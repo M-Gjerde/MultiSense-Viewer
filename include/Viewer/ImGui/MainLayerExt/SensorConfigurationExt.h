@@ -243,7 +243,7 @@ public:
                 float inputWidth = 15.0f * 2.8f;
                 ImGui::Text("Upper left corner (x, y)");
 
-                ImGui::SameLine(0, 15.0f);
+                ImGui::SameLine(0, 12.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, VkRender::Colors::CRLTextWhite);
                 ImGui::SetNextItemWidth(inputWidth);
                 ImGui::InputText("##decimalminX", buf1, 5, ImGuiInputTextFlags_CharsDecimal);
@@ -254,7 +254,8 @@ public:
 
                 ImGui::Dummy(ImVec2(0.0f, 5.0f));
                 ImGui::SetCursorPosX(posX);
-                ImGui::Text("Lower right corner (x, y)");
+                //ImGui::Text("Lower right corner (x, y)");
+                ImGui::Text("Width and Height (x, y)");
                 ImGui::SameLine();
                 ImGui::PushStyleColor(ImGuiCol_Text, VkRender::Colors::CRLTextWhite);
                 ImGui::SetNextItemWidth(inputWidth);
