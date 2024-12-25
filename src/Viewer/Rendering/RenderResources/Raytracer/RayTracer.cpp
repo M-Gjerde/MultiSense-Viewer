@@ -5,9 +5,7 @@
 #include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.h"
-#include <sycl/sycl.hpp>
-#include <Viewer/Rendering/Components/GaussianComponent.h>
-
+#include "Viewer/Rendering/Components/GaussianComponent.h"
 #include "Viewer/Tools/SyclDeviceSelector.h"
 
 namespace VkRender::RT {

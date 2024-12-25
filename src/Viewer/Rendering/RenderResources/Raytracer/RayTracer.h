@@ -5,20 +5,17 @@
 #ifndef MULTISENSE_VIEWER_RAYTRACER_H
 #define MULTISENSE_VIEWER_RAYTRACER_H
 
-#include <Viewer/Rendering/MeshManager.h>
-
 #include "Viewer/Scenes/Scene.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/Definitions.h"
+#include "Viewer/Rendering/MeshManager.h"
 
-#ifdef SYCL_ENALBED
-
+#ifdef SYCL_ENABLED
 #include "Viewer/Tools/SyclDeviceSelector.h"
-
 #endif
 
 
 namespace VkRender::RT {
-#ifdef SYCL_ENALBED
+#ifdef SYCL_ENABLED
 
     class RayTracer {
     public:
