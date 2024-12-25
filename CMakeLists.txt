@@ -9,12 +9,15 @@ project(MultiSense-Viewer
 
 # Options
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" FALSE)
-option(ENABLE_SYCL "Compile with SYCL support. Provided that llvm-sycl clang++ is in path" FALSE)
 option(ENABLE_PYTORCH "Compile with PyTorch" FALSE)
 option(BUILD_DOC "Build documentation" ON)
 option(PROPRIETARY_GIGEVISION_MODULE "Include the proprietary GigE-Vision module" OFF)
-option(SYCL_BACKEND "Select SYCL backend (dpcpp or adaptivecpp)" "adaptivecpp")
-option(DPCPP_COMPILER_PATH "If Intel's DPCPP compiler is selected, the compiler path must be set")
+
+option(ENABLE_SYCL "Compile with SYCL support. Provided that llvm-sycl clang++ is in path" FALSE)
+set(SYCL_BACKEND "adaptivecpp" CACHE STRING "Select SYCL backend (dpcpp or adaptivecpp)")
+set_property(CACHE SYCL_BACKEND PROPERTY STRINGS "dpcpp" "adaptivecpp")
+set(DPCPP_COMPILER_PATH "" CACHE STRING "If Intel's DPCPP compiler is selected, the compiler path must be set")
+
 
 # Paths for proprietary module
 set(GIGEVISION_LIB_PATH "" CACHE PATH "Path to the proprietary GigE-Vision module library")
@@ -94,8 +97,9 @@ else ()
     message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
 endif ()
 
-# SYCL Backend selection
+# SYCL Backend selectionDefault
 if (ENABLE_SYCL)
+    message(STATUS "SYCL backend: ${SYCL_BACKEND}")
     if (SYCL_BACKEND STREQUAL "dpcpp")
         #set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
         set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead

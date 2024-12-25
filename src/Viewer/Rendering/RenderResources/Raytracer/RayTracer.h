@@ -8,10 +8,18 @@
 #include <Viewer/Rendering/MeshManager.h>
 
 #include "Viewer/Scenes/Scene.h"
-#include "Viewer/Tools/SyclDeviceSelector.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/Definitions.h"
 
+#ifdef SYCL_ENALBED
+
+#include "Viewer/Tools/SyclDeviceSelector.h"
+
+#endif
+
+
 namespace VkRender::RT {
+#ifdef SYCL_ENALBED
+
     class RayTracer {
     public:
         RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
@@ -45,6 +53,21 @@ namespace VkRender::RT {
         void saveAsPPM(const std::filesystem::path& filename) const;
 
     };
+
+#else
+
+    class RayTracer {
+    public:
+        RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
+        void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
+        void uploadVertexData(std::shared_ptr<Scene>& scene) {}
+        void update(bool update) {}
+        uint8_t* getImage() {return nullptr;}
+        ~RayTracer() {}
+        void upload(std::shared_ptr<Scene> ptr) {}
+    };
+#endif
+
 }
 
 
