@@ -4,6 +4,8 @@
 
 #include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
+
+#include "LightTracerKernels.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.h"
 #include "Viewer/Rendering/Components/GaussianComponent.h"
 #include "Viewer/Tools/SyclDeviceSelector.h"
@@ -203,24 +205,20 @@ namespace VkRender::RT {
         if (update) {
             auto& queue = m_selector.getQueue();
 
-
             auto cameraEntity = m_scene->getEntityByName("Camera");
             if (cameraEntity) {
                 auto camera = std::dynamic_pointer_cast<PinholeCamera>(cameraEntity.getComponent<CameraComponent>().camera);
                 auto& transform = cameraEntity.getComponent<TransformComponent>();
 
 
-                uint32_t tileWidth = 16;
-                uint32_t tileHeight = 16;
-                sycl::range localWorkSize(tileHeight, tileWidth);
-                sycl::range globalWorkSize(m_height, m_width);
+                uint32_t totalPhotons = 100000;
+                sycl::range<1> globalRange(totalPhotons);
 
-                queue.submit([&](sycl::handler& h) {
-                    // Create a kernel instance with the required parameters
-                    const Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform, *camera);
-                    h.parallel_for<class RenderKernel>(
-                        sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
-                }).wait();
+                queue.submit([&](sycl::handler& cgh) {
+                    // Capture GPUData, etc. by value or reference as needed
+                    RenderKernelLightTracing kernel(m_gpu, totalPhotons, m_width, m_height, m_width * m_height * 4, transform, *camera, 1);
+                    cgh.parallel_for(globalRange, kernel);
+                });
 
                 queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * 4);
                 queue.wait();

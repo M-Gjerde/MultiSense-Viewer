@@ -18,7 +18,11 @@ namespace VkRender::RT{
         glm::vec3 position;
         glm::vec3 normal;
         glm::vec2 scale;
-        float intensity;
+
+        float intensity;         // Emissive power
+        float diffuse;           // Diffuse coefficient
+        float specular;          // Specular coefficient
+        float phongExponent;     // Shininess exponent
     };
 
     struct GaussianScene {
