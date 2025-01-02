@@ -33,6 +33,10 @@ namespace VkRender {
     }
 
     void EditorImage::onEditorResize() {
+        auto scene = m_context->activeScene();
+        m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, m_createInfo.width, m_createInfo.height);
+        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width , m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
+
     }
 
     void EditorImage::onFileDrop(const std::filesystem::path &path) {

@@ -188,6 +188,8 @@ namespace VkRender {
                     auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(mesh.meshParameters);
                     out << YAML::Key << "ModelPath";
                     out << YAML::Value << params->path.string();
+                    out << YAML::Key << "RelativeModelPath";
+                    out << YAML::Value << params->relativeAssetPath.string();
                 }
                 break;
             case PLY_FILE:
@@ -416,6 +418,10 @@ namespace VkRender {
         out << YAML::BeginMap;
         out << YAML::Key << "Scene";
         out << YAML::Value << "Scene name";
+
+        out << YAML::Key << "Base Path";
+        out << YAML::Value << filePath.parent_path();
+
         out << YAML::Key << "Entities";
         out << YAML::Value << YAML::BeginSeq;
         for (auto entity : m_scene->m_registry.view<entt::entity>()) {
@@ -447,6 +453,8 @@ namespace VkRender {
         if (!data["Scene"])
             return false;
         std::string sceneName = data["Scene"].as<std::string>();
+        std::string assetsPath = data["Base Path"].as<std::string>();
+
         Log::Logger::getInstance()->info("Deserializing scene: {} from: {}", sceneName, filePath.string());
         auto entities = data["Entities"];
         if (entities) {
@@ -535,12 +543,15 @@ namespace VkRender {
                     if (meshComponent["ModelPath"]) {
                         path = meshComponent["ModelPath"].as<std::string>();
                     }
+                    if (meshComponent["RelativeModelPath"]) {
+                        path = std::filesystem::path(assetsPath) / std::filesystem::path(meshComponent["RelativeModelPath"].as<std::string>());
+                    }
 
-                    std::string meshDataTypeStr = meshComponent["MeshDataType"].as<std::string>();
+                    auto meshDataTypeStr = meshComponent["MeshDataType"].as<std::string>();
                     MeshDataType meshDataType = stringToMeshDataType(meshDataTypeStr);
 
                     // Add MeshComponent to the entity
-                    MeshComponent& mesh = deserializedEntity.addComponent<MeshComponent>(meshDataType, path);
+                    auto& mesh = deserializedEntity.addComponent<MeshComponent>(meshDataType, path);
                     // Deserialize PolygonMode
                     if (meshComponent["PolygonMode"] && meshComponent["PolygonMode"].IsScalar()) {
                         std::string polygonModeStr = meshComponent["PolygonMode"].as<std::string>();

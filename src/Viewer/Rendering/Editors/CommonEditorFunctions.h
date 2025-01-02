@@ -129,17 +129,10 @@ namespace VkRender::EditorUtils {
         }
     }
 
-    static void openImportFolderDialog(const std::string& fileDescription,
-                                       const std::vector<std::string>& type,
-                                       LayerUtils::FileTypeLoadFlow flow,
+    static void openImportFolderDialog(const std::string& dialogName,const std::filesystem::path& openLocation, LayerUtils::FileTypeLoadFlow flow,
                                        std::future<LayerUtils::LoadFileInfo>* loadFolderFuture) {
         if (!loadFolderFuture->valid()) {
-            auto& opts = ApplicationConfig::getInstance().getUserSetting();
-            std::string openLoc = Utils::getSystemHomePath().string();
-            if (!opts.lastOpenedImportModelFolderPath.empty()) {
-                openLoc = opts.lastOpenedImportModelFolderPath.remove_filename().string();
-            }
-            *loadFolderFuture = std::async(VkRender::LayerUtils::selectFolder, "Select Folder", openLoc, flow);
+            *loadFolderFuture = std::async(VkRender::LayerUtils::selectFolder, dialogName, openLocation, flow);
         }
     }
 
@@ -158,17 +151,18 @@ namespace VkRender::EditorUtils {
         }
     }
 
-    static std::shared_ptr<MeshInstance> setupMesh(Application* ctx) {
+    static std::shared_ptr<MeshInstance> setupMesh(Application* ctx, float scaleX = 1.0f, float scaleY = 1.0f) {
         std::vector<VkRender::ImageVertex> vertices = {
             // Bottom-left corner
-            {glm::vec2{-1.0f, -1.0f}, glm::vec2{0.0f, 0.0f}},
+            {glm::vec2{-1.0f * scaleX, -1.0f * scaleY}, glm::vec2{0.0f, 0.0f}},
             // Bottom-right corner
-            {glm::vec2{1.0f, -1.0f}, glm::vec2{1.0f, 0.0f}},
+            {glm::vec2{1.0f * scaleX, -1.0f * scaleY}, glm::vec2{1.0f, 0.0f}},
             // Top-right corner
-            {glm::vec2{1.0f, 1.0f}, glm::vec2{1.0f, 1.0f}},
+            {glm::vec2{1.0f * scaleX, 1.0f * scaleY}, glm::vec2{1.0f, 1.0f}},
             // Top-left corner
-            {glm::vec2{-1.0f, 1.0f}, glm::vec2{0.0f, 1.0f}}
+            {glm::vec2{-1.0f * scaleX, 1.0f * scaleY}, glm::vec2{0.0f, 1.0f}}
         };
+
         // Define the indices for two triangles that make up the quad
         std::vector<uint32_t> indices = {
             0, 1, 2, // First triangle (bottom-left to top-right)

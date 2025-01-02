@@ -15,7 +15,7 @@ namespace VkRender {
         Log::Logger::getInstance()->trace("Cleaning up unused resources");
         std::lock_guard<std::mutex> lock(resourceMutex);
 
-        //submitCommandBuffers();
+        submitCommandBuffers();
 
         // Check if fences are signaled and execute corresponding cleanup functions
         for (auto it = m_deferredCleanupFunctions.begin(); it != m_deferredCleanupFunctions.end();) {

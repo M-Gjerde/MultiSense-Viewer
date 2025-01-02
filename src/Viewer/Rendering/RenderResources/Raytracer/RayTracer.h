@@ -59,7 +59,7 @@ namespace VkRender::RT {
         RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
-        void update(bool update) {}
+        void update(const EditorImageUI& editorImageUI) {}
         uint8_t* getImage() {return nullptr;}
         ~RayTracer() {}
         void upload(std::shared_ptr<Scene> ptr) {}

@@ -124,6 +124,12 @@ namespace VkRender {
                         EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::SAVE_SCENE, &loadFileFuture, openLocation);
 
                     }
+
+                    if (ImGui::MenuItem("Set Assets Path", nullptr)) {
+                        auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                        EditorUtils::openImportFolderDialog("Load Scene", openLocation, LayerUtils::SELECT_FOLDER, &loadFileFuture);
+                    }
+
                     ImGui::EndMenu();  // End the Scenes submenu
                 }
 
@@ -187,6 +193,18 @@ namespace VkRender {
                             serializer.serialize(loadFileInfo.path);
                             serializer.serialize(Utils::getProjectsPath() / loadFileInfo.path.filename());
                             ApplicationConfig::getInstance().getUserSetting().projectName = project.projectName;
+                    }
+                        break;
+                    case LayerUtils::SELECT_FOLDER: {
+                            auto scene = m_context->activeScene();
+                            if (scene) {
+                                std::filesystem::path assetsBasePath = loadFileInfo.path;
+                                SceneSerializer serializer(scene);
+                                serializer.deserialize(assetsBasePath);
+                                auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
+                                userSetting.lastActiveScenePath = loadFileInfo.path;
+                                userSetting.assetsPath = loadFileInfo.path.parent_path();
+                            }
                     }
                         break;
                     default:

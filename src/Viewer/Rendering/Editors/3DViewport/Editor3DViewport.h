@@ -40,8 +40,6 @@ namespace VkRender {
         void onKeyCallback(const Input& input) override;
         std::shared_ptr<BaseCamera> getCamera() { return m_editorCamera; }
 
-        std::shared_ptr<MeshInstance> setupMesh();
-
         void onRenderSettingsChanged();
 
         void bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command);

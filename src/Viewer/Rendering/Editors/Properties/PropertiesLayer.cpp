@@ -574,6 +574,7 @@ namespace VkRender {
                     break;
             }
 
+            component.resetUpdateState();
             if (paramsChanged) {
                 component.updateParametersChanged();
             }
@@ -691,7 +692,7 @@ namespace VkRender {
 
             // Display different input fields based on mesh type
             switch (component.meshDataType()) {
-                case MeshDataType::OBJ_FILE: {
+                case OBJ_FILE: {
                     auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(component.meshParameters);
                     if (params) {
                         ImGui::Text("Mesh File:");

@@ -18,7 +18,6 @@ namespace VkRender::RT {
         m_scene = scene;
         m_width = width;
         m_height = height;
-        m_camera = BaseCamera(width / height);
         // Load the scene into gpu memory
         // Create image memory
         m_imageMemory = new uint8_t[width * height * 4]; // Assuming RGBA8 image
@@ -26,7 +25,7 @@ namespace VkRender::RT {
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-
+        Log::Logger::getInstance()->info("Creating Ray Tracer. Image dimensions are: {}x{}", width, height);
         upload(scene);
     }
 

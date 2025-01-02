@@ -687,15 +687,8 @@ namespace VkRender {
 
 
     void Application::postRenderActions() {
-        // Reset mousewheel across imgui contexts
-        /*
-        for (std::vector<ImGuiContext *> list = {m_mainEditor->m_guiManager->m_imguiContext,
-                                                 m_editors[0].m_guiManager->m_imguiContext}; auto &ctx : list) {
-            ImGui::SetCurrentContext(ctx);
-            ImGuiIO &io = ImGui::GetIO();
-            io.MouseWheel = 0;
-        }
-        */
+
+
     }
 
     /*

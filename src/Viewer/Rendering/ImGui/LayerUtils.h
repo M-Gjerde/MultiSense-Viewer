@@ -37,7 +37,8 @@ namespace VkRender::LayerUtils {
         FRAGMENT_SHADER_FILE,
         SAVE_SCENE,
         SAVE_SCENE_AS,
-        SAVE_PROJECT_AS
+        SAVE_PROJECT_AS,
+        SELECT_FOLDER,
     } FileTypeLoadFlow;
 
     struct LoadFileInfo {
@@ -396,7 +397,7 @@ namespace VkRender::LayerUtils {
         return future.get();
     }
 
-    static  LoadFileInfo selectFolder(const std::string& dialogName, const std::string& openLocation, LayerUtils::FileTypeLoadFlow flow) {
+    static  LoadFileInfo selectFolder(const std::string& dialogName, const std::filesystem::path& openLocation, LayerUtils::FileTypeLoadFlow flow) {
         std::vector<std::string> filetypes;
         // Memory is cleaned up in the dialog
         auto* dialogData = new FileDialogData{

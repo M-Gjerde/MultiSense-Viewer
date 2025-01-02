@@ -11,6 +11,8 @@
 #include <bits/fs_path.h>
 #include <glm/vec3.hpp>
 #include <utility>
+#include <Viewer/Application/ApplicationConfig.h>
+
 #include "Viewer/Rendering/Core/UUID.h"
 #include "Viewer/Rendering/Components/CameraComponent.h"
 
@@ -62,8 +64,19 @@ namespace VkRender {
     };
     class OBJFileMeshParameters : public IMeshParameters {
     public:
-        explicit OBJFileMeshParameters(std::filesystem::path  path) : path(std::move(path)) {}
+        explicit OBJFileMeshParameters(std::filesystem::path  path) : path(path) {
+            std::string assetsPath = ApplicationConfig::getInstance().getUserSetting().assetsPath;
+            // Check if the provided path is relative to the assets path
+            if (path.string().find(assetsPath) == 0) {
+                // Compute the relative path from assetsPath
+                relativeAssetPath = std::filesystem::relative(path, assetsPath);
+            } else {
+                // Log a warning or set relativeAssetPath to an empty path if it's not valid
+                relativeAssetPath.clear();
+            }
+        }
         std::filesystem::path path;
+        std::filesystem::path relativeAssetPath;
 
         std::string getIdentifier() const override {
             return "OBJFileMeshParameters_" + path.string();

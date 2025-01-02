@@ -41,12 +41,29 @@ namespace VkRender {
 
     void Editor3DViewport::onEditorResize() {
         m_editorCamera = std::make_shared<ArcballCamera>(static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
-        m_sceneRenderer->setActiveCamera(m_editorCamera);
-        auto& ci = m_sceneRenderer->getCreateInfo();
-        ci.width = m_createInfo.width;
-        ci.height = m_createInfo.height;
-        m_sceneRenderer->resize(ci);
-        onRenderSettingsChanged();
+        auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
+
+
+        if (m_lastActiveCamera) {
+            auto camera = m_lastActiveCamera->getPinholeCamera();
+            float textureAspect = static_cast<float>(camera->m_width) / static_cast<float>(camera->m_height);
+            float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
+            // Calculate scaling factors
+            float scaleX = 1.0f, scaleY = 1.0f;
+            if (editorAspect > textureAspect) {
+                scaleX = textureAspect / editorAspect;
+            } else {
+                scaleY = editorAspect / textureAspect;
+            }
+            m_meshInstances.reset();
+            m_meshInstances = nullptr;
+            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+            auto& ci = m_sceneRenderer->getCreateInfo();
+            ci.width = camera->m_width;
+            ci.height = camera->m_height;
+            m_sceneRenderer->resize(ci);
+            onRenderSettingsChanged();
+        }
     }
 
     void Editor3DViewport::onRenderSettingsChanged() {
@@ -77,22 +94,59 @@ namespace VkRender {
         if (!m_activeScene)
             return;
         m_sceneRenderer->setActiveCamera(m_editorCamera);
-
-        auto& e = m_context->getSelectedEntity();
-        if (e && e.hasComponent<CameraComponent>()) {
-            auto& camera = e.getComponent<CameraComponent>();
-            if (camera.renderFromViewpoint() && imageUI->renderFromViewpoint) {
-                // If the selected entity has a camera with renderFromViewpoint, use it
-                m_sceneRenderer->setActiveCamera(camera.camera);
-                m_lastActiveCamera = &camera; // Update the last active camera
+        static bool firstRun = true;
+        auto view = m_activeScene->getRegistry().view<CameraComponent>();
+        for (auto e: view) {
+            auto entity = Entity(e, m_activeScene.get());
+            auto& cameraComponent = entity.getComponent<CameraComponent>();
+            if (cameraComponent.renderFromViewpoint() && imageUI->renderFromViewpoint) {
+                m_lastActiveCamera = &cameraComponent; // Update the last active camera
             }
         }
-        else if (m_lastActiveCamera && m_lastActiveCamera->renderFromViewpoint()) {
+
+        bool lastRenderWasSceneCamera = false;
+        if (m_lastActiveCamera && m_lastActiveCamera->renderFromViewpoint()) {
             // Use the last active camera if it still has renderFromViewpoint enabled
             m_sceneRenderer->setActiveCamera(m_lastActiveCamera->camera);
+            if (m_lastActiveCamera->updateTrigger() || firstRun) {
+                auto camera = m_lastActiveCamera->getPinholeCamera();
+                float textureAspect = camera->m_width / camera->m_height;
+                float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
+                // Calculate scaling factors
+                float scaleX = 1.0f, scaleY = 1.0f;
+                if (editorAspect > textureAspect) {
+                    scaleX = textureAspect / editorAspect;
+                } else {
+                    scaleY = editorAspect / textureAspect;
+                }
+                m_meshInstances.reset();
+                m_meshInstances = nullptr;
+                m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+                auto& ci = m_sceneRenderer->getCreateInfo();
+                ci.width = camera->m_width;
+                ci.height = camera->m_height;
+                m_sceneRenderer->resize(ci);
+                onRenderSettingsChanged();
+                firstRun = false;
+            }
+            lastRenderWasSceneCamera = true;
+        }
+
+        if (!imageUI->renderFromViewpoint && lastRenderWasSceneCamera) {
+            float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
+            m_meshInstances.reset();
+            m_meshInstances = nullptr;
+            m_meshInstances = EditorUtils::setupMesh(m_context);
+            auto& ci = m_sceneRenderer->getCreateInfo();
+            ci.width = m_createInfo.width;
+            ci.height = m_createInfo.height;
+            m_sceneRenderer->resize(ci);
+            onRenderSettingsChanged();
+            m_lastActiveCamera = nullptr;
         }
 
         m_sceneRenderer->m_saveNextFrame = imageUI->saveNextFrame;
+
 
 
         auto frameIndex = m_context->currentFrameIndex();
