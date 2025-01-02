@@ -16,6 +16,55 @@
 
 namespace VkRender {
 
+    struct GaussianComponent2DGS {
+        std::vector<glm::vec3> positions;         // Contiguous array for mean positions
+        std::vector<glm::vec3> normals;   // Contiguous array for covariance matrices
+        std::vector<glm::vec2> scales;   // Contiguous array for covariance matrices
+
+        std::vector<float> emissions;        // Contiguous array for amplitudes
+        std::vector<float> colors;        // Contiguous array for amplitudes
+        std::vector<float> diffuse;        // Contiguous array for amplitudes
+        std::vector<float> specular;        // Contiguous array for amplitudes
+        std::vector<float> phongExponents;        // Contiguous array for amplitudes
+
+        // Resize to hold n Gaussians
+        void resize(size_t n) {
+            positions.resize(n);
+            scales.resize(n);
+            normals.resize(n);
+            emissions.resize(n);
+            colors.resize(n);
+            diffuse.resize(n);
+            specular.resize(n);
+            phongExponents.resize(n);
+        }
+
+        // Add a Gaussian with default values for float properties and emission set to 0
+        void addGaussian(const glm::vec3 &position,
+                         const glm::vec3 &normal,
+                         const glm::vec2 &scale,
+                         float color = 1.0f,
+                         float diffuseValue = 0.5f,
+                         float specularValue = 0.5f,
+                         float phongExponent = 32.0f)
+        {
+            positions.push_back(position);
+            normals.push_back(normal);
+            scales.push_back(scale);
+
+            emissions.push_back(0.0f);           // Set emission to 0
+            colors.push_back(color);
+            diffuse.push_back(diffuseValue);
+            specular.push_back(specularValue);
+            phongExponents.push_back(phongExponent);
+        }
+
+
+        // Get the number of Gaussians
+        size_t size() const {
+            return positions.size();
+        }
+    };
 
     struct GaussianComponent {
         std::vector<glm::vec3> means;         // Contiguous array for mean positions

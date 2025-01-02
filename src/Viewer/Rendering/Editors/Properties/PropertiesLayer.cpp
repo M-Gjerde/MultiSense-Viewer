@@ -329,8 +329,8 @@ namespace VkRender {
         return valueChanged;
     }
 
-    bool PropertiesLayer::drawFloatControl(const std::string &label, float &value, float resetValue = 0.0f,
-                                           float speed = 1.0f, float columnWidth = 100.0f) {
+    bool PropertiesLayer::drawVec2Control(const std::string &label, glm::vec2 &values, float resetValue = 0.0f,
+                                          float speed = 1.0f, float columnWidth = 100.0f) {
         bool valueChanged = false;
         ImGuiIO &io = ImGui::GetIO();
         auto boldFont = io.Fonts->Fonts[0];
@@ -353,6 +353,68 @@ namespace VkRender {
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
         ImGui::PushFont(boldFont);
         if (ImGui::Button("X", buttonSize)) {
+            values.x = resetValue;
+            valueChanged = true;
+        }
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##X", &values.x, 0.1f * speed, 0.0f, 0.0f, "%.2f")) {
+            valueChanged = true;
+        }
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.3f, 0.8f, 0.3f, 1.0f});
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.2f, 0.7f, 0.2f, 1.0f});
+        ImGui::PushFont(boldFont);
+        if (ImGui::Button("Y", buttonSize))
+            values.y = resetValue;
+        ImGui::PopFont();
+        ImGui::PopStyleColor(3);
+
+        ImGui::SameLine();
+        if (ImGui::DragFloat("##Y", &values.y, 0.1f * speed, 0.0f, 0.0f, "%.2f")) {
+            valueChanged = true;
+        }
+        ImGui::PopItemWidth();
+
+
+        ImGui::PopStyleVar();
+
+        ImGui::Columns(1);
+
+        ImGui::PopID();
+
+        return valueChanged;
+    }
+
+    bool PropertiesLayer::drawFloatControl(const std::string &label, float &value, float resetValue = 0.0f,
+                                           float speed = 1.0f, float columnWidth = 100.0f) {
+        bool valueChanged = false;
+        ImGuiIO &io = ImGui::GetIO();
+        auto boldFont = io.Fonts->Fonts[0];
+
+        ImGui::PushID(label.c_str());
+
+        ImGui::Columns(2);
+        ImGui::SetColumnWidth(0, columnWidth);
+        ImGui::Text("%s", label.c_str());
+        ImGui::NextColumn();
+
+        ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
+
+        float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5f, 0.5f, 0.5f, 1.0f});        // Gray
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.6f, 0.6f, 0.6f, 1.0f}); // Lighter gray
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.4f, 0.4f, 0.4f, 1.0f});  // Darker gray
+        ImGui::PushFont(boldFont);
+        if (ImGui::Button("R", buttonSize)) {
             value = resetValue;
             valueChanged = true;
         }
@@ -423,6 +485,7 @@ namespace VkRender {
             displayAddComponentEntry<MaterialComponent>("Material");
             displayAddComponentEntry<PointCloudComponent>("PointCloud");
             displayAddComponentEntry<GaussianComponent>("3DGS Model");
+            displayAddComponentEntry<GaussianComponent2DGS>("2DGS Model");
 
             ImGui::EndPopup();
         }
@@ -498,8 +561,8 @@ namespace VkRender {
                     paramsChanged |= ImGui::SliderFloat("Cx", &component.pinHoleParameters.cx, 1.0f, 4096.0f);
                     paramsChanged |= ImGui::SliderFloat("Cy", &component.pinHoleParameters.cy, 1.0f, 4096.0f);
 
-                    if(ImGui::Button("Set from viewport")) {
-                        auto& ci = m_context->getViewport()->getCreateInfo();
+                    if (ImGui::Button("Set from viewport")) {
+                        auto &ci = m_context->getViewport()->getCreateInfo();
                         component.pinHoleParameters.width = ci.width;
                         component.pinHoleParameters.height = ci.height;
                         component.pinHoleParameters.cx = ci.width / 2;
@@ -630,7 +693,7 @@ namespace VkRender {
             switch (component.meshDataType()) {
                 case MeshDataType::OBJ_FILE: {
                     auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(component.meshParameters);
-                    if (params){
+                    if (params) {
                         ImGui::Text("Mesh File:");
                         ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
                     }
@@ -639,7 +702,7 @@ namespace VkRender {
                     break;
                 case PLY_FILE: {
                     auto params = std::dynamic_pointer_cast<PLYFileMeshParameters>(component.meshParameters);
-                    if (params){
+                    if (params) {
                         ImGui::Text("Mesh File:");
                         ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
                     }
@@ -806,7 +869,65 @@ namespace VkRender {
             }
             // Notify scene that material component has been updated
         });
+        drawComponent<GaussianComponent2DGS>("Gaussian Model", entity, [this](GaussianComponent2DGS &component) {
+            ImGui::Text("Gaussian Model Properties");
 
+            // Display the number of Gaussians
+            ImGui::Text("Number of Gaussians: %zu", component.size());
+
+            ImGui::Separator();
+
+            // Button to add a new Gaussian
+            if (ImGui::Button("Add Gaussian")) {
+                // Default values for a new Gaussian
+                glm::vec3 defaultMean(0.0f, 0.0f, 0.0f);
+                glm::vec3 defaultNormal(0.0f, 0.0f, 1.0f); // Identity matrix
+                glm::vec2 defaultScale(1.0f); // Identity matrix
+                component.addGaussian(defaultMean, defaultNormal, defaultScale);
+            }
+
+            ImGui::Spacing();
+
+            // Iterate over each Gaussian and provide controls to modify them
+            if (component.size() < 10) {
+                for (size_t i = 0; i < component.size(); ++i) {
+                    ImGui::PushID(static_cast<int>(i)); // Ensure unique ID for ImGui widgets
+                    // Collapsible header for each Gaussian
+                    if (ImGui::CollapsingHeader(("Gaussian " + std::to_string(i)).c_str())) {
+                        // Mean Position Controls
+                        bool update = false;
+                        update |= drawVec3Control("Position", component.positions[i], 0.0f);
+                        update |= drawVec3Control("Normal", component.normals[i], 0.0f, 0.1f);
+                        update |= drawVec2Control("Scale", component.scales[i], 0.0f, 0.1f);
+                        // Amplitude Control
+                        ImGui::Text("Appearance Properties");
+                        update |= drawFloatControl("Emission",  component.emissions[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Colors",  component.colors[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Diffuse",  component.diffuse[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Specular",  component.specular[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("PhongExponents",  component.phongExponents[i], 0.0f, 0.1f);
+
+
+                        // Button to remove this Gaussian
+                        ImGui::Spacing();
+                        if (ImGui::Button("Remove Gaussian")) {
+                            component.positions.erase(component.positions.begin() + i);
+                            component.scales.erase(component.scales.begin() + i);
+                            component.normals.erase(component.normals.begin() + i);
+                            component.emissions.erase(component.emissions.begin() + i);
+                            component.colors.erase(component.colors.begin() + i);
+                            component.diffuse.erase(component.diffuse.begin() + i);
+                            component.specular.erase(component.specular.begin() + i);
+                            component.phongExponents.erase(component.phongExponents.begin() + i);
+                            --i; // Adjust index after removal
+                        }
+                    }
+
+                    ImGui::PopID(); // Pop ID for this Gaussian
+                }
+            }
+        });
+        /*
         drawComponent<GaussianComponent>("Gaussian Model", entity, [this](auto &component) {
             ImGui::Text("Gaussian Model Properties");
 
@@ -868,6 +989,7 @@ namespace VkRender {
                 }
             }
         });
+        */
 
 
         drawComponent<GroupComponent>("Group", entity, [this](auto &component) {

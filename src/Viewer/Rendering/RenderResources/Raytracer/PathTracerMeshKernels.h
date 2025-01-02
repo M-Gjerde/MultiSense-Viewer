@@ -2,15 +2,15 @@
 // Created by magnus on 12/27/24.
 //
 
-#ifndef LIGHTTRACERKERNELS_H
-#define LIGHTTRACERKERNELS_H
+#ifndef PathTracerMeshKernels_H
+#define PathTracerMeshKernels_H
 
 #include "Viewer/Rendering/RenderResources/Raytracer/Definitions.h"
 
 namespace VkRender::RT {
-class RenderKernelLightTracing {
+class PathTracerMeshKernels {
 public:
-    RenderKernelLightTracing(GPUData        gpuData,
+    PathTracerMeshKernels(GPUData        gpuData,
                              uint32_t       numPhotons,
                              uint32_t       width,
                              uint32_t       height,
@@ -57,8 +57,9 @@ private:
         // -----------------------------------------------------
         // 1) Sample Emissive Patch & Direction
         // -----------------------------------------------------
+        /*
         size_t lightIdx = sampleRandomEmissivePatch(photonID);
-        const GaussianInputAssembly& lightPatch = m_gpuData.gaussianInputAssembly[lightIdx];
+        const InputAssembly& lightPatch = m_gpuData.gaussianInputAssembly[lightIdx];
 
         glm::vec3 rayOrigin = lightPatch.position;
         glm::vec3 rayDir    = sampleEmissionDirection(photonID, lightPatch.normal);
@@ -83,7 +84,7 @@ private:
                                   tSensor);
 
             // We'll track the closest intersection in the scene
-             */
+
             float tMin   = FLT_MAX;
             int   hitIdx = -1; // no hit
 
@@ -93,7 +94,7 @@ private:
                 tMin   = tSensor;
                 hitIdx = -2;  // special ID => sensor
             }
-            */
+
 
             // B) Intersect with scene geometry
             for (size_t i = 0; i < m_gpuData.numGaussians; ++i) {
@@ -194,6 +195,7 @@ private:
             rayOrigin = hitPoint;
             rayDir    = bounceDir;
         }
+         */
         // Exited the loop => we reached m_maxBounces bounces w/o hitting sensor again
     }
 
@@ -268,7 +270,7 @@ private:
         // find a emissive object:
         // TODO support multiple light sources
         for (size_t i = 0; i < m_gpuData.numGaussians; ++i) {
-            if (m_gpuData.gaussianInputAssembly[i].emission != 0){
+            if (m_gpuData.materials[i].emissiveFactor.x != 0){
                 return i;
             }
         }
@@ -335,4 +337,4 @@ private:
 }
 
 
-#endif //LIGHTTRACERKERNELS_H
+#endif //PathTracerMeshKernels

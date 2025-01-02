@@ -7,6 +7,8 @@
 
 #include "LightTracerKernels.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.h"
+#include "Viewer/Rendering/RenderResources/Raytracer/PathTracerMeshKernels.h"
+
 #include "Viewer/Rendering/Components/GaussianComponent.h"
 #include "Viewer/Tools/SyclDeviceSelector.h"
 
@@ -29,10 +31,6 @@ namespace VkRender::RT {
     }
 
     void RayTracer::upload(std::shared_ptr<Scene> scene) {
-        if (m_gpu.gaussianInputAssembly) {
-            sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
-            m_gpu.gaussianInputAssembly = nullptr;
-        }
         if (m_gpu.vertices) {
             sycl::free(m_gpu.vertices, m_selector.getQueue());
             m_gpu.vertices = nullptr;
@@ -53,9 +51,48 @@ namespace VkRender::RT {
             sycl::free(m_gpu.transforms, m_selector.getQueue());
             m_gpu.transforms = nullptr;
         }
+        if (m_gpu.materials) {
+            sycl::free(m_gpu.materials, m_selector.getQueue());
+            m_gpu.materials = nullptr;
+        }
+        if (m_gpu.gaussianInputAssembly) {
+            sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
+            m_gpu.gaussianInputAssembly = nullptr;
+        }
+
         m_selector.getQueue().wait();
         uploadVertexData(scene);
-        //  uploadGaussianData(scene);
+        uploadGaussianData(scene);
+    }
+
+    void RayTracer::uploadGaussianData(std::shared_ptr<Scene> &scene) {
+        auto &queue = m_selector.getQueue();
+        std::vector<GaussianInputAssembly> gaussianInputAssembly;
+        auto &registry = scene->getRegistry();
+        // Find all entities with GaussianComponent
+        auto view = scene->getRegistry().view<GaussianComponent2DGS>();
+        for (auto e: view) {
+            auto &component = Entity(e, scene.get()).getComponent<GaussianComponent2DGS>();
+            for (size_t i = 0; i < component.size(); ++i) {
+                GaussianInputAssembly point{};
+                point.position = component.positions[i];
+                point.scale = component.scales[i];
+                point.normal = component.normals[i];
+                point.emission = component.emissions[i];
+                point.color = component.colors[i];
+                point.diffuse = component.diffuse[i];
+                point.specular = component.specular[i];
+                point.phongExponent = component.phongExponents[i];
+                gaussianInputAssembly.push_back(point);
+            }
+        }
+
+        m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(gaussianInputAssembly.size(), queue);
+        queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(),
+                     gaussianInputAssembly.size() * sizeof(uint32_t));
+        queue.wait();
+
+        m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
     }
 
     void RayTracer::uploadVertexData(std::shared_ptr<Scene> &scene) {
@@ -64,7 +101,7 @@ namespace VkRender::RT {
         std::vector<uint32_t> indexOffsets;       // Offset for each entity's indices
         std::vector<uint32_t> vertexOffsets;     // Offset for each entity's vertices
         std::vector<glm::mat4> transformMatrices; // Transformation matrices for entities
-
+        std::vector<MaterialComponent> materials; // Transformation matrices for entities
         auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
@@ -74,7 +111,6 @@ namespace VkRender::RT {
             std::string tag = entity.getName();
             // Initialize a flag to determine if we should skip this entity
             bool skipEntity = false;
-
             // Start with the current entity
             Entity current = entity;
             // Traverse up the parent hierarchy
@@ -84,7 +120,7 @@ namespace VkRender::RT {
                 // Check if the parent has both GroupComponent and VisibilityComponent
                 if (current.hasComponent<GroupComponent>() && current.hasComponent<VisibleComponent>()) {
                     // Retrieve the VisibilityComponent
-                    auto& visibility = current.getComponent<VisibleComponent>();
+                    auto &visibility = current.getComponent<VisibleComponent>();
                     // If visibility is set to false, mark to skip this entity
                     if (!visibility.visible) {
                         skipEntity = true;
@@ -92,28 +128,28 @@ namespace VkRender::RT {
                     }
                 }
             }
-
             if (entity.hasComponent<CameraComponent>())
                 skipEntity = true;
             // If an ancestor with visible == false was found, skip to the next entity
             if (skipEntity) {
                 continue;
             }
-
-
-
             auto &transform = entity.getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform.getTransform());
+
+            if (entity.hasComponent<MaterialComponent>()){
+                auto &material = entity.getComponent<MaterialComponent>();
+                materials.emplace_back(material);
+            }
+
 
             auto &meshComponent = entity.getComponent<MeshComponent>();
             if (meshComponent.meshDataType() != OBJ_FILE)
                 continue;
 
             std::shared_ptr<MeshData> meshData = m_meshManager.getMeshData(meshComponent);
-
             // Store vertex offset
             vertexOffsets.push_back(currentVertexOffset);
-
             // Add vertex data
             for (auto &vert: meshData->vertices) {
                 InputAssembly input{};
@@ -123,41 +159,35 @@ namespace VkRender::RT {
                 vertexData.emplace_back(input);
             }
             currentVertexOffset += meshData->vertices.size();
-
             // Store index offset
             indexOffsets.push_back(currentIndexOffset);
-
             // Add index data
             for (auto idx: meshData->indices) {
                 indices.push_back(idx + vertexOffsets.back()); // Adjust indices by vertex offset
             }
             currentIndexOffset += meshData->indices.size();
         }
-
         // Upload vertex data to GPU
         auto &queue = m_selector.getQueue();
         m_gpu.vertices = sycl::malloc_device<InputAssembly>(vertexData.size(), queue);
         queue.memcpy(m_gpu.vertices, vertexData.data(), vertexData.size() * sizeof(InputAssembly));
-
         // Upload index data to GPU
         m_gpu.indices = sycl::malloc_device<uint32_t>(indices.size(), queue);
         queue.memcpy(m_gpu.indices, indices.data(), indices.size() * sizeof(uint32_t));
-
         // Upload transform matrices to GPU
         m_gpu.transforms = sycl::malloc_device<glm::mat4>(transformMatrices.size(), queue);
         queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(glm::mat4));
-
+        m_gpu.materials = sycl::malloc_device<MaterialComponent>(materials.size(), queue);
+        queue.memcpy(m_gpu.materials, materials.data(), materials.size() * sizeof(MaterialComponent));
         // Upload offsets (if necessary for rendering)
         m_gpu.vertexOffsets = sycl::malloc_device<uint32_t>(vertexOffsets.size(), queue);
         queue.memcpy(m_gpu.vertexOffsets, vertexOffsets.data(), vertexOffsets.size() * sizeof(uint32_t));
         m_gpu.indexOffsets = sycl::malloc_device<uint32_t>(indexOffsets.size(), queue);
         queue.memcpy(m_gpu.indexOffsets, indexOffsets.data(), indexOffsets.size() * sizeof(uint32_t));
-
         queue.wait();
 
         m_gpu.totalVertices = currentVertexOffset; // Number of entities for rendering
         m_gpu.totalIndices = currentIndexOffset; // Number of entities for rendering
-
         m_gpu.numEntities = static_cast<uint32_t>(transformMatrices.size()); // Number of entities for rendering
     }
 
@@ -270,7 +300,7 @@ namespace VkRender::RT {
             auto camera = std::dynamic_pointer_cast<PinholeCamera>(cameraEntity.getComponent<CameraComponent>().camera);
             auto &transform = cameraEntity.getComponent<TransformComponent>();
 
-            if (editorImageUI.kernel == "Path Tracer") {
+            if (editorImageUI.kernel == "Path Tracer: 2DGS") {
                 uint32_t totalPhotons = 100000;
                 sycl::range<1> globalRange(totalPhotons);
                 queue.submit([&](sycl::handler &cgh) {
@@ -279,16 +309,25 @@ namespace VkRender::RT {
                                                     transform, *camera, 1);
                     cgh.parallel_for(globalRange, kernel);
                 });
-            }
-                if (editorImageUI.kernel == "Hit-Test") {
+            } else if (editorImageUI.kernel == "Path Tracer: Mesh") {
+                uint32_t totalPhotons = 100000;
+                sycl::range<1> globalRange(totalPhotons);
+                queue.submit([&](sycl::handler &cgh) {
+                    // Capture GPUData, etc. by value or reference as needed
+                    PathTracerMeshKernels kernel(m_gpu, totalPhotons, m_width, m_height, m_width * m_height * 4,
+                                                 transform, *camera, 1);
+                    cgh.parallel_for(globalRange, kernel);
+                });
+            } else if (editorImageUI.kernel == "Hit-Test") {
                 uint32_t tileWidth = 16;
                 uint32_t tileHeight = 16;
                 sycl::range localWorkSize(tileHeight, tileWidth);
                 sycl::range globalWorkSize(m_height, m_width);
 
-                queue.submit([&](sycl::handler& h) {
+                queue.submit([&](sycl::handler &h) {
                     // Create a kernel instance with the required parameters
-                    const Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform, *camera);
+                    const Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform,
+                                                       *camera);
                     h.parallel_for<class RenderKernel>(
                             sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
                 }).wait();

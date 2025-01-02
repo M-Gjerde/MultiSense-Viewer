@@ -127,8 +127,8 @@ namespace VkRender {
             ImGui::SameLine();
 
             // Dropdown for selecting render kernel
-            const char* kernels[] = { "Hit-Test", "Path Tracer" };
-            static int selectedKernelIndex = 0; // Default selection
+            const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
+            static int selectedKernelIndex = 1; // Default selection
             if (ImGui::Combo("Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
                 imageUI->kernel = kernels[selectedKernelIndex];
             }

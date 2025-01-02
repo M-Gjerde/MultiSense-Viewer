@@ -313,7 +313,9 @@ namespace VkRender {
     void Scene::onComponentAdded<TemporaryComponent>(Entity entity, TemporaryComponent &component) {
     }
 
-
+    template<>
+    void Scene::onComponentAdded<GaussianComponent2DGS>(Entity entity, GaussianComponent2DGS &component) {
+    }
     /** COMPONENT REMOVE **/
 
     template<>
@@ -382,7 +384,9 @@ namespace VkRender {
     template<>
     void Scene::onComponentRemoved<TemporaryComponent>(Entity entity, TemporaryComponent &component) {
     }
-
+    template<>
+    void Scene::onComponentRemoved<GaussianComponent2DGS>(Entity entity, GaussianComponent2DGS &component) {
+    }
     /** COMPONENT UPDATE **/
     template<>
     void Scene::onComponentUpdated<IDComponent>(Entity entity, IDComponent &component) {
@@ -449,6 +453,9 @@ namespace VkRender {
 
     template<>
     void Scene::onComponentUpdated<TemporaryComponent>(Entity entity, TemporaryComponent &component) {
+    }
+    template<>
+    void Scene::onComponentUpdated<GaussianComponent2DGS>(Entity entity, GaussianComponent2DGS &component) {
     }
 
     DISABLE_WARNING_POP

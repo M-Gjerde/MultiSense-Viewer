@@ -318,6 +318,52 @@ namespace VkRender {
 
             out << YAML::EndMap;
         }
+        if (entity.hasComponent<GaussianComponent2DGS>()) {
+            out << YAML::Key << "GaussianComponent2DGS";
+            auto& component = entity.getComponent<GaussianComponent2DGS>();
+            out << YAML::BeginMap;
+            // Serialize positions
+            out << YAML::Key << "Positions";
+            out << YAML::Value << YAML::BeginSeq;
+            for (const auto& position : component.positions) {
+                out << YAML::Flow << YAML::BeginSeq << position.x << position.y << position.z << YAML::EndSeq;
+            }
+            out << YAML::EndSeq;
+
+            // Serialize normals
+            out << YAML::Key << "Normals";
+            out << YAML::Value << YAML::BeginSeq;
+            for (const auto& normal : component.normals) {
+                out << YAML::Flow << YAML::BeginSeq << normal.x << normal.y << normal.z << YAML::EndSeq;
+            }
+            out << YAML::EndSeq;
+
+            // Serialize scales
+            out << YAML::Key << "Scales";
+            out << YAML::Value << YAML::BeginSeq;
+            for (const auto& scale : component.scales) {
+                out << YAML::Flow << YAML::BeginSeq << scale.x << scale.y << YAML::EndSeq;
+            }
+            out << YAML::EndSeq;
+
+            // Serialize float properties
+            auto serializeFloatArray = [&](const std::vector<float>& values, const std::string& key) {
+                out << YAML::Key << key;
+                out << YAML::Value << YAML::BeginSeq;
+                for (const auto& value : values) {
+                    out << value;
+                }
+                out << YAML::EndSeq;
+            };
+
+            serializeFloatArray(component.emissions, "Emissions");
+            serializeFloatArray(component.colors, "Colors");
+            serializeFloatArray(component.diffuse, "Diffuse");
+            serializeFloatArray(component.specular, "Specular");
+            serializeFloatArray(component.phongExponents, "PhongExponents");
+
+            out << YAML::EndMap;
+        }
 
         if (entity.hasComponent<GaussianComponent>()) {
             out << YAML::Key << "GaussianComponent";
@@ -624,6 +670,59 @@ namespace VkRender {
                             component.colors.push_back(color);
                         }
                     }
+                }
+
+                auto gaussianComponent2DGSNode = entity["GaussianComponent2DGS"];
+                if (gaussianComponent2DGSNode) {
+                    auto& component = deserializedEntity.addComponent<GaussianComponent2DGS>();
+                    auto& node = gaussianComponent2DGSNode;
+                    // Deserialize positions
+                    if (node["Positions"]) {
+                        for (const auto& positionNode : node["Positions"]) {
+                            glm::vec3 position(
+                                    positionNode[0].as<float>(),
+                                    positionNode[1].as<float>(),
+                                    positionNode[2].as<float>()
+                            );
+                            component.positions.push_back(position);
+                        }
+                    }
+
+                    // Deserialize normals
+                    if (node["Normals"]) {
+                        for (const auto& normalNode : node["Normals"]) {
+                            glm::vec3 normal(
+                                    normalNode[0].as<float>(),
+                                    normalNode[1].as<float>(),
+                                    normalNode[2].as<float>()
+                            );
+                            component.normals.push_back(normal);
+                        }
+                    }
+
+                    // Deserialize scales
+                    if (node["Scales"]) {
+                        for (const auto& scaleNode : node["Scales"]) {
+                            glm::vec2 scale(
+                                    scaleNode[0].as<float>(),
+                                    scaleNode[1].as<float>()
+                            );
+                            component.scales.push_back(scale);
+                        }
+                    }
+                    // Deserialize float properties
+                    auto deserializeFloatArray = [&](std::vector<float>& values, const std::string& key) {
+                        if (node[key]) {
+                            for (const auto& valueNode : node[key]) {
+                                values.push_back(valueNode.as<float>());
+                            }
+                        }
+                    };
+                    deserializeFloatArray(component.emissions, "Emissions");
+                    deserializeFloatArray(component.colors, "Colors");
+                    deserializeFloatArray(component.diffuse, "Diffuse");
+                    deserializeFloatArray(component.specular, "Specular");
+                    deserializeFloatArray(component.phongExponents, "PhongExponents");
                 }
             }
 

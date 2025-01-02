@@ -7,6 +7,8 @@
 
 #include <glm/glm.hpp>
 
+#include "Viewer/Rendering/Components/MaterialComponent.h"
+
 namespace VkRender::RT {
     struct InputAssembly {
         glm::vec3 position;
@@ -19,15 +21,13 @@ namespace VkRender::RT {
         glm::vec3 normal;
         glm::vec2 scale;
 
-        float intensity;         // Emissive power
+        float emission;         // Emissive power
+        float color;             // Albedo
         float diffuse;           // Diffuse coefficient
         float specular;          // Specular coefficient
         float phongExponent;     // Shininess exponent
     };
 
-    struct GaussianScene {
-        GaussianInputAssembly *inputAssembly;
-    };
 
     struct GPUData {
         InputAssembly *vertices = nullptr;
@@ -36,6 +36,7 @@ namespace VkRender::RT {
         uint32_t *indexOffsets = nullptr;
         uint32_t numEntities = 0;
         glm::mat4 *transforms = nullptr;
+        MaterialComponent* materials = nullptr;
 
         uint32_t totalVertices;
         uint32_t totalIndices;
