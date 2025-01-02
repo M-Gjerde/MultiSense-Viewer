@@ -270,7 +270,7 @@ private:
         // find a emissive object:
         // TODO support multiple light sources
         for (size_t i = 0; i < m_gpuData.numGaussians; ++i) {
-            if (m_gpuData.materials[i].emissiveFactor.x != 0){
+            if (m_gpuData.materials[i].emission != 0){
                 return i;
             }
         }

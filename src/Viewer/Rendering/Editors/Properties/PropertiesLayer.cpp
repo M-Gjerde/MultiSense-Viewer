@@ -798,15 +798,14 @@ namespace VkRender {
 
             // Base Color Control
             ImGui::Text("Base Color");
-            ImGui::ColorEdit4("##BaseColor", glm::value_ptr(component.baseColor));
+            ImGui::ColorEdit4("##BaseColor", glm::value_ptr(component.albedo));
 
-            // Metallic Control
-            ImGui::Text("Metallic");
-            ImGui::SliderFloat("##Metallic", &component.metallic, 0.0f, 1.0f);
-
-            // Roughness Control
-            ImGui::Text("Roughness");
-            ImGui::SliderFloat("##Roughness", &component.roughness, 0.0f, 1.0f);
+            ImGui::Text("Appearance Properties");
+            bool update = false;
+            update |= drawFloatControl("Emission",  component.emission, 0.0f, 0.1f);
+            update |= drawFloatControl("Diffuse",  component.diffuse, 0.5f, 0.1f);
+            update |= drawFloatControl("Specular",  component.specular, 0.5f, 0.1f);
+            update |= drawFloatControl("PhongExponents",  component.phongExponent, 32.0f, 1.0f);
 
             /*
             // Emissive Factor Control
@@ -831,25 +830,6 @@ namespace VkRender {
                 EditorUtils::openImportFileDialog("Load Texture", types, LayerUtils::TEXTURE_FILE, &m_loadFileFuture);
             }
 
-            // Texture Control
-            ImGui::Checkbox("Use Video Source", &component.usesVideoSource);
-            if (component.usesVideoSource) {
-                ImGui::BeginChild("TextureChildWindow", ImVec2(0, ImGui::GetTextLineHeightWithSpacing() * 6), true);
-
-                ImGui::Text("Images folder:");
-                ImGui::Text("%s", component.videoFolderSource.string().c_str());
-                // Button to load texture
-                if (ImGui::Button("Set Image Folder")) {
-                    std::vector<std::string> types{".png", ".jpg", ".bmp"};
-                    EditorUtils::openImportFolderDialog("Set Image Folder", types, LayerUtils::VIDEO_TEXTURE_FILE,
-                                                        &m_loadFolderFuture);
-                }
-
-                ImGui::Checkbox("Is Disparity", &component.isDisparity);
-
-
-                ImGui::EndChild();
-            }
 
             // Shader Controls
             ImGui::Text("Vertex Shader:");
@@ -902,10 +882,10 @@ namespace VkRender {
                         // Amplitude Control
                         ImGui::Text("Appearance Properties");
                         update |= drawFloatControl("Emission",  component.emissions[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("Colors",  component.colors[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("Diffuse",  component.diffuse[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("Specular",  component.specular[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("PhongExponents",  component.phongExponents[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Colors",  component.colors[i], 1.0f, 0.1f);
+                        update |= drawFloatControl("Diffuse",  component.diffuse[i], 0.5f, 0.1f);
+                        update |= drawFloatControl("Specular",  component.specular[i], 0.5f, 0.1f);
+                        update |= drawFloatControl("PhongExponents",  component.phongExponents[i], 32.0f, 1.0f);
 
 
                         // Button to remove this Gaussian
@@ -1089,29 +1069,6 @@ namespace VkRender {
                     if (m_selectionContext.hasComponent<MeshComponent>()) {
                         auto &meshComponent = m_selectionContext.getComponent<MeshComponent>();
                         meshComponent.meshParameters = std::make_shared<PLYFileMeshParameters>(loadFileInfo.path);
-                    }
-                    break;
-                case LayerUtils::VIDEO_TEXTURE_FILE: {
-                    // TODO figure out how to know which component requested the folder or file load operation
-                    if (m_selectionContext.hasComponent<MaterialComponent>()) {
-                        auto &materialComponent = m_selectionContext.getComponent<MaterialComponent>();
-                        materialComponent.videoFolderSource = loadFileInfo.path;
-                        m_context->activeScene()->onComponentUpdated(m_selectionContext, materialComponent);
-                    }
-                }
-                    break;
-                case LayerUtils::VIDEO_DISPARITY_DEPTH_TEXTURE_FILE:
-                    if (m_selectionContext.hasComponent<PointCloudComponent>()) {
-                        auto &pointCloudComponent = m_selectionContext.getComponent<PointCloudComponent>();
-                        pointCloudComponent.depthVideoFolderSource = loadFileInfo.path;
-                        m_context->activeScene()->onComponentUpdated(m_selectionContext, pointCloudComponent);
-                    }
-                    break;
-                case LayerUtils::VIDEO_DISPARITY_COLOR_TEXTURE_FILE:
-                    if (m_selectionContext.hasComponent<PointCloudComponent>()) {
-                        auto &pointCloudComponent = m_selectionContext.getComponent<PointCloudComponent>();
-                        pointCloudComponent.colorVideoFolderSource = loadFileInfo.path;
-                        m_context->activeScene()->onComponentUpdated(m_selectionContext, pointCloudComponent);
                     }
                     break;
                 default:

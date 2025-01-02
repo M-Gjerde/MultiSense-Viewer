@@ -260,40 +260,25 @@ namespace VkRender {
             // Serialize baseColor (glm::vec4)
             out << YAML::Key << "BaseColor";
             out << YAML::Value << YAML::Flow << std::vector<float>{
-                material.baseColor.r, material.baseColor.g, material.baseColor.b, material.baseColor.a
+                material.albedo.r, material.albedo.g, material.albedo.b, material.albedo.a
             };
             // Serialize metallic factor (float)
-            out << YAML::Key << "Metallic";
-            out << YAML::Value << material.metallic;
-            // Serialize roughness factor (float)
-            out << YAML::Key << "Roughness";
-            out << YAML::Value << material.roughness;
-            // Serialize usesTexture flag (bool)
-            out << YAML::Key << "UsesTexture";
-            out << YAML::Value << material.usesVideoSource;
-            // Serialize emissiveFactor (glm::vec4)
-            out << YAML::Key << "EmissiveFactor";
-            out << YAML::Value << YAML::Flow << std::vector<float>{
-                material.emissiveFactor.r, material.emissiveFactor.g, material.emissiveFactor.b,
-                material.emissiveFactor.a
-            };
+            out << YAML::Key << "Emission";
+            out << YAML::Value << material.emission;
+            out << YAML::Key << "Diffuse";
+            out << YAML::Value << material.diffuse;
+            out << YAML::Key << "Specular";
+            out << YAML::Value << material.specular;
+            out << YAML::Key << "PhongExponent";
+            out << YAML::Value << material.phongExponent;
             // Serialize vertex shader name (std::filesystem::path)
             out << YAML::Key << "VertexShader";
             out << YAML::Value << material.vertexShaderName.string(); // Convert path to string
             // Serialize fragment shader name (std::filesystem::path)
             out << YAML::Key << "FragmentShader";
             out << YAML::Value << material.fragmentShaderName.string(); // Convert path to string
-            // Serialize the flag for video source
-            out << YAML::Key << "UsesVideoSource";
-            out << YAML::Value << material.usesVideoSource;
-            // If video source is used, serialize the video folder source
-            if (material.usesVideoSource) {
-                out << YAML::Key << "VideoFolderSource";
-                out << YAML::Value << material.videoFolderSource.string();
-                out << YAML::Key << "IsDisparity";
-                out << YAML::Value << material.isDisparity;
-            }
-
+            out << YAML::Key << "AlbedoTexturePath";
+            out << YAML::Value << material.albedoTexturePath.string(); // Convert path to string
             out << YAML::EndMap;
         }
 
@@ -573,21 +558,29 @@ namespace VkRender {
                     // Deserialize base color
                     auto baseColor = materialComponent["BaseColor"].as<std::vector<float>>();
                     if (baseColor.size() == 4) {
-                        material.baseColor = glm::vec4(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
+                        material.albedo = glm::vec4(baseColor[0], baseColor[1], baseColor[2], baseColor[3]);
                     }
-                    // Deserialize metallic factor
-                    material.metallic = materialComponent["Metallic"].as<float>();
-                    // Deserialize roughness factor
-                    material.roughness = materialComponent["Roughness"].as<float>();
+                    if (materialComponent["Emission"]) {
+                        material.emission = materialComponent["Emission"].as<float>();
+                    } else {
+                        material.emission = 0.0f; // Default value or handle as needed
+                    }
+                    if (materialComponent["Diffuse"]) {
+                        material.diffuse = materialComponent["Diffuse"].as<float>();
+                    } else {
+                        material.diffuse = 0.0f; // Default value or handle as needed
+                    }
+                    if (materialComponent["Specular"]) {
+                        material.specular = materialComponent["Specular"].as<float>();
+                    } else {
+                        material.specular = 0.0f; // Default value or handle as needed
+                    }
+                    if (materialComponent["PhongExponent"]) {
+                        material.phongExponent = materialComponent["PhongExponent"].as<float>();
+                    } else {
+                        material.phongExponent = 32.0f; // Default value or handle as needed
+                    }
                     // Deserialize uses texture flag
-                    material.usesVideoSource = materialComponent["UsesTexture"].as<bool>();
-                    // Deserialize emissive factor
-                    auto emissiveFactor = materialComponent["EmissiveFactor"].as<std::vector<float>>();
-                    if (emissiveFactor.size() == 4) {
-                        material.emissiveFactor = glm::vec4(emissiveFactor[0], emissiveFactor[1], emissiveFactor[2],
-                                                            emissiveFactor[3]);
-                    }
-                    // Deserialize vertex shader name
                     if (materialComponent["VertexShader"]) {
                         material.vertexShaderName = std::filesystem::path(
                             materialComponent["VertexShader"].as<std::string>());
@@ -596,13 +589,6 @@ namespace VkRender {
                     if (materialComponent["FragmentShader"]) {
                         material.fragmentShaderName = std::filesystem::path(
                             materialComponent["FragmentShader"].as<std::string>());
-                    }
-                    // Deserialize albedo texture path (only if usesTexture is true)
-                    if (material.usesVideoSource && materialComponent["VideoFolderSource"]) {
-                        material.videoFolderSource = std::filesystem::path(
-                            materialComponent["VideoFolderSource"].as<std::string>());
-                        material.isDisparity =
-                            materialComponent["IsDisparity"].as<bool>();
                     }
                 }
 

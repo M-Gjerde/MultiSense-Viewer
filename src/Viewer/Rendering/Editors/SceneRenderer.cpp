@@ -428,11 +428,10 @@ namespace VkRender {
         if (entity.hasComponent<MaterialComponent>() && !m_entityRenderData[entity.getUUID()].materialBuffer.empty()) {
             auto& material = entity.getComponent<MaterialComponent>();
             MaterialBufferObject matUBO = {};
-            matUBO.baseColor = material.baseColor;
-            matUBO.metallic = material.metallic;
-            matUBO.roughness = material.roughness;
-            matUBO.emissiveFactor = material.emissiveFactor;
-            matUBO.isDisparity = material.isDisparity;
+            matUBO.baseColor = material.albedo;
+            matUBO.metallic = material.specular;
+            matUBO.roughness = material.diffuse;
+            matUBO.emissiveFactor = glm::vec4(material.emission);
             void* data;
             vkMapMemory(m_context->vkDevice().m_LogicalDevice,
                         m_entityRenderData[entity.getUUID()].materialBuffer[frameIndex]->m_memory, 0,

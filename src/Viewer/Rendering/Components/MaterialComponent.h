@@ -18,22 +18,17 @@ namespace VkRender {
         Blend
     };
     struct MaterialComponent {
-        glm::vec4 baseColor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);    // Base color (could be an albedo color)
-        float metallic = 1.0f;                    // Metallic factor
-        float roughness = 1.0f;                   // Roughness factor
-        // Emissive properties
-        glm::vec4 emissiveFactor = glm::vec4(0.0f); // Default to no emission
+        glm::vec4 albedo = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);    // Base color (could be an albedo color)
+        float emission = 0.0f;         // Emissive power
+        float diffuse = 0.5f;           // Diffuse coefficient
+        float specular = 0.5f;          // Specular coefficient
+        float phongExponent = 32.0f;     // Shininess exponent
 
         bool reloadShader = false;
 
         std::filesystem::path vertexShaderName = "defaultBasic.vert";
         std::filesystem::path fragmentShaderName = "defaultPhongLight.frag";
         std::filesystem::path albedoTexturePath = "default.png";
-
-        bool usesVideoSource = false;
-        std::filesystem::path videoFolderSource = "path/to/images";
-        bool isDisparity = false;
-
     };
 
     struct MaterialInstance {
