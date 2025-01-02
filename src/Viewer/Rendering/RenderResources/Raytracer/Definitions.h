@@ -7,7 +7,7 @@
 
 #include <glm/glm.hpp>
 
-namespace VkRender::RT{
+namespace VkRender::RT {
     struct InputAssembly {
         glm::vec3 position;
         glm::vec3 color;
@@ -26,20 +26,26 @@ namespace VkRender::RT{
     };
 
     struct GaussianScene {
-        GaussianInputAssembly* inputAssembly;
+        GaussianInputAssembly *inputAssembly;
     };
 
     struct GPUData {
-        InputAssembly* vertices = nullptr;
-        uint32_t*  indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
-        size_t numVertices;
-        size_t numIndices;
+        InputAssembly *vertices = nullptr;
+        uint32_t *indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
+        uint32_t *vertexOffsets = nullptr;
+        uint32_t *indexOffsets = nullptr;
+        uint32_t numEntities = 0;
+        glm::mat4 *transforms = nullptr;
+
+        uint32_t totalVertices;
+        uint32_t totalIndices;
+
         // GS
-        GaussianInputAssembly* gaussianInputAssembly = nullptr;
+        GaussianInputAssembly *gaussianInputAssembly = nullptr;
         size_t numGaussians;
 
         // uint8_t
-        uint8_t* imageMemory;
+        uint8_t *imageMemory;
     };
 
 

@@ -1,0 +1,24 @@
+//
+// Created by magnus on 1/2/25.
+//
+
+#ifndef MULTISENSE_VIEWER_EDITORIMAGEUI_H
+#define MULTISENSE_VIEWER_EDITORIMAGEUI_H
+
+#include "Viewer/Rendering/ImGui/Layer.h"
+
+namespace VkRender {
+
+    struct EditorImageUI : public EditorUI {
+
+        bool uploadScene = false;
+        bool render = false;
+
+        std::string kernel = "Hit-Test";
+
+        // Constructor that copies everything from base EditorUI
+        EditorImageUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
+    };
+
+}
+#endif //MULTISENSE_VIEWER_EDITORIMAGEUI_H

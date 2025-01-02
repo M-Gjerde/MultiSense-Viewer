@@ -51,17 +51,7 @@ namespace VkRender::RT::Kernels {
         return false;
     }
 
-    static bool
-    intersectPlane(const glm::vec3 &n, const glm::vec3 &p0, const glm::vec3 &l0, const glm::vec3 &l, float &t) {
-        // Assuming vectors are normalized
-        float denom = glm::dot(n, l);
-        if (std::abs(denom) > 1e-6) { // Avoid near-parallel cases
-            glm::vec3 p0l0 = p0 - l0;
-            t = glm::dot(p0l0, n) / denom;
-            return (t >= 0); // Only return true for intersections in front of the ray
-        }
-        return false;
-    }
+
 
     class RenderKernel {
     public:
@@ -98,7 +88,124 @@ namespace VkRender::RT::Kernels {
             float closest_t = FLT_MAX;
             bool hit = false;
             size_t hitIdx = 0; // Index of the Gaussian that is hit
+            glm::vec3 hitPointWorld(0.0f);
 
+            // Loop over all entities
+            for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
+                // Get entity transform and invert it to transform the ray into local space
+                glm::mat4 entityTransform  = m_gpuData.transforms[entityIdx];
+                glm::mat4 invEntityTransform = glm::inverse(entityTransform);
+
+                // Transform ray to local space
+                glm::vec3 localRayOrigin = glm::vec3(invEntityTransform * glm::vec4(rayOrigin, 1.0f));
+                glm::vec3 localRayDir    = glm::normalize(
+                        glm::vec3(invEntityTransform * glm::vec4(worldRayDir, 0.0f))
+                );
+
+                // Determine which slice of the index buffer belongs to this entity
+                uint32_t startIndex = m_gpuData.indexOffsets[entityIdx];
+                // If this is the last entity, go until the end. Otherwise, go until next offset.
+                uint32_t endIndex   = (entityIdx + 1 < m_gpuData.numEntities)
+                                      ? m_gpuData.indexOffsets[entityIdx + 1]
+                                      : 0; // We'll fix this below
+
+                // If the user never stored a total index count, you can do:
+                //  - either store totalIndices in GPUData
+                //  - or handle it carefully.
+                // For clarity, let's assume 'endIndex' is:
+                if (entityIdx + 1 < m_gpuData.numEntities) {
+                    endIndex = m_gpuData.indexOffsets[entityIdx + 1];
+                } else {
+                    // If we have a total index count, use it
+                    endIndex = m_gpuData.totalIndices; // if you had stored it
+                    // If not, you need to pass it from the host or keep track in some other way.
+                    // For example, assume indexOffsets.back() is the last offset:
+                    // endIndex = m_gpuData.indexOffsets[m_gpuData.numEntities - 1] + ???
+                    // We'll illustrate one approach:
+                    // endIndex = <the final number of indices uploaded>;
+                }
+
+                // For simplicity, let's assume you have a "totalIndices" or you set endIndex properly:
+                // size_t entityIndexCount = endIndex - startIndex;
+                // size_t triangleCount    = entityIndexCount / 3;
+
+                // If you do NOT have totalIndices stored, you might do:
+                // (We'll assume 'endIndex' is computed or we do a minimal example.)
+                // For demonstration, let's do a safer pattern check:
+                if (endIndex <= startIndex) {
+                    // This means the current entity is the last one or misconfigured
+                    // Without totalIndices in GPUData, you might not know how far to go
+                    continue;
+                }
+                size_t entityIndexCount = endIndex - startIndex;
+                size_t triangleCount    = entityIndexCount / 3;
+
+                // Test each triangle
+                for (size_t t = 0; t < triangleCount; ++t) {
+                    uint32_t i0 = m_gpuData.indices[startIndex + t * 3 + 0];
+                    uint32_t i1 = m_gpuData.indices[startIndex + t * 3 + 1];
+                    uint32_t i2 = m_gpuData.indices[startIndex + t * 3 + 2];
+
+                    // Local-space vertices
+                    const glm::vec3& aLocal = m_gpuData.vertices[i0].position;
+                    const glm::vec3& bLocal = m_gpuData.vertices[i1].position;
+                    const glm::vec3& cLocal = m_gpuData.vertices[i2].position;
+
+                    // Ray-triangle test in local space
+                    glm::vec3 localHit(0.0f);
+                    if (rayTriangleIntersect(localRayOrigin, localRayDir, aLocal, bLocal, cLocal, localHit)) {
+                        // Convert the local hit point back to world space
+                        glm::vec3 worldHit = glm::vec3(entityTransform * glm::vec4(localHit, 1.0f));
+                        float dist = glm::distance(rayOrigin, worldHit);
+
+                        if (dist < closest_t) {
+                            closest_t     = dist;
+                            hit           = true;
+                            hitPointWorld = worldHit;
+                        }
+                    }
+                }
+            } // end for (entityIdx)
+
+
+            if (hit) {
+                // If we hit a triangle, color the pixel accordingly.
+                // For a simple visualization, let’s map intersection distance to grayscale.
+                float maxDistance = 10.0f;
+                float minDistance = 0.25f;
+
+                // Clamp the distance to the range [minDistance, maxDistance]
+                float clampedDist = glm::clamp(closest_t, minDistance, maxDistance);
+
+                // Map the clamped distance to the intensity range [0, 255]
+                uint8_t intensity = static_cast<uint8_t>((clampedDist - minDistance) / (maxDistance - minDistance) * 255.0f);
+
+                // Write the intensity to the image memory (RGBA)
+                m_gpuData.imageMemory[pixelIndex + 0] = 255 - intensity; // R
+                m_gpuData.imageMemory[pixelIndex + 1] = 255 - intensity; // G
+                m_gpuData.imageMemory[pixelIndex + 2] = 255 - intensity; // B
+                m_gpuData.imageMemory[pixelIndex + 3] = 255;       // A
+            }
+            else {
+                // No intersection: clear pixel to some background color.
+                m_gpuData.imageMemory[pixelIndex + 0] = 0; // R
+                m_gpuData.imageMemory[pixelIndex + 1] = 0; // G
+                m_gpuData.imageMemory[pixelIndex + 2] = 0; // B
+                m_gpuData.imageMemory[pixelIndex + 3] = 255; // A
+            }
+
+            /*
+                static bool
+    intersectPlane(const glm::vec3 &n, const glm::vec3 &p0, const glm::vec3 &l0, const glm::vec3 &l, float &t) {
+        // Assuming vectors are normalized
+        float denom = glm::dot(n, l);
+        if (std::abs(denom) > 1e-6) { // Avoid near-parallel cases
+            glm::vec3 p0l0 = p0 - l0;
+            t = glm::dot(p0l0, n) / denom;
+            return (t >= 0); // Only return true for intersections in front of the ray
+        }
+        return false;
+    }
             for (size_t idx = 0; idx < m_gpuData.numGaussians; ++idx) {
                 glm::vec3 &pos = m_gpuData.gaussianInputAssembly[idx].position;
                 glm::vec3 &normal = m_gpuData.gaussianInputAssembly[idx].normal;
@@ -157,6 +264,7 @@ namespace VkRender::RT::Kernels {
                 m_gpuData.imageMemory[pixelIndex + 2] = 0; // B
                 m_gpuData.imageMemory[pixelIndex + 3] = 255; // A
             }
+             */
         }
 
     private:

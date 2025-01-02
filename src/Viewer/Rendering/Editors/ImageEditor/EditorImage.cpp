@@ -59,16 +59,16 @@ namespace VkRender {
     void EditorImage::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorImageUI>(m_ui);
 
-        if (imageUI->iterateOptimizer) {
+        if (imageUI->uploadScene) {
             m_rayTracer->upload(m_context->activeScene());
 
         }
 
-        m_rayTracer->update(imageUI->updateImage);
-
-        if (imageUI->updateImage){
+        if (imageUI->render){
+            m_rayTracer->update(*imageUI);
             m_colorTexture->loadImage(m_rayTracer->getImage(), m_createInfo.width * m_createInfo.height * 4);
         }
+
     }
 
     void EditorImage::onMouseMove(const MouseButtons &mouse) {
@@ -104,7 +104,7 @@ namespace VkRender {
         key.setLayouts.resize(1);
         auto imageUI = std::dynamic_pointer_cast<EditorImageUI>(m_ui);
 
-        if (imageUI->iterateOptimizer) {
+        if (imageUI->uploadScene) {
             m_descriptorRegistry.getManager(DescriptorManagerType::Viewport3DTexture).freeDescriptorSets();
         }
         // Prepare descriptor writes based on your texture or other resources

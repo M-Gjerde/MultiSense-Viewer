@@ -18,7 +18,7 @@ namespace VkRender {
         float m_width, m_height;
 
         PinholeCamera(uint32_t width, uint32_t height, float fx, float fy, float cx, float cy, float zNear = 0.1f,
-                      float zFar = 10.0f) {
+                      float zFar = 100.0f) {
             m_width = static_cast<float>(width);
             m_height = static_cast<float>(height);
             m_fx = fx;

@@ -73,6 +73,7 @@ private:
             // -------------------------------------------------
             // A) Check if photon hits sensor (before geometry)
             // -------------------------------------------------
+            /*
             float tSensor = FLT_MAX;
             bool  sensorHit = intersectPlane(
                                   m_gpuData.sensorPlaneNormal,
@@ -82,14 +83,17 @@ private:
                                   tSensor);
 
             // We'll track the closest intersection in the scene
+             */
             float tMin   = FLT_MAX;
             int   hitIdx = -1; // no hit
 
+            /*
             if (sensorHit && tSensor > 0.f) {
                 // So far, sensor is the best candidate intersection
                 tMin   = tSensor;
                 hitIdx = -2;  // special ID => sensor
             }
+            */
 
             // B) Intersect with scene geometry
             for (size_t i = 0; i < m_gpuData.numGaussians; ++i) {

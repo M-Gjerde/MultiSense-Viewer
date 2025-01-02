@@ -10,10 +10,12 @@ namespace VkRender {
     VulkanResourceManager *VulkanResourceManager::instance = nullptr;
 
     void VulkanResourceManager::cleanup(bool onExit) {
+        auto functionStart = std::chrono::high_resolution_clock::now();
 
+        Log::Logger::getInstance()->trace("Cleaning up unused resources");
         std::lock_guard<std::mutex> lock(resourceMutex);
 
-        submitCommandBuffers();
+        //submitCommandBuffers();
 
         // Check if fences are signaled and execute corresponding cleanup functions
         for (auto it = m_deferredCleanupFunctions.begin(); it != m_deferredCleanupFunctions.end();) {
@@ -27,6 +29,9 @@ namespace VkRender {
             }
         }
 
+        auto functionEnd = std::chrono::high_resolution_clock::now();
+        auto functionDuration = std::chrono::duration_cast<std::chrono::milliseconds>(functionEnd - functionStart).count();
+        Log::Logger::getInstance()->trace("cleanup function took {} microseconds to execute", functionDuration);
     }
 
     void VulkanResourceManager::submitCommandBuffers() {

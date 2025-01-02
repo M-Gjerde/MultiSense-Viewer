@@ -13,6 +13,7 @@
 #include "Viewer/Tools/SyclDeviceSelector.h"
 #endif
 
+#include "Viewer/Rendering/Editors/ImageEditor/EditorImageUI.h"
 
 namespace VkRender::RT {
 #ifdef SYCL_ENABLED
@@ -23,7 +24,7 @@ namespace VkRender::RT {
         void uploadGaussianData(std::shared_ptr<Scene>& scene);
         void uploadVertexData(std::shared_ptr<Scene>& scene);
 
-        void update(bool update);
+        void update(const EditorImageUI& editorImageUI);
 
 
         uint8_t* getImage() {return m_imageMemory;}

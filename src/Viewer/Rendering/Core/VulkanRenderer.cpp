@@ -550,6 +550,9 @@ namespace VkRender {
                 std::chrono::high_resolution_clock::now() - tStart).count();
             frameTimer = static_cast<float>(tDiff) / 1000.0f;
 
+            if (static_cast<float>(tDiff) > 33){
+                Log::Logger::getInstance()->trace("Warning: Exceeding 33ms for render time");
+            }
             postRenderActions();
             mouse.d = glm::vec2(0.0f);
             mouse.action = -1;

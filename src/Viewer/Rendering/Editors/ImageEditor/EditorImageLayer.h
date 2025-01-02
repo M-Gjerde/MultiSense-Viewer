@@ -7,24 +7,10 @@
 
 #include "Viewer/Rendering/ImGui/Layer.h"
 #include "Viewer/Rendering/ImGui/IconsFontAwesome6.h"
+#include "Viewer/Rendering/Editors/ImageEditor/EditorImageUI.h"
 
 namespace VkRender {
 
-    struct EditorImageUI : public EditorUI {
-        bool renderMultiSense = false;
-
-        bool renderFromSceneCamera = false;
-        bool update = false;
-
-        int previewID = 0;
-        std::string selectedCameraName = "";
-
-        bool iterateOptimizer = false;
-        bool updateImage = false;
-
-        // Constructor that copies everything from base EditorUI
-        EditorImageUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
-    };
 
     class EditorImageLayer : public Layer {
 
@@ -62,8 +48,8 @@ namespace VkRender {
 
             auto imageUI = std::dynamic_pointer_cast<EditorImageUI>(m_editor->ui());
 
-
-            ImGui::Checkbox("Scene camera", &imageUI->renderFromSceneCamera); ImGui::SameLine();
+            /*
+            ImGui::Checkbox("Scene camera", &imageUI->renderFromSceneCamera); ImGui::SameLine();h
             if (imageUI->renderFromSceneCamera) {
                 auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
                 std::vector<std::string> cameraEntityNames;
@@ -126,25 +112,27 @@ namespace VkRender {
                     ImGui::EndCombo();
                 }
             }
+            */
             ImGui::SameLine();
-            imageUI->iterateOptimizer = ImGui::Button("Optimize");
-            static bool toggleOptimize = false;
-            ImGui::SameLine();
-            ImGui::Checkbox("Toggle Optimize Update", &toggleOptimize);
-            if (toggleOptimize){
-                imageUI->iterateOptimizer = true;
-            }
+            imageUI->uploadScene = ImGui::Button("UploadScene");
             ImGui::SameLine();
 
-            imageUI->updateImage = ImGui::Button("Update Image");
+            imageUI->render = ImGui::Button("Render");
             static bool togleImageUpdate = false;
             ImGui::SameLine();
-            ImGui::Checkbox("Toggle Image Update", &togleImageUpdate);
+            ImGui::Checkbox("Toggle Render", &togleImageUpdate);
             if (togleImageUpdate){
-                imageUI->updateImage = true;
+                imageUI->render = true;
+            }
+            ImGui::SameLine();
+
+            // Dropdown for selecting render kernel
+            const char* kernels[] = { "Hit-Test", "Path Tracer" };
+            static int selectedKernelIndex = 0; // Default selection
+            if (ImGui::Combo("Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
+                imageUI->kernel = kernels[selectedKernelIndex];
             }
 
-            ImGui::SameLine();
             ImGui::End();
 
         }
