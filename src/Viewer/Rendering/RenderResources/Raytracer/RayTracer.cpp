@@ -6,11 +6,11 @@
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
 
 #include "LightTracerKernels.h"
-#include "Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/PathTracerMeshKernels.h"
 
 #include "Viewer/Rendering/Components/GaussianComponent.h"
 #include "Viewer/Tools/SyclDeviceSelector.h"
+#include "RayTracerKernels.h"
 
 namespace VkRender::RT {
     RayTracer::RayTracer(Application *ctx, std::shared_ptr<Scene> &scene, uint32_t width, uint32_t height) : m_context(
@@ -99,8 +99,9 @@ namespace VkRender::RT {
         std::vector<uint32_t> indices;
         std::vector<uint32_t> indexOffsets;       // Offset for each entity's indices
         std::vector<uint32_t> vertexOffsets;     // Offset for each entity's vertices
-        std::vector<glm::mat4> transformMatrices; // Transformation matrices for entities
+        std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
         std::vector<MaterialComponent> materials; // Transformation matrices for entities
+        std::vector<TagComponent> tagComponents; // Transformation matrices for entities
         auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
@@ -134,7 +135,10 @@ namespace VkRender::RT {
                 continue;
             }
             auto &transform = entity.getComponent<TransformComponent>();
-            transformMatrices.emplace_back(transform.getTransform());
+            transformMatrices.emplace_back(transform);
+
+            auto tagComponent = entity.getComponent<TagComponent>();
+            tagComponents.emplace_back(tagComponent);
 
             if (entity.hasComponent<MaterialComponent>()){
                 auto &material = entity.getComponent<MaterialComponent>();
@@ -174,10 +178,12 @@ namespace VkRender::RT {
         m_gpu.indices = sycl::malloc_device<uint32_t>(indices.size(), queue);
         queue.memcpy(m_gpu.indices, indices.data(), indices.size() * sizeof(uint32_t));
         // Upload transform matrices to GPU
-        m_gpu.transforms = sycl::malloc_device<glm::mat4>(transformMatrices.size(), queue);
-        queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(glm::mat4));
+        m_gpu.transforms = sycl::malloc_device<TransformComponent>(transformMatrices.size(), queue);
+        queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(TransformComponent));
         m_gpu.materials = sycl::malloc_device<MaterialComponent>(materials.size(), queue);
         queue.memcpy(m_gpu.materials, materials.data(), materials.size() * sizeof(MaterialComponent));
+        m_gpu.tagComponents = sycl::malloc_device<TagComponent>(tagComponents.size(), queue);
+        queue.memcpy(m_gpu.tagComponents, tagComponents.data(), tagComponents.size() * sizeof(TagComponent));
         // Upload offsets (if necessary for rendering)
         m_gpu.vertexOffsets = sycl::malloc_device<uint32_t>(vertexOffsets.size(), queue);
         queue.memcpy(m_gpu.vertexOffsets, vertexOffsets.data(), vertexOffsets.size() * sizeof(uint32_t));
@@ -290,14 +296,22 @@ namespace VkRender::RT {
             }
         }
         */
-
-
         auto &queue = m_selector.getQueue();
+        if (editorImageUI.clearImageMemory){
+            queue.fill(m_gpu.imageMemory, static_cast<uint8_t>(0), m_width * m_height * 4).wait();
+            m_frameID = 0;
+        }
 
         auto cameraEntity = m_scene->getEntityByName("Camera");
-        if (cameraEntity) {
-            auto camera = std::dynamic_pointer_cast<PinholeCamera>(cameraEntity.getComponent<CameraComponent>().camera);
-            auto &transform = cameraEntity.getComponent<TransformComponent>();
+        if (cameraEntity && !editorImageUI.clearImageMemory) {
+            auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
+            auto transform = cameraEntity.getComponent<TransformComponent>();
+
+            PinholeCamera cam;
+            auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
+            queue.memcpy(cameraGPU, camera.get(), sizeof(PinholeCamera));
+
+
 
             if (editorImageUI.kernel == "Path Tracer: 2DGS") {
                 uint32_t totalPhotons = 100000;
@@ -305,16 +319,16 @@ namespace VkRender::RT {
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     RenderKernelLightTracing kernel(m_gpu, totalPhotons, m_width, m_height, m_width * m_height * 4,
-                                                    transform, *camera, 1);
+                                                    transform, cameraGPU, 1);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Path Tracer: Mesh") {
-                uint32_t totalPhotons = 100000;
+                uint32_t totalPhotons = 10000;
                 sycl::range<1> globalRange(totalPhotons);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     PathTracerMeshKernels kernel(m_gpu, totalPhotons, m_width, m_height, m_width * m_height * 4,
-                                                 transform, *camera, 1);
+                                                 transform, cameraGPU, 1, m_frameID);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Hit-Test") {
@@ -325,19 +339,20 @@ namespace VkRender::RT {
 
                 queue.submit([&](sycl::handler &h) {
                     // Create a kernel instance with the required parameters
-                    const Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform,
-                                                       *camera);
+                    Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform,
+                                                 cameraGPU);
                     h.parallel_for<class RenderKernel>(
                             sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
-                }).wait();
+                });
             }
 
-            queue.wait();
-            queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * 4);
-            queue.wait();
+            sycl::free(cameraGPU, queue);
 
-            //saveAsPPM("sycl.ppm");;
+            queue.wait();
+            m_frameID++;
         }
+        queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * 4).wait();
+
     }
 
     RayTracer::~RayTracer() {

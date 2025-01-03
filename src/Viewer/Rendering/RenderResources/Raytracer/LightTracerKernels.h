@@ -16,7 +16,7 @@ public:
                              uint32_t       height,
                              uint32_t       size,
                              TransformComponent cameraPose,
-                             PinholeCamera  camera,
+                             PinholeCamera*  camera,
                              uint32_t       maxBounces)
         : m_gpuData(gpuData)
         , m_numPhotons(numPhotons)
@@ -47,7 +47,7 @@ private:
     uint32_t        m_maxBounces;  // e.g. 5, 8, or 10
 
     TransformComponent m_cameraTransform{};
-    PinholeCamera      m_camera{};
+    PinholeCamera*      m_camera{};
 
     // ---------------------------------------------------------
     // Single Photon Trace (Multi-Bounce)
@@ -235,16 +235,7 @@ private:
     void accumulateOnSensor(const glm::vec3 &sensorHitPoint, float flux) const
     {
         int sensorPixelX, sensorPixelY;
-        projectSensorPoint(sensorHitPoint, sensorPixelX, sensorPixelY);
 
-        if (sensorPixelX >= 0 && sensorPixelX < (int)m_camera.m_width &&
-            sensorPixelY >= 0 && sensorPixelY < (int)m_camera.m_height)
-        {
-            // pseudo-code to add flux
-            // size_t idx = (sensorPixelY * m_camera.m_width + sensorPixelX) * 4;
-            // m_gpuData.imageAccumBuffer[idx + 0] += flux;
-            // ...
-        }
     }
 
     // ---------------------------------------------------------

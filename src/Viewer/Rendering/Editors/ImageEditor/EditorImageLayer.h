@@ -129,8 +129,15 @@ namespace VkRender {
             // Dropdown for selecting render kernel
             const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
             static int selectedKernelIndex = 1; // Default selection
-            if (ImGui::Combo("Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
+            ImGui::SetNextItemWidth(100.0f);
+            if (ImGui::Combo("##Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
                 imageUI->kernel = kernels[selectedKernelIndex];
+            }
+            ImGui::SameLine();
+
+            imageUI->clearImageMemory = ImGui::Button("Clear image memory");
+            if (imageUI->clearImageMemory){
+                imageUI->render = true;
             }
 
             ImGui::End();

@@ -400,8 +400,6 @@ namespace VkRender {
             out << YAML::Key << "GroupComponent";
             out << YAML::BeginMap;
             auto& groupComponent = entity.getComponent<GroupComponent>();
-            out << YAML::Key << "ColmapPath";
-            out << YAML::Value << groupComponent.colmapPath.string();
             out << YAML::EndMap;
         }
 
@@ -617,9 +615,6 @@ namespace VkRender {
                 auto groupComponent = entity["GroupComponent"];
                 if (groupComponent) {
                     auto& component = deserializedEntity.addComponent<GroupComponent>();
-                    auto colmapPathNode = groupComponent["ColmapPath"];
-                    if (colmapPathNode)
-                        component.colmapPath = colmapPathNode.as<std::string>();
                 }
 
                 auto gaussianComponentNode = entity["GaussianComponent"];

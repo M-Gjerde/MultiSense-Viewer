@@ -56,7 +56,7 @@ namespace VkRender::RT::Kernels {
     class RenderKernel {
     public:
         RenderKernel(GPUData gpuData, uint32_t width, uint32_t height, uint32_t size, TransformComponent cameraPose,
-                     PinholeCamera camera)
+                     PinholeCamera* camera)
                 : m_gpuData(gpuData), m_width(width), m_height(height), m_size(size), m_cameraTransform(cameraPose),
                   m_camera(camera) {
         }
@@ -69,10 +69,10 @@ namespace VkRender::RT::Kernels {
             if (pixelIndex >= m_size)
                 return;
 
-            float fx = m_camera.m_fx;
-            float fy = m_camera.m_fy;
-            float cx = m_camera.m_cx;
-            float cy = m_camera.m_cy;
+            float fx = m_camera->m_fx;
+            float fy = m_camera->m_fy;
+            float cx = m_camera->m_cx;
+            float cy = m_camera->m_cy;
             float Z_plane = -1.0f;
 
             auto mapPixelTo3D = [&](float u, float v) {
@@ -93,7 +93,7 @@ namespace VkRender::RT::Kernels {
             // Loop over all entities
             for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
                 // Get entity transform and invert it to transform the ray into local space
-                glm::mat4 entityTransform  = m_gpuData.transforms[entityIdx];
+                glm::mat4 entityTransform  = m_gpuData.transforms[entityIdx].getTransform();
                 glm::mat4 invEntityTransform = glm::inverse(entityTransform);
 
                 // Transform ray to local space
@@ -274,7 +274,7 @@ namespace VkRender::RT::Kernels {
         uint32_t m_size;
 
         TransformComponent m_cameraTransform;
-        PinholeCamera m_camera;
+        PinholeCamera* m_camera;
     };
 }
 

@@ -16,6 +16,9 @@
 #define GLM_ENABLE_EXPERIMENTAL
 
 #include <glm/gtx/hash.hpp>
+#include "glm/ext.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+
 #include <utility>
 
 #include "IMeshParameters.h"

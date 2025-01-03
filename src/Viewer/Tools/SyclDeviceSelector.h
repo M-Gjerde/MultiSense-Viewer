@@ -41,21 +41,21 @@ namespace VkRender {
         // Function to select the appropriate device
         void selectDevice(DeviceType deviceType) {
             try {
-                sycl::property_list properties{sycl::property::queue::in_order{}, sycl::property::queue::enable_profiling()};
+                sycl::property_list properties{sycl::property::queue::in_order{}};
 
                 if (deviceType == DeviceType::GPU) {
                     // Select GPU if available
-                    m_queue = sycl::queue(sycl::gpu_selector{}, properties);
+                    m_queue = sycl::queue(sycl::gpu_selector_v, properties);
                     Log::Logger::getInstance()->info("Using GPU: {}",
                                                      m_queue.get_device().get_info<sycl::info::device::name>());
                 } else if (deviceType == DeviceType::CPU) {
                     // Select CPU if available
-                    m_queue = sycl::queue(sycl::cpu_selector{}, properties);
+                    m_queue = sycl::queue(sycl::cpu_selector_v, properties);
                     Log::Logger::getInstance()->info("Using CPU: {}",
                                                      m_queue.get_device().get_info<sycl::info::device::name>());
                 } else {
                     // Default device selector (picks the best available)
-                    m_queue = sycl::queue(sycl::default_selector{}, properties);
+                    m_queue = sycl::queue(sycl::default_selector_v, properties);
                     Log::Logger::getInstance()->info("Using default device: {}",
                                                      m_queue.get_device().get_info<sycl::info::device::name>());
                 }
@@ -68,8 +68,11 @@ namespace VkRender {
                 Log::Logger::getInstance()->error("Error selecting device: {}", e.what());
                 Log::Logger::getInstance()->error("Falling back to default device.");
                 sycl::property_list properties{sycl::property::queue::in_order{}};
+
                 // Fallback to default device with in_order property
                 m_queue = sycl::queue(sycl::default_selector_v, properties);
+                Log::Logger::getInstance()->info("Using device: {}",m_queue.get_device().get_info<sycl::info::device::name>());
+
             }
         }
     };

@@ -31,6 +31,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_executable(${PROJECT_NAME}
         src/Viewer/Rendering/RenderResources/Raytracer/LightTracerKernels.h)
 
+# Set default build type if none was specified
+if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "[VkRenderINFO]: Setting build type to 'Release' as none was specified.")
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif ()
+
+# Include common CMake modules
+include(cmake/Common.cmake)
+include(cmake/CompilerWarnings.cmake)
+
 # Check if PyTorch is available with ROCm or CUDA
 set(PYTORCH_AVAILABLE FALSE)
 set(USE_CUDA FALSE)
@@ -102,11 +113,11 @@ endif ()
 if (ENABLE_SYCL)
     message(STATUS "SYCL backend: ${SYCL_BACKEND}")
     if (SYCL_BACKEND STREQUAL "dpcpp")
-        #set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
-        set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead
+        set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
+        #set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead
 
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=nvptx64-nvidia-cuda -g -O0" )
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -ltbb -lur_loader ")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64")
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=spir64 -ltbb")
 
         message(STATUS "[VkRenderINFO]: SYCL DPC++ support enabled. Compiler: ${CMAKE_CXX_COMPILER} Flags: ${CMAKE_CXX_FLAGS}")
@@ -136,16 +147,7 @@ else ()
     message(STATUS "[VkRenderINFO]: SYCL support not enabled.")
 endif ()
 
-# Set default build type if none was specified
-if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    message(STATUS "[VkRenderINFO]: Setting build type to 'Release' as none was specified.")
-    set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif ()
 
-# Include common CMake modules
-include(cmake/Common.cmake)
-include(cmake/CompilerWarnings.cmake)
 
 # Add version file generation
 GenerateVersionFile()
@@ -262,8 +264,8 @@ set(LIBRARIES
 # Add SYCL-specific files
 if (ENABLE_SYCL)
     set(SYCL_SOURCES
-            src/Viewer/Rendering/RenderResources/2DGS/SYCLGaussian2D.cpp
-            src/Viewer/Rendering/RenderResources/3DGS/SYCLGaussian3D.cpp
+            #src/Viewer/Rendering/RenderResources/2DGS/SYCLGaussian2D.cpp
+            #src/Viewer/Rendering/RenderResources/3DGS/SYCLGaussian3D.cpp
             src/Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.cpp
             src/Viewer/Rendering/RenderResources/Raytracer/RayTracer.cpp
             src/Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.cpp

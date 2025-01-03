@@ -14,6 +14,8 @@ namespace VkRender {
         bool uploadScene = false;
         bool render = false;
 
+        bool clearImageMemory = false;
+
         std::string kernel = "Path Tracer: Mesh";
 
         // Constructor that copies everything from base EditorUI

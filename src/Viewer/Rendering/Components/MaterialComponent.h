@@ -24,6 +24,8 @@ namespace VkRender {
         float specular = 0.5f;          // Specular coefficient
         float phongExponent = 32.0f;     // Shininess exponent
 
+        bool isSensor = false;
+
         bool reloadShader = false;
 
         std::filesystem::path vertexShaderName = "defaultBasic.vert";

@@ -37,7 +37,7 @@ namespace VkRender::RT {
     private:
         BaseCamera m_camera;
         Application* m_context;
-        SyclDeviceSelector m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
+        SyclDeviceSelector m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
 
         std::shared_ptr<Scene> m_scene;
         uint8_t* m_imageMemory = nullptr;
@@ -50,6 +50,7 @@ namespace VkRender::RT {
 
         void saveAsPPM(const std::filesystem::path& filename) const;
 
+        uint32_t m_frameID = 0;
     };
 
 #else

@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "Viewer/Rendering/Components/MaterialComponent.h"
+#include "Viewer/Rendering/Components/Components.h"
 
 namespace VkRender::RT {
     struct InputAssembly {
@@ -34,9 +35,10 @@ namespace VkRender::RT {
         uint32_t *indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
         uint32_t *vertexOffsets = nullptr;
         uint32_t *indexOffsets = nullptr;
-        uint32_t numEntities = 0;
-        glm::mat4 *transforms = nullptr;
+        TransformComponent *transforms = nullptr;
         MaterialComponent* materials = nullptr;
+        TagComponent* tagComponents = nullptr;
+        uint32_t numEntities = 0;
 
         uint32_t totalVertices;
         uint32_t totalIndices;

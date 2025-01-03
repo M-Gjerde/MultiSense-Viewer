@@ -72,7 +72,7 @@ namespace VkRender {
             diffRenderEntry->update();
 
         }
-        gaussianRenderer2D.setActiveCamera(m_editorCamera);
+        //gaussianRenderer2D.setActiveCamera(m_editorCamera);
         /*
         gaussianRenderer3D.setActiveCamera(m_editorCamera);
 
@@ -116,10 +116,10 @@ namespace VkRender {
 
         if (imageUI->render3dgsImage || updateRender) {
             if (imageUI->radioButton == 0) {
-                gaussianRenderer3D.render(scene, m_colorTexture);
+                //gaussianRenderer3D.render(scene, m_colorTexture);
 
             } else {
-                gaussianRenderer2D.render(scene, m_colorTexture);
+                //gaussianRenderer2D.render(scene, m_colorTexture);
 
             }
         }
