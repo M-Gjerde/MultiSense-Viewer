@@ -453,7 +453,7 @@ namespace VkRender {
         if (!data["Scene"])
             return false;
         std::string sceneName = data["Scene"].as<std::string>();
-        std::string assetsPath = data["Base Path"].as<std::string>();
+        std::string assetsPath = filePath.parent_path(); // TODO fix the relative assets path
 
         Log::Logger::getInstance()->info("Deserializing scene: {} from: {}", sceneName, filePath.string());
         auto entities = data["Entities"];

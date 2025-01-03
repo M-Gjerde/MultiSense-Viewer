@@ -67,6 +67,7 @@ namespace VkRender {
             userSetting.assetsPath = userSetting.lastActiveScenePath.parent_path();
         }
 
+
         VulkanRenderPassCreateInfo passCreateInfo(m_vulkanDevice, &m_allocator);
         passCreateInfo.msaaSamples = msaaSamples;
         passCreateInfo.swapchainImageCount = swapchain->imageCount;
@@ -142,6 +143,13 @@ namespace VkRender {
             m_editors.push_back(std::move(editor));
         }
 
+        for (auto& editor : m_sceneRenderers) {
+            editor.second->loadScene(m_activeScene);
+        }
+        for (auto& editor : m_editors) {
+            editor->loadScene(m_activeScene);
+        }
+
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();
         m_multiSense->setup();
     }
@@ -192,7 +200,6 @@ namespace VkRender {
             m_editors.push_back(std::move(createEditor(createInfo)));
         }
 
-        loadScene(project.sceneName);
         Log::Logger::getInstance()->info("Loaded project '{}', scene '{}'.", project.projectName, project.sceneName);
         auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
         userSetting.projectName = project.projectName;
@@ -220,24 +227,6 @@ namespace VkRender {
         }
         return nullptr;
     }
-
-    // TODO make scene objects serializeable and loadable.
-    void Application::loadScene(const std::filesystem::path& scenePath) {
-        for (auto& editor : m_sceneRenderers) {
-            editor.second->loadScene(m_activeScene);
-        }
-
-        for (auto& editor : m_editors) {
-            editor->loadScene(std::shared_ptr<Scene>(m_activeScene));
-        }
-    }
-
-    void Application::deleteScene(std::filesystem::path scenePath) {
-        // Find the scene to delete
-        Log::Logger::getInstance()->info("Deleting Scene with Reference count: {}", m_activeScene.use_count());
-        //m_scene.reset();
-    }
-
 
     void Application::addDeviceFeatures() {
         if (deviceFeatures.fillModeNonSolid) {
@@ -317,8 +306,6 @@ namespace VkRender {
 
         auto editorPtr = std::shared_ptr<Editor>(std::move(createEditorWithUUID(uuid, sceneRendererCreateInfo)));
         m_sceneRenderers[uuid] = std::dynamic_pointer_cast<SceneRenderer>(std::move(editorPtr));
-
-        m_sceneRenderers[uuid]->loadScene(m_activeScene);
         return m_sceneRenderers[uuid].get();
     }
 
@@ -732,10 +719,6 @@ namespace VkRender {
             m_activeScene.reset();
         }
         m_activeScene = std::make_shared<Scene>(this);
-        for (auto& editors : m_editors) {
-            editors->onSceneLoad(m_activeScene); // Also resets editor camera etc..
-        }
-
         return m_activeScene;
     }
 

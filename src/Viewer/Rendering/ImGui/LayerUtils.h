@@ -35,7 +35,7 @@ namespace VkRender::LayerUtils {
         TEXTURE_FILE,
         VERTEX_SHADER_FILE,
         FRAGMENT_SHADER_FILE,
-        SAVE_SCENE,
+        LOAD_SCENE,
         SAVE_SCENE_AS,
         SAVE_PROJECT_AS,
         SELECT_FOLDER,

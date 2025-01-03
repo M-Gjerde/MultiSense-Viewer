@@ -56,6 +56,7 @@ namespace VkRender {
 
         //std::shared_ptr<ArcballCamera> m_editorCamera;
         CameraComponent* m_lastActiveCamera = nullptr;
+        bool m_wasSceneCameraActive = false;
         std::shared_ptr<Scene> m_activeScene;
 
         SceneRenderer* m_sceneRenderer;

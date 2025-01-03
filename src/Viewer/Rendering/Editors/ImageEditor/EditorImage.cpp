@@ -19,24 +19,56 @@ namespace VkRender {
 
         m_descriptorRegistry.createManager(DescriptorManagerType::Viewport3DTexture, m_context->vkDevice());
 
-        m_colorTexture = EditorUtils::createEmptyTexture(1280, 720, VK_FORMAT_R8G8B8A8_UNORM, m_context, VMA_MEMORY_USAGE_GPU_ONLY, true);
+        m_colorTexture = EditorUtils::createEmptyTexture(1280, 720, VK_FORMAT_R8G8B8A8_UNORM, m_context,
+                                                         VMA_MEMORY_USAGE_GPU_ONLY, true);
         m_shaderSelectionBuffer.resize(m_context->swapChainBuffers().size());
-        for (auto& frameIndex : m_shaderSelectionBuffer) {
+        for (auto &frameIndex: m_shaderSelectionBuffer) {
             m_context->vkDevice().createBuffer(
-                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                frameIndex,
-                sizeof(int32_t), nullptr, "EditorImage:ShaderSelectionBuffer",
-                m_context->getDebugUtilsObjectNameFunction());
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                    frameIndex,
+                    sizeof(int32_t), nullptr, "EditorImage:ShaderSelectionBuffer",
+                    m_context->getDebugUtilsObjectNameFunction());
         }
 
     }
 
     void EditorImage::onEditorResize() {
         auto scene = m_context->activeScene();
-        m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, m_createInfo.width, m_createInfo.height);
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width , m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
+        float width = m_createInfo.width;
+        float height = m_createInfo.height;
+        float editorAspect = static_cast<float>(m_createInfo.width) /
+                             static_cast<float>(m_createInfo.height);
+        PinholeCamera *pinholeCamera = nullptr;
+        auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
+        for (auto e: view) {
+            Entity entity(e, m_context->activeScene().get());
+            auto &cameraComponent = entity.getComponent<CameraComponent>();
+
+            if (cameraComponent.cameraType == CameraComponent::PINHOLE) {
+                // Use the first camera found that can render from viewpoint
+                pinholeCamera = cameraComponent.getPinholeCamera().get();
+                break;
+            }
+        }
+        if (pinholeCamera) {
+            float sceneCameraAspect = pinholeCamera->m_width / pinholeCamera->m_height;
+            width = pinholeCamera->m_width;
+            height = pinholeCamera->m_height;
+
+            float scaleX = 1.0f, scaleY = 1.0f;
+            if (editorAspect > sceneCameraAspect) {
+                scaleX = sceneCameraAspect / editorAspect;
+            } else {
+                scaleY = editorAspect / sceneCameraAspect;
+            }
+            // Reset and rebuild mesh
+            m_meshInstances.reset();
+            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+        }
+        m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, width, height);
+        m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
     }
 
     void EditorImage::onFileDrop(const std::filesystem::path &path) {
@@ -49,10 +81,39 @@ namespace VkRender {
 
 
     void EditorImage::onSceneLoad(std::shared_ptr<Scene> scene) {
-       // m_rayTracer->setup(scene);
+        float width = m_createInfo.width;
+        float height = m_createInfo.height;
+        float editorAspect = static_cast<float>(m_createInfo.width) /
+                             static_cast<float>(m_createInfo.height);
+        PinholeCamera *pinholeCamera = nullptr;
+        auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
+        for (auto e: view) {
+            Entity entity(e, m_context->activeScene().get());
+            auto &cameraComponent = entity.getComponent<CameraComponent>();
 
-        m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, m_createInfo.width, m_createInfo.height);
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width , m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
+            if (cameraComponent.cameraType == CameraComponent::PINHOLE) {
+                // Use the first camera found that can render from viewpoint
+                pinholeCamera = cameraComponent.getPinholeCamera().get();
+                break;
+            }
+        }
+        if (pinholeCamera) {
+            float sceneCameraAspect = pinholeCamera->m_width / pinholeCamera->m_height;
+            width = pinholeCamera->m_width;
+            height = pinholeCamera->m_height;
+
+            float scaleX = 1.0f, scaleY = 1.0f;
+            if (editorAspect > sceneCameraAspect) {
+                scaleX = sceneCameraAspect / editorAspect;
+            } else {
+                scaleY = editorAspect / sceneCameraAspect;
+            }
+            // Reset and rebuild mesh
+            m_meshInstances.reset();
+            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+        }
+        m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, width, height);
+        m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
     }
 
@@ -68,9 +129,9 @@ namespace VkRender {
 
         }
 
-        if (imageUI->render){
+        if (imageUI->render) {
             m_rayTracer->update(*imageUI);
-            m_colorTexture->loadImage(m_rayTracer->getImage(), m_createInfo.width * m_createInfo.height * 4);
+            m_colorTexture->loadImage(m_rayTracer->getImage());
         }
 
     }
@@ -81,14 +142,14 @@ namespace VkRender {
     void EditorImage::onMouseScroll(float change) {
     }
 
-    void EditorImage::onRender(CommandBuffer& commandBuffer) {
+    void EditorImage::onRender(CommandBuffer &commandBuffer) {
         std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> renderGroups;
         collectRenderCommands(renderGroups, commandBuffer.frameIndex);
 
         // Render each group
-        for (auto& [pipeline, commands] : renderGroups) {
+        for (auto &[pipeline, commands]: renderGroups) {
             pipeline->bind(commandBuffer);
-            for (auto& command : commands) {
+            for (auto &command: commands) {
                 // Bind resources and draw
                 bindResourcesAndDraw(commandBuffer, command);
             }
@@ -96,8 +157,8 @@ namespace VkRender {
     }
 
     void EditorImage::collectRenderCommands(
-        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
-        uint32_t frameIndex) {
+            std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> &renderGroups,
+            uint32_t frameIndex) {
         if (!m_meshInstances) {
             m_meshInstances = EditorUtils::setupMesh(m_context);
             Log::Logger::getInstance()->info("Created MeshInstance for 3DViewport");
@@ -124,8 +185,10 @@ namespace VkRender {
         writeDescriptors[1].descriptorCount = 1;
         writeDescriptors[1].pBufferInfo = &m_shaderSelectionBuffer[frameIndex]->m_descriptorBufferInfo;
         std::vector descriptorWrites = {writeDescriptors[0], writeDescriptors[1]};
-        VkDescriptorSet descriptorSet = m_descriptorRegistry.getManager(DescriptorManagerType::Viewport3DTexture).getOrCreateDescriptorSet(descriptorWrites);
-        key.setLayouts[0] = m_descriptorRegistry.getManager(DescriptorManagerType::Viewport3DTexture).getDescriptorSetLayout();
+        VkDescriptorSet descriptorSet = m_descriptorRegistry.getManager(
+                DescriptorManagerType::Viewport3DTexture).getOrCreateDescriptorSet(descriptorWrites);
+        key.setLayouts[0] = m_descriptorRegistry.getManager(
+                DescriptorManagerType::Viewport3DTexture).getDescriptorSetLayout();
         // Use default descriptor set layout
         key.vertexShaderName = "default2D.vert";
         key.fragmentShaderName = "EditorImageViewportTexture.frag";
@@ -133,9 +196,10 @@ namespace VkRender {
         key.polygonMode = VK_POLYGON_MODE_FILL;
         std::vector<VkVertexInputBindingDescription> vertexInputBinding = {
                 {0, sizeof(VkRender::ImageVertex), VK_VERTEX_INPUT_RATE_VERTEX}
-        };        std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-            {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
-            {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 2},
+        };
+        std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
+                {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+                {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 2},
         };
         key.vertexInputBindingDescriptions = vertexInputBinding;
         key.vertexInputAttributes = vertexInputAttributes;
@@ -155,7 +219,7 @@ namespace VkRender {
         renderGroups[pipeline].push_back(command);
     }
 
-    void EditorImage::bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command) {
+    void EditorImage::bindResourcesAndDraw(const CommandBuffer &commandBuffer, RenderCommand &command) {
         VkCommandBuffer cmdBuffer = commandBuffer.getActiveBuffer();
         uint32_t frameIndex = commandBuffer.frameIndex;
 
@@ -174,16 +238,16 @@ namespace VkRender {
                           command.pipeline->pipeline()->getPipeline());
 
 
-        for (auto& [index, descriptorSet] : command.descriptorSets) {
+        for (auto &[index, descriptorSet]: command.descriptorSets) {
             vkCmdBindDescriptorSets(
-                cmdBuffer,
-                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                command.pipeline->pipeline()->getPipelineLayout(),
-                0, // TODO can't reuse the approach in SceneRenderer since we have different manager types
-                1,
-                &descriptorSet,
-                0,
-                nullptr
+                    cmdBuffer,
+                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    command.pipeline->pipeline()->getPipelineLayout(),
+                    0, // TODO can't reuse the approach in SceneRenderer since we have different manager types
+                    1,
+                    &descriptorSet,
+                    0,
+                    nullptr
             );
         }
 

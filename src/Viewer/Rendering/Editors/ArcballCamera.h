@@ -7,7 +7,7 @@
 namespace VkRender {
     class ArcballCamera : public BaseCamera {
     public:
-        glm::vec2 rot = glm::vec2(0.0f, 0.0f);
+        glm::vec2 m_rotation = glm::vec2(0.0f, 0.0f);
         float m_rotationSpeed = 0.20f;
         float m_zoomValue = 1.0f;
         explicit ArcballCamera(float aspect)
@@ -16,16 +16,22 @@ namespace VkRender {
         }
         ArcballCamera() = default;
 
+        void setDefaultPosition(glm::vec2 defaultRotation, float zoomValue = 1.0f){
+            m_rotation = defaultRotation;
+            m_zoomValue = zoomValue;
+            rotate(0, 0);
+        }
+
         void rotate(float dx, float dy) {
             dx *= m_rotationSpeed;
             dy *= m_rotationSpeed;
-            rot.x += dx;
-            rot.y += dy;
+            m_rotation.x += dx;
+            m_rotation.y += dy;
 
             glm::quat orientation = glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
             // Adjust rotation based on the mouse movement
-            glm::quat rotX = glm::angleAxis(glm::radians(rot.x), glm::vec3(0.0f, 0.0f, 1.0f));
-            glm::quat rotY = glm::angleAxis(glm::radians(rot.y), glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat rotX = glm::angleAxis(glm::radians(m_rotation.x), glm::vec3(0.0f, 0.0f, 1.0f));
+            glm::quat rotY = glm::angleAxis(glm::radians(m_rotation.y), glm::vec3(1.0f, 0.0f, 0.0f));
             // Combine rotations in a specific order
             orientation = rotX * orientation;
             orientation = orientation * rotY;

@@ -121,7 +121,7 @@ namespace VkRender {
                         auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
 
                         std::vector<std::string> types{"multisense"};
-                        EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::SAVE_SCENE, &loadFileFuture, openLocation);
+                        EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::LOAD_SCENE, &loadFileFuture, openLocation);
 
                     }
 
@@ -163,7 +163,7 @@ namespace VkRender {
         handleSelectedFileOrFolder(const LayerUtils::LoadFileInfo &loadFileInfo) {
             if (!loadFileInfo.path.empty()) {
                 switch (loadFileInfo.filetype) {
-                    case LayerUtils::SAVE_SCENE: {
+                    case LayerUtils::LOAD_SCENE: {
                         auto scene = m_context->newScene();
                         if (scene) {
                             SceneSerializer serializer(scene);

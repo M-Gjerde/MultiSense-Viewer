@@ -52,6 +52,9 @@ namespace VkRender {
         std::shared_ptr<PinholeCamera> getPinholeCamera() const {
             return std::dynamic_pointer_cast<PinholeCamera>(camera);
         }
+        std::shared_ptr<BaseCamera> getPerspectiveCamera() const {
+            return std::dynamic_pointer_cast<BaseCamera>(camera);
+        }
 
         // we use a shared pointer as storage since most often we need to share this data with the rendering loop.
         std::shared_ptr<BaseCamera> camera = std::make_shared<BaseCamera>();

@@ -112,18 +112,12 @@ namespace VkRender {
         uint32_t currentFrameIndex() { return currentFrame; }
         uint32_t getFrameId() { return frameID; }
 
-        void loadScene(const std::filesystem::path &string);
-
         void loadProject(const Project& project);
         Project getCurrentProject();
 
         bool isCurrentProject(std::string projectName);
 
-        bool isCurrentScene(std::string sceneName);
-
         std::shared_ptr<Scene> activeScene();
-
-        void deleteScene(std::filesystem::path scenePath);
 
         std::function<VkResult(VkDevice, const VkDebugUtilsObjectNameInfoEXT *)> getDebugUtilsObjectNameFunction() {
             return m_setDebugUtilsObjectNameEXT;

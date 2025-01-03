@@ -40,7 +40,8 @@ namespace VkRender {
 
         }
 
-        void loadImage(void *data, uint32_t size);
+        /** @brief If Size is 0 the texture will use the bound image size */
+        void loadImage(void *data, uint32_t size = 0);
         uint32_t getSize(){return m_image->getImageSize();}
         uint32_t width(){return m_image->width();}
         uint32_t height(){return m_image->height();}
