@@ -133,6 +133,13 @@ namespace VkRender {
             if (ImGui::Combo("##Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
                 imageUI->kernel = kernels[selectedKernelIndex];
             }
+            ImGui::SameLine();            // Dropdown for selecting render kernel
+            const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
+            static int selectedDevieType = 0; // Default selection
+            ImGui::SetNextItemWidth(100.0f);
+            if (ImGui::Combo("##Select Device Type", &selectedDevieType, selections, IM_ARRAYSIZE(selections))) {
+                imageUI->kernel = selections[selectedDevieType];
+            }
             ImGui::SameLine();
 
             imageUI->clearImageMemory = ImGui::Button("Clear image memory");

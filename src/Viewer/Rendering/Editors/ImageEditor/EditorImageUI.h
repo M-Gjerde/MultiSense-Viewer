@@ -18,6 +18,7 @@ namespace VkRender {
         bool clearImageMemory = false;
 
         std::string kernel = "Path Tracer: Mesh";
+        std::string selectedDevieType = "";
 
         // Constructor that copies everything from base EditorUI
         EditorImageUI(const EditorUI &baseUI) : EditorUI(baseUI) {}

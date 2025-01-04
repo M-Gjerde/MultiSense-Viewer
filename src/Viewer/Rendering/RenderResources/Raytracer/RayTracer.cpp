@@ -22,11 +22,32 @@ namespace VkRender::RT {
         m_height = height;
         // Load the scene into gpu memory
         // Create image memory
-        m_imageMemory = new float[width * height]; // Assuming RGBA8 image
-        m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
+        // Allocate host memory for RGBA image (4 floats per pixel)
+        m_imageMemory = new float[width * height * 4];
+
+        // Allocate device memory for RGBA image (4 floats per pixel)
+        m_gpu.imageMemory = sycl::malloc_device<float>(width * height * 4, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
+        // Allocate device memory for RGBA image (4 floats per pixel)
+        m_gpu.imageMemory = sycl::malloc_device<float>(width * height * 4, m_selector.getQueue());
+        if (!m_gpu.imageMemory) {
+            throw std::runtime_error("Device memory allocation failed.");
+        }
+
+        m_renderInformation = std::make_unique<RenderInformation>();
+        m_gpu.renderInformation = sycl::malloc_device<RenderInformation>(1, m_selector.getQueue());
+        if (!m_gpu.renderInformation) {
+            throw std::runtime_error("Device memory allocation failed.");
+        }
+        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+
+        // Initialize device memory to 0
+        m_selector.getQueue().fill(m_gpu.imageMemory, 0.0f, width * height * 4).wait();
+
+        // Initialize host memory to 0
+        std::fill(m_imageMemory, m_imageMemory + (width * height * 4), 0.0f);
         Log::Logger::getInstance()->info("Creating Ray Tracer. Image dimensions are: {}x{}", width, height);
         upload(scene);
     }
@@ -302,7 +323,13 @@ namespace VkRender::RT {
             }
         }
         */
+
+        m_renderInformation->frameID++;
+        uint32_t totalPhotons = 100000000;
+
         auto &queue = m_selector.getQueue();
+        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+
         if (editorImageUI.clearImageMemory) {
             queue.fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
             m_frameID = 0;
@@ -328,11 +355,10 @@ namespace VkRender::RT {
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Path Tracer: Mesh") {
-                uint32_t totalPhotons = 10000000;
                 sycl::range<1> globalRange(totalPhotons);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
-                    PathTracerMeshKernels kernel(m_gpu, totalPhotons, transform, cameraGPU, 8, m_frameID);
+                    PathTracerMeshKernels kernel(m_gpu, totalPhotons, transform, cameraGPU, 4, m_frameID);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Hit-Test") {
@@ -349,15 +375,18 @@ namespace VkRender::RT {
                             sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
                 });
             }
+            queue.wait();
 
             sycl::free(cameraGPU, queue);
-
-            queue.wait();
             m_frameID++;
         }
+
+        queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
         queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
         if (editorImageUI.saveImage)
             saveAsPFM("cornell.pfm");
+
+        Log::Logger::getInstance()->infoWithFrequency("PhotnCount", 60, "simulated {} Billion photons", totalPhotons/1e9 * m_renderInformation->frameID);
     }
 
     RayTracer::~RayTracer() {

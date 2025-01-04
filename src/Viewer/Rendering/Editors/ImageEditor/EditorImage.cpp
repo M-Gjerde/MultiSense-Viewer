@@ -148,7 +148,7 @@ namespace VkRender {
                 }
 
                 // Upload the texture (ensure the format matches)
-                m_colorTexture->loadImage(convertedImage.data(), convertedImage.size() * 4);
+                m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
             }
         }
 

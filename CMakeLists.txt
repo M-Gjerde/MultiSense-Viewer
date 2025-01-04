@@ -46,67 +46,67 @@ set(PYTORCH_AVAILABLE FALSE)
 set(USE_CUDA FALSE)
 set(USE_ROCM FALSE)
 
-if (ENABLE_PYTORCH)
-    # Find PyTorch
+#if (ENABLE_PYTORCH)
+#    # Find PyTorch
+#
+#    set(CMAKE_CUDA_STANDARD 20)
+#    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+#    set(CMAKE_CUDA_EXTENSIONS OFF)
+#
+#    find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
+#            /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
+#    )
+#
+#
+#    if (Torch_FOUND)
+#        message(STATUS "[VkRenderINFO]: PyTorch found at ${TORCH_INSTALL_PREFIX}")
+#        # Check if PyTorch is built for CUDA
+#        if (DEFINED TORCH_CUDA_LIBRARIES)
+#            set(PYTORCH_AVAILABLE TRUE)
+#            set(USE_CUDA TRUE)
+#            message(STATUS "[VkRenderINFO]: PyTorch is configured with CUDA.")
+#        endif ()
+#
+#        # Check if PyTorch is built for ROCm
+#        if (DEFINED TORCH_HIP_VERSION)
+#            set(PYTORCH_AVAILABLE TRUE)
+#            set(USE_ROCM TRUE)
+#            message(STATUS "[VkRenderINFO]: PyTorch is configured with ROCm.")
+#        endif ()
+#
+#        if (NOT USE_CUDA AND NOT USE_ROCM)
+#            message(FATAL_ERROR "PyTorch is not configured with CUDA or ROCm. Skipping PyTorch integration.")
+#        endif ()
+#    else ()
+#        message(FATAL_ERROR "PyTorch not found. Skipping PyTorch integration.")
+#    endif ()
+#endif ()
 
-    set(CMAKE_CUDA_STANDARD 20)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(CMAKE_CUDA_EXTENSIONS OFF)
-
-    find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
-            /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
-    )
-
-
-    if (Torch_FOUND)
-        message(STATUS "[VkRenderINFO]: PyTorch found at ${TORCH_INSTALL_PREFIX}")
-        # Check if PyTorch is built for CUDA
-        if (DEFINED TORCH_CUDA_LIBRARIES)
-            set(PYTORCH_AVAILABLE TRUE)
-            set(USE_CUDA TRUE)
-            message(STATUS "[VkRenderINFO]: PyTorch is configured with CUDA.")
-        endif ()
-
-        # Check if PyTorch is built for ROCm
-        if (DEFINED TORCH_HIP_VERSION)
-            set(PYTORCH_AVAILABLE TRUE)
-            set(USE_ROCM TRUE)
-            message(STATUS "[VkRenderINFO]: PyTorch is configured with ROCm.")
-        endif ()
-
-        if (NOT USE_CUDA AND NOT USE_ROCM)
-            message(FATAL_ERROR "PyTorch is not configured with CUDA or ROCm. Skipping PyTorch integration.")
-        endif ()
-    else ()
-        message(FATAL_ERROR "PyTorch not found. Skipping PyTorch integration.")
-    endif ()
-endif ()
-
-if (PYTORCH_AVAILABLE)
-    if (USE_CUDA)
-        set(CMAKE_CUDA_STANDARD 20)
-        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-        set(CMAKE_CUDA_EXTENSIONS OFF)
-        message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
-        target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
-
-    elseif (USE_ROCM)
-        enable_language(HIP)
-        message(STATUS "[VkRenderINFO]: HIP language support enabled.")
-        set(CMAKE_HIP_STANDARD 20)
-        set(CMAKE_HIP_STANDARD_REQUIRED ON)
-        set(CMAKE_HIP_EXTENSIONS OFF)
-        # Add any ROCm-specific setup if necessary (e.g., include ROCm libraries or headers)
-        message(STATUS "[VkRenderINFO]: ROCm-specific setup would go here if needed.")
-    endif ()
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})
-    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
-    message(STATUS "[VkRenderINFO]: PyTorch libraries successfully linked.")
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PYTORCH_ENABLED)
-
-else ()
-    message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
-endif ()
+#if (PYTORCH_AVAILABLE)
+#    if (USE_CUDA)
+#        set(CMAKE_CUDA_STANDARD 20)
+#        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+#        set(CMAKE_CUDA_EXTENSIONS OFF)
+#        message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
+#        target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
+#
+#    elseif (USE_ROCM)
+#        enable_language(HIP)
+#        message(STATUS "[VkRenderINFO]: HIP language support enabled.")
+#        set(CMAKE_HIP_STANDARD 20)
+#        set(CMAKE_HIP_STANDARD_REQUIRED ON)
+#        set(CMAKE_HIP_EXTENSIONS OFF)
+#        # Add any ROCm-specific setup if necessary (e.g., include ROCm libraries or headers)
+#        message(STATUS "[VkRenderINFO]: ROCm-specific setup would go here if needed.")
+#    endif ()
+#    target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})
+#    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
+#    message(STATUS "[VkRenderINFO]: PyTorch libraries successfully linked.")
+#    target_compile_definitions(${PROJECT_NAME} PRIVATE PYTORCH_ENABLED)
+#
+#else ()
+#    message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
+#endif ()
 
 # SYCL Backend selectionDefault
 if (ENABLE_SYCL)
@@ -118,10 +118,12 @@ if (ENABLE_SYCL)
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=nvptx64-nvidia-cuda -g -O0" )
 
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
+            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=spir64,amdgcn-amd-amdhsa -Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
             message(STATUS "[VkRenderINFO]: Compiling using DPCPP With Optimization")
         else()
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
+            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64,amdgcn-amd-amdhsa -Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
             message(STATUS "[VkRenderINFO]: Compiling using DPCPP With Debug flags")
         endif()
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=spir64 -ltbb")

@@ -623,12 +623,7 @@ namespace VkRender {
 
         drawComponent<MeshComponent>("Mesh", entity, [this, &entity](MeshComponent &component) {
             // Mesh Type Selection
-
-            static int previousMeshType = -1; // Store the previous selection
             int currentMeshType = component.meshDataType();
-
-            const auto array = meshDataTypeToStringArray().data();
-            int num = meshDataTypeToStringArray().size();
             // Create the combo and check for interaction
             // Polygon Mode Control
             ImGui::Text("Polygon Mode:");

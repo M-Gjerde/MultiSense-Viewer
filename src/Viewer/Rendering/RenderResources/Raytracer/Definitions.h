@@ -29,7 +29,11 @@ namespace VkRender::RT {
         float phongExponent;     // Shininess exponent
     };
 
+struct RenderInformation {
+    uint32_t photonsAccumulated = 0;
+    uint32_t frameID = 0;
 
+};
     struct GPUData {
         InputAssembly *vertices = nullptr;
         uint32_t *indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
@@ -48,6 +52,8 @@ namespace VkRender::RT {
         size_t numGaussians;
 
         float *imageMemory;
+
+        RenderInformation* renderInformation;
     };
 
 

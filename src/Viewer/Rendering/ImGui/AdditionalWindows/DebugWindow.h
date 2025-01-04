@@ -273,9 +273,9 @@ public:
         // Set log level
         const auto items = Log::getLogLevelsString();
 
-        const char *previewValue = Log::logLevelToString(config.getLogLevel()).c_str();  // Pass in the preview value visible before opening the combo (it could be anything)
+        std::string previewValue = Log::logLevelToString(config.getLogLevel());  // Pass in the preview value visible before opening the combo (it could be anything)
         ImGui::SetNextItemWidth(100.0f);
-        if (ImGui::BeginCombo("Set Log level", previewValue, 0)) {
+        if (ImGui::BeginCombo("Set Log level", previewValue.c_str(), 0)) {
             for (int n = 0; n < items.size(); n++) {
                 const bool is_selected = (itemIdIndex == n);
                 if (ImGui::Selectable(items[n].c_str(), is_selected)) {

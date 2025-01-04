@@ -45,6 +45,7 @@ namespace VkRender::RT {
         uint32_t m_width = 0, m_height = 0;
 
         GPUData m_gpu;
+        std::unique_ptr<RenderInformation> m_renderInformation;
         MeshManager m_meshManager;
 
 
