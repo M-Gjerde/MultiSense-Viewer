@@ -104,6 +104,8 @@ namespace VkRender {
 
         bool isDirty = true;
         bool isDynamic = false;
+
+        void computeNormals();
     };
 }
 

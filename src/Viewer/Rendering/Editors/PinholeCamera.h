@@ -9,6 +9,33 @@
 
 
 namespace VkRender {
+    struct PinholeParameters {
+        int height = 720; // Default image height
+        int width = 1280; // Default image width
+        float fx = 1280.0f; // Default horizontal focal length (pixels)
+        float fy = 720.0f; // Default vertical focal length (pixels)
+        float cx = 640.0f; // Default principal point x-coordinate (pixels)
+        float cy = 360.0f; // Default principal point y-coordinate (pixels)
+        float focalLength = 4; // focal length in mm
+        float fNumber = 1.0f / 2.8f; // focal length in mm
+        // Overload equality operator
+        bool operator==(const PinholeParameters &other) const {
+            return height == other.height &&
+                   width == other.width &&
+                   fx == other.fx &&
+                   fy == other.fy &&
+                   cx == other.cx &&
+                   focalLength == other.focalLength &&
+                   fNumber == other.fNumber &&
+                   cy == other.cy;
+        }
+
+        // Optional: Overload inequality operator for convenience
+        bool operator!=(const PinholeParameters &other) const {
+            return !(*this == other);
+        }
+    };
+
     class PinholeCamera : public BaseCamera {
     public:
 
@@ -16,8 +43,11 @@ namespace VkRender {
 
         float m_fx, m_fy, m_cx, m_cy;
         float m_width, m_height;
+        float m_focalLength;
+        float m_fNumber;
 
-        PinholeCamera(uint32_t width, uint32_t height, float fx, float fy, float cx, float cy, float zNear = 0.1f,
+        PinholeCamera(uint32_t width, uint32_t height, float fx, float fy, float cx, float cy,
+                      float focalLength = 10.0f, float zNear = 0.1f,
                       float zFar = 100.0f) {
             m_width = static_cast<float>(width);
             m_height = static_cast<float>(height);
@@ -25,6 +55,22 @@ namespace VkRender {
             m_fy = fy;
             m_cx = cx;
             m_cy = cy;
+            m_focalLength = focalLength;
+            m_zNear = zNear;
+            m_zFar = zFar;
+            PinholeCamera::updateProjectionMatrix();
+        }
+
+        explicit PinholeCamera(PinholeParameters parameters, float zNear = 0.1f,
+                               float zFar = 100.0f) {
+            m_width = static_cast<float>(parameters.width);
+            m_height = static_cast<float>(parameters.height);
+            m_fx = parameters.fx;
+            m_fy = parameters.fy;
+            m_cx = parameters.cx;
+            m_cy = parameters.cy;
+            m_focalLength = parameters.focalLength;
+            m_fNumber = parameters.fNumber;
             m_zNear = zNear;
             m_zFar = zFar;
             PinholeCamera::updateProjectionMatrix();

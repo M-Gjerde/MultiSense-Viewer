@@ -131,7 +131,25 @@ namespace VkRender {
 
         if (imageUI->render) {
             m_rayTracer->update(*imageUI);
-            m_colorTexture->loadImage(m_rayTracer->getImage());
+            float* image = m_rayTracer->getImage();
+            if (image) {
+                uint32_t width = m_colorTexture->width();
+                uint32_t height = m_colorTexture->height();
+                std::vector<uint8_t> convertedImage(width * height * 4); // 4 channels: RGBA
+                // Parallelize the conversion loop for better performance
+                for (int i = 0; i < static_cast<int>(width * height); ++i) {
+                    float intensity = image[i];
+                    // Clamp and scale to [0, 255]
+                    uint8_t value = static_cast<uint8_t>(std::clamp(intensity, 0.0f, 1.0f) * 255.0f);
+                    convertedImage[i * 4 + 0] = value; // R
+                    convertedImage[i * 4 + 1] = value; // G
+                    convertedImage[i * 4 + 2] = value; // B
+                    convertedImage[i * 4 + 3] = 255;   // A (fully opaque)
+                }
+
+                // Upload the texture (ensure the format matches)
+                m_colorTexture->loadImage(convertedImage.data(), convertedImage.size() * 4);
+            }
         }
 
     }

@@ -73,6 +73,9 @@ namespace VkRender {
         glm::vec3 &getPosition() {
             return translation;
         }
+        glm::vec3 getPosition() const {
+            return translation;
+        }
 
         // Scale setters and getters
         void setScale(const glm::vec3 &s) {

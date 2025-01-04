@@ -47,7 +47,7 @@ namespace VkRender {
 
     class CameraGizmoPinholeMeshParameters : public IMeshParameters {
     public:
-        CameraComponent::PinHoleParameters parameters;
+        PinholeParameters parameters;
         std::string getIdentifier() const override {
             return "CameraGizmoPinhole_" + std::to_string(uuid);
         }
