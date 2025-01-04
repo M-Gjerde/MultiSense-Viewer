@@ -125,9 +125,9 @@ namespace VkRender {
         float fy     = pinhole.parameters.fy;
         float cx     = pinhole.parameters.cx;
         float cy     = pinhole.parameters.cy;
+        float focalLength     = pinhole.parameters.focalLength;
 
         // Choose a plane at Z = -1 for visualization. Objects in front of the camera have negative Z.
-        float Z_plane = -1.0f;
 
         // Convert image corners into camera coordinates:
         // We'll map four corners of the image:
@@ -146,18 +146,24 @@ namespace VkRender {
         // - Top side (v<cy) => positive Y
         // - Forward along negative Z
 
-        auto mapPixelTo3D = [&](float u, float v) {
+        auto mapPixelTo3D = [&](float u, float v, float Z_plane) {
             float X = -(u - cx) * Z_plane / fx;
             float Y = -(v - cy) * Z_plane / fy; // Notice the minus sign before (v - cy)
             float Z = Z_plane;
             return glm::vec3(X, Y, Z);
         };
 
+        float Z_plane = -1.0f;
 
-        glm::vec3 topLeft     = mapPixelTo3D(0.0f,     0.0f);
-        glm::vec3 topRight    = mapPixelTo3D(width,     0.0f);
-        glm::vec3 bottomRight = mapPixelTo3D(width,     height);
-        glm::vec3 bottomLeft  = mapPixelTo3D(0.0f,      height);
+        glm::vec3 frontTopLeft     = mapPixelTo3D(0.0f,     0.0f, Z_plane);
+        glm::vec3 frontTopRight    = mapPixelTo3D(width,     0.0f, Z_plane);
+        glm::vec3 frontBottomRight = mapPixelTo3D(width,     height, Z_plane);
+        glm::vec3 frontBottomLeft  = mapPixelTo3D(0.0f,      height, Z_plane);
+
+        glm::vec3 backTopLeft     = mapPixelTo3D(0.0f,     0.0f, focalLength / 1000); // convert focal length to meters
+        glm::vec3 backTopRight    = mapPixelTo3D(width,     0.0f, focalLength / 1000); // convert focal length to meters
+        glm::vec3 backBottomRight = mapPixelTo3D(width,     height, focalLength / 1000); // convert focal length to meters
+        glm::vec3 backBottomLeft  = mapPixelTo3D(0.0f,      height, focalLength / 1000); // convert focal length to meters
 
         // The pinhole (camera center) at the origin
         glm::vec3 pinholePos = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -166,10 +172,14 @@ namespace VkRender {
         // We'll store them in order: pinhole(0), topLeft(1), topRight(2), bottomRight(3), bottomLeft(4)
         std::vector<glm::vec3> uboVertices = {
                 pinholePos,
-                topLeft,
-                topRight,
-                bottomRight,
-                bottomLeft
+                frontTopLeft,
+                frontTopRight,
+                frontBottomRight,
+                frontBottomLeft,
+                backTopLeft,
+                backTopRight,
+                backBottomRight,
+                backBottomLeft
         };
 
         // We'll create a simple line-based mesh:
@@ -196,7 +206,18 @@ namespace VkRender {
                 1, 2,
                 2, 3,
                 3, 4,
-                4, 1
+                4, 1,
+
+                // Lines from pinhole (0) to sensor corners
+                0, 5,
+                0, 6,
+                0, 7,
+                0, 8,
+
+                // Image plane rectangle
+                5, 8, 7,
+                5, 7, 6,
+
         };
 
         vertices.resize(uboVertices.size());
@@ -327,39 +348,89 @@ namespace VkRender {
         vertices.reserve(estimatedVertexCount); // Reserve space to avoid resizing
         indices.reserve(estimatedIndexCount); // Reserve space to avoid resizing
 
-        // Using range-based loop to process vertices and indices
+        std::vector<glm::vec3> tempNormals(vertices.size(), glm::vec3(0.0f));
+
+        bool calculateNormals = false;
+
+        // Build the mesh (vertices + indices)
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
-                Vertex vertex{};
+                VkRender::Vertex vertex{};
+
+                // Position
                 vertex.pos = {
-                    attrib.vertices[3 * index.vertex_index + 0],
-                    attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
+                        attrib.vertices[3 * index.vertex_index + 0],
+                        attrib.vertices[3 * index.vertex_index + 1],
+                        attrib.vertices[3 * index.vertex_index + 2]
                 };
 
+                // Normal (if available). Otherwise, set to zero to mark that we need to compute it
                 if (index.normal_index > -1) {
                     vertex.normal = {
-                        attrib.normals[3 * index.normal_index + 0],
-                        attrib.normals[3 * index.normal_index + 1],
-                        attrib.normals[3 * index.normal_index + 2]
+                            attrib.normals[3 * index.normal_index + 0],
+                            attrib.normals[3 * index.normal_index + 1],
+                            attrib.normals[3 * index.normal_index + 2]
                     };
-                }
-                else {
-                    vertex.normal = {0.0f, 0.0f, 1.0f}; // Default normal if not present
+                } else {
+                    vertex.normal = {0.0f, 0.0f, 0.0f}; // Will compute later
                 }
 
+                // UV
                 if (index.texcoord_index > -1) {
                     vertex.uv0 = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                            attrib.texcoords[2 * index.texcoord_index + 0],
+                            1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                     };
                 }
-                auto [it, inserted] = uniqueVertices.try_emplace(vertex, vertices.size());
+
+                // De-duplicate
+                auto [it, inserted] = uniqueVertices.try_emplace(vertex, static_cast<uint32_t>(vertices.size()));
                 if (inserted) {
                     vertices.push_back(vertex);
                 }
 
                 indices.push_back(it->second);
+            }
+        }
+
+        // Now compute normals for any vertices that have a zero normal
+        computeNormals();
+    }
+
+    void MeshData::computeNormals()
+    {
+        // Accumulator array the same size as `vertices`
+        std::vector<glm::vec3> accumulators(vertices.size(), glm::vec3(0.0f));
+
+        // Accumulate face normals
+        for (size_t i = 0; i < indices.size(); i += 3) {
+            // Indices of the triangle
+            uint32_t i0 = indices[i + 0];
+            uint32_t i1 = indices[i + 1];
+            uint32_t i2 = indices[i + 2];
+
+            // Positions of the triangle’s vertices
+            const glm::vec3& p0 = vertices[i0].pos;
+            const glm::vec3& p1 = vertices[i1].pos;
+            const glm::vec3& p2 = vertices[i2].pos;
+
+            // Compute face normal (using right-handed cross product)
+            glm::vec3 edge1 = p1 - p0;
+            glm::vec3 edge2 = p2 - p0;
+            glm::vec3 faceNormal = glm::normalize(glm::cross(edge1, edge2));
+
+            // Accumulate the face normal in each of the triangle’s vertices
+            accumulators[i0] += faceNormal;
+            accumulators[i1] += faceNormal;
+            accumulators[i2] += faceNormal;
+        }
+
+        // Assign / normalize
+        for (size_t i = 0; i < vertices.size(); i++) {
+            // If the vertex had a normal of (0,0,0) or we choose to override it,
+            // we use the accumulated normal. Otherwise, you can skip to retain existing normals.
+            if (glm::length(vertices[i].normal) < 1e-6f) {
+                vertices[i].normal = glm::normalize(accumulators[i]);
             }
         }
     }

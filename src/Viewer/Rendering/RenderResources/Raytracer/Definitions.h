@@ -47,8 +47,7 @@ namespace VkRender::RT {
         GaussianInputAssembly *gaussianInputAssembly = nullptr;
         size_t numGaussians;
 
-        // uint8_t
-        uint8_t *imageMemory;
+        float *imageMemory;
     };
 
 

@@ -14,14 +14,16 @@
 
 namespace VkRender::RT {
     RayTracer::RayTracer(Application *ctx, std::shared_ptr<Scene> &scene, uint32_t width, uint32_t height) : m_context(
-            ctx) {
+            ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU)) {
+        ;
+
         m_scene = scene;
         m_width = width;
         m_height = height;
         // Load the scene into gpu memory
         // Create image memory
-        m_imageMemory = new uint8_t[width * height * 4]; // Assuming RGBA8 image
-        m_gpu.imageMemory = sycl::malloc_device<uint8_t>(m_width * m_height * 4, m_selector.getQueue());
+        m_imageMemory = new float[width * height]; // Assuming RGBA8 image
+        m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
@@ -53,6 +55,10 @@ namespace VkRender::RT {
         if (m_gpu.materials) {
             sycl::free(m_gpu.materials, m_selector.getQueue());
             m_gpu.materials = nullptr;
+        }
+        if (m_gpu.tagComponents) {
+            sycl::free(m_gpu.tagComponents, m_selector.getQueue());
+            m_gpu.tagComponents = nullptr;
         }
         if (m_gpu.gaussianInputAssembly) {
             sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
@@ -140,7 +146,7 @@ namespace VkRender::RT {
             auto tagComponent = entity.getComponent<TagComponent>();
             tagComponents.emplace_back(tagComponent);
 
-            if (entity.hasComponent<MaterialComponent>()){
+            if (entity.hasComponent<MaterialComponent>()) {
                 auto &material = entity.getComponent<MaterialComponent>();
                 materials.emplace_back(material);
             }
@@ -297,8 +303,8 @@ namespace VkRender::RT {
         }
         */
         auto &queue = m_selector.getQueue();
-        if (editorImageUI.clearImageMemory){
-            queue.fill(m_gpu.imageMemory, static_cast<uint8_t>(0), m_width * m_height * 4).wait();
+        if (editorImageUI.clearImageMemory) {
+            queue.fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
             m_frameID = 0;
         }
 
@@ -312,7 +318,6 @@ namespace VkRender::RT {
             queue.memcpy(cameraGPU, camera.get(), sizeof(PinholeCamera));
 
 
-
             if (editorImageUI.kernel == "Path Tracer: 2DGS") {
                 uint32_t totalPhotons = 100000;
                 sycl::range<1> globalRange(totalPhotons);
@@ -323,12 +328,11 @@ namespace VkRender::RT {
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Path Tracer: Mesh") {
-                uint32_t totalPhotons = 10000;
+                uint32_t totalPhotons = 10000000;
                 sycl::range<1> globalRange(totalPhotons);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
-                    PathTracerMeshKernels kernel(m_gpu, totalPhotons, m_width, m_height, m_width * m_height * 4,
-                                                 transform, cameraGPU, 1, m_frameID);
+                    PathTracerMeshKernels kernel(m_gpu, totalPhotons, transform, cameraGPU, 8, m_frameID);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Hit-Test") {
@@ -351,8 +355,9 @@ namespace VkRender::RT {
             queue.wait();
             m_frameID++;
         }
-        queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * 4).wait();
-
+        queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
+        if (editorImageUI.saveImage)
+            saveAsPFM("cornell.pfm");
     }
 
     RayTracer::~RayTracer() {
@@ -385,6 +390,44 @@ namespace VkRender::RT {
                 file.put(m_imageMemory[pixelIndex + 1]); // G
                 file.put(m_imageMemory[pixelIndex + 2]); // B
             }
+        }
+
+        file.close();
+    }
+
+    void RayTracer::saveAsPFM(const std::filesystem::path &filename) const {
+        std::ofstream file(filename, std::ios::binary);
+
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open file for writing: " + filename.string());
+        }
+
+        // Write the PFM header
+        // "PF" indicates a color image. Use "Pf" for grayscale.
+        file << "PF\n" << m_width << " " << m_height << "\n-1.0\n";
+
+        // PFM expects the data in binary format, row by row from top to bottom
+        // Assuming your m_imageMemory is in RGBA format with floats
+
+        // Allocate a temporary buffer for RGB data
+        std::vector<float> rgbData(m_width * m_height * 3);
+
+        for (uint32_t y = 0; y < m_height; ++y) {
+            for (uint32_t x = 0; x < m_width; ++x) {
+                uint32_t pixelIndex = (y * m_width + x); // RGBA: 4 floats per pixel
+                uint32_t rgbIndex = (y * m_width + x) * 3;
+
+                rgbData[rgbIndex + 0] = m_imageMemory[pixelIndex]; // R
+                rgbData[rgbIndex + 1] = m_imageMemory[pixelIndex]; // G
+                rgbData[rgbIndex + 2] = m_imageMemory[pixelIndex]; // B
+            }
+        }
+
+        // Write the RGB float data
+        file.write(reinterpret_cast<const char *>(rgbData.data()), rgbData.size() * sizeof(float));
+
+        if (!file) {
+            throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
         }
 
         file.close();

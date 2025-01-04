@@ -553,20 +553,22 @@ namespace VkRender {
 
                     break;
                 case CameraComponent::PINHOLE:
-                    paramsChanged |= ImGui::SliderInt("Width", &component.pinHoleParameters.width, 1.0, 4096);
-                    paramsChanged |= ImGui::SliderInt("Height", &component.pinHoleParameters.height, 1.0, 4096);
+                    paramsChanged |= ImGui::SliderInt("Width", &component.pinholeParameters.width, 1.0, 4096);
+                    paramsChanged |= ImGui::SliderInt("Height", &component.pinholeParameters.height, 1.0, 4096);
 
-                    paramsChanged |= ImGui::SliderFloat("Fx", &component.pinHoleParameters.fx, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Fy", &component.pinHoleParameters.fy, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Cx", &component.pinHoleParameters.cx, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Cy", &component.pinHoleParameters.cy, 1.0f, 4096.0f);
+                    paramsChanged |= ImGui::SliderFloat("Fx", &component.pinholeParameters.fx, 1.0f, 4096.0f);
+                    paramsChanged |= ImGui::SliderFloat("Fy", &component.pinholeParameters.fy, 1.0f, 4096.0f);
+                    paramsChanged |= ImGui::SliderFloat("Cx", &component.pinholeParameters.cx, 1.0f, 4096.0f);
+                    paramsChanged |= ImGui::SliderFloat("Cy", &component.pinholeParameters.cy, 1.0f, 4096.0f);
+                    paramsChanged |= ImGui::SliderFloat("Focal Length", &component.pinholeParameters.focalLength, 1.0f, 100.0f);
+                    paramsChanged |= ImGui::SliderFloat("Aperture", &component.pinholeParameters.fNumber, 0.0f, 32.0f);
 
                     if (ImGui::Button("Set from viewport")) {
                         auto &ci = m_context->getViewport()->getCreateInfo();
-                        component.pinHoleParameters.width = ci.width;
-                        component.pinHoleParameters.height = ci.height;
-                        component.pinHoleParameters.cx = ci.width / 2;
-                        component.pinHoleParameters.cy = ci.height / 2;
+                        component.pinholeParameters.width = ci.width;
+                        component.pinholeParameters.height = ci.height;
+                        component.pinholeParameters.cx = ci.width / 2;
+                        component.pinholeParameters.cy = ci.height / 2;
                         paramsChanged = true;
                     }
                     break;
@@ -731,7 +733,7 @@ namespace VkRender {
                         auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPinholeMeshParameters>(
                                 component.meshParameters);
                         if (cameraGizmoParams) {
-                            auto &cameraParams = entity.getComponent<CameraComponent>().pinHoleParameters;
+                            auto &cameraParams = entity.getComponent<CameraComponent>().pinholeParameters;
                             // Update focal point and check if it has changed
                             if (cameraGizmoParams->parameters != cameraParams) {
                                 cameraGizmoParams->parameters = cameraParams;

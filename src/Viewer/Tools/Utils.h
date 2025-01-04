@@ -556,7 +556,6 @@ namespace Utils {
             case VK_FORMAT_D32_SFLOAT:
             case VK_FORMAT_R32_SFLOAT:
             case VK_FORMAT_R32_UINT:
-                return 4; // 4 bytes per pixel for depth
             case VK_FORMAT_D24_UNORM_S8_UINT:
                 return 4; // Approximation: 24 bits depth + 8 bits stencil = 4 bytes
             default:

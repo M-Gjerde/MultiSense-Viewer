@@ -13,15 +13,12 @@ namespace VkRender::RT {
     public:
         PathTracerMeshKernels(GPUData gpuData,
                               uint32_t numPhotons,
-                              uint32_t width,
-                              uint32_t height,
-                              uint32_t size,
                               TransformComponent cameraPose,
                               PinholeCamera *camera,
                               uint32_t maxBounces,
                               uint32_t frameID)
-                : m_gpuData(gpuData), m_numPhotons(numPhotons), m_width(width), m_height(height), m_size(size),
-                  m_cameraTransform(cameraPose), m_camera(camera), m_maxBounces(maxBounces), m_frameID(frameID) {}
+                : m_gpuData(gpuData), m_numPhotons(numPhotons), m_cameraTransform(cameraPose), m_camera(camera),
+                  m_maxBounces(maxBounces), m_frameID(frameID) {}
 
         void operator()(sycl::item<1> item) const {
             size_t photonID = item.get_linear_id();
@@ -36,11 +33,8 @@ namespace VkRender::RT {
     private:
         GPUData m_gpuData{};
         uint32_t m_numPhotons{};
-        uint32_t m_width;
-        uint32_t m_height;
-        uint32_t m_size;
-        uint32_t m_maxBounces;  // e.g. 5, 8, or 10
-        uint32_t m_frameID;
+        uint32_t m_maxBounces = 5;  // e.g. 5, 8, or 10
+        uint32_t m_frameID = 0;
 
         TransformComponent m_cameraTransform{};
         PinholeCamera *m_camera{};
@@ -99,6 +93,7 @@ namespace VkRender::RT {
                 // if you want “check sensor before geometry.” Or treat sensor as geometry.
                 // We'll treat sensor as geometry for a purely mesh-based approach.
 
+
                 for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
                     // Transform ray to local space
                     if (entityIdx == lightEntityIdx)
@@ -154,28 +149,51 @@ namespace VkRender::RT {
                         }
                     }
                 }
-                // Check for intersection with camera plane:: Direct lighting
-                glm::vec3 camHit;
-                float tCam;
-                float contribution;
-                bool cameraHit = checkCameraPlaneIntersection(rayOrigin, rayDir, camHit, tCam, contribution);
 
-                // Determine the closest hit (geometry vs. camera plane)
-                if (cameraHit) {
-                    // Calculate geometry intersection distance if hit
-                    float tGeom = hit ? closest_t : FLT_MAX;
-                    glm::vec3 hitPointWorld = rayOrigin + rayDir * tCam;
+                // (A) Check if the ray passes "through" the pinhole
+                bool pinholeHit = false;
+                float tPinhole = 0.0f;
+                glm::vec3 closePt(0.f);
+                float apertureDiameter = (m_camera->m_focalLength / m_camera->m_fNumber) / 1000;
+                pinholeHit = checkPinholeIntersection(
+                        rayOrigin,
+                        rayDir,
+                        m_cameraTransform.getPosition(),
+                        apertureDiameter / 2,
+                        closePt,   // out: the closest approach on the ray
+                        tPinhole   // out: parameter t
+                );
 
-                    //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f)\n", photonID, hitPointWorld.x, hitPointWorld.y, hitPointWorld.z);
-                    if (tCam < tGeom) {
-                        accumulateOnSensor(photonID, hitPointWorld, photonFlux * contribution);
-                        return; // Photon path terminates
+                if (pinholeHit) {
+                    // Check for intersection with camera plane:: Direct lighting
+                    glm::vec3 camHit;
+                    float tCam;
+                    float contribution;
+                    bool cameraHit = checkCameraPlaneIntersection(rayOrigin, rayDir, camHit, tCam, contribution);
+
+                    // Determine the closest hit (geometry vs. camera plane)
+                    if (cameraHit) {
+                        // Calculate geometry intersection distance if hit
+                        float tGeom = hit ? closest_t : FLT_MAX;
+                        glm::vec3 hitPointWorld = rayOrigin + rayDir * tCam;
+                        float length = glm::length(hitPointWorld);
+                        float xWorld = hitPointWorld.x;
+                        float yWorld = hitPointWorld.y;
+                        float zWorld = hitPointWorld.z;
+                        //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f)\n", photonID, hitPointWorld.x, hitPointWorld.y, hitPointWorld.z);
+                        if (tCam < tGeom) {
+                            float totalFlux = photonFlux * contribution;
+                            if (totalFlux > emissionPower)
+                                return;
+
+                            accumulateOnSensor(photonID, hitPointWorld, totalFlux);
+                            return; // Photon path terminates
+                        }
+                        // Photon hits the camera plane first
+
+
                     }
-                    // Photon hits the camera plane first
-
-
                 }
-                return;
 
                 // If no hit or geometry hit first, proceed
                 if (hit) {
@@ -188,7 +206,7 @@ namespace VkRender::RT {
 
                     // Retrieve material properties
                     const MaterialComponent &mat = m_gpuData.materials[hitEntity];
-                    float albedo = mat.albedo.x; // Assuming monochrome; extend as needed
+                    float albedo = 1.0f; //mat.albedo.x; // Assuming monochrome; extend as needed
 
                     // Calculate cosine of the angle between normal and incoming direction
                     float cosTheta = glm::dot(hitNormalWorld, -rayDir);
@@ -202,7 +220,7 @@ namespace VkRender::RT {
                     if (bounce >= 2) {
                         rrProb = glm::clamp(photonFlux, 0.05f, 0.9f);
                     }
-                    float rnd = randomFloat(photonID, bounce);
+                    float rnd = randomFloat(photonID * m_frameID, bounce * m_frameID);
                     if (rnd > rrProb) {
                         return; // Photon terminated
                     } else {
@@ -220,6 +238,175 @@ namespace VkRender::RT {
             } // end for bounces
 
             // If we exit here, we used up all bounces w/o hitting sensor
+        }
+
+        bool checkCameraPlaneIntersection(
+                const glm::vec3 &rayOriginWorld,
+                const glm::vec3 &rayDirWorld,
+                glm::vec3 &hitPointCam,   // out: intersection in camera space
+                float &tIntersect, // out: parameter t
+                float &contributionScore// out: parameter contributionScore
+        ) const {
+            // 1) Transform to camera space
+
+            glm::mat4 entityTransform = m_cameraTransform.getTransform();
+            // Camera plane normal in world space
+            glm::vec3 cameraPlaneNormalWorld = glm::normalize(
+                    glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
+            glm::vec3 cameraPlanePointWorld = glm::vec3(
+                    entityTransform *
+                    glm::vec4(0.0f, 0.0f, m_camera->m_focalLength / 1000, 1.0f)); // A point on the plane
+
+            // Ray-plane intersection
+
+            // Ray-plane intersection calculation
+            float denom = glm::dot(cameraPlaneNormalWorld, rayDirWorld);
+            if (std::abs(denom) < 1e-6) {
+                return false; // Ray is parallel to the plane
+            }
+            glm::vec3 p0l0 = cameraPlanePointWorld - rayOriginWorld;
+            float t = glm::dot(p0l0, cameraPlaneNormalWorld) / denom;
+            if (t < 1e-6) {
+                return false; // Intersection is behind the ray origin
+            }
+            glm::vec3 intersectionPoint = rayOriginWorld + t * rayDirWorld;
+
+            float hitx = intersectionPoint.x;
+            float hity = intersectionPoint.y;
+            float hitz = intersectionPoint.z;
+
+            glm::vec3 intersectionCamSpace = glm::vec3(
+                    glm::inverse(entityTransform) * glm::vec4(intersectionPoint, 1.0f));
+
+            float hitCx = intersectionCamSpace.x;
+            float hitCy = intersectionCamSpace.y;
+            float hitCz = intersectionCamSpace.z;
+
+            // Sensor plane bounds in camera space
+            float halfW = (m_camera->m_width * 0.5f) / m_camera->m_fx;
+            float halfH = (m_camera->m_height * 0.5f) / m_camera->m_fy;
+
+            // Check bounds
+            if (intersectionCamSpace.x < -halfW || intersectionCamSpace.x > halfW ||
+                intersectionCamSpace.y < -halfH || intersectionCamSpace.y > halfH) {
+                return false; // Outside sensor bounds
+            }
+
+            float cosAngle = std::abs(glm::dot(cameraPlaneNormalWorld, rayDirWorld)); // Ensure positive cosine
+            contributionScore = cosAngle; // Higher cosine means closer to perpendicular
+
+
+            // If we reach here, the ray intersects the camera plane within bounds
+            hitPointCam = intersectionPoint; // Intersection point in camera space
+            tIntersect = t;     // Distance along the ray to the intersection
+            return true;
+        }
+
+        // ---------------------------------------------------------------------
+        //  accumulateOnSensor
+        // ---------------------------------------------------------------------
+        void accumulateOnSensor(size_t photonID, const glm::vec3 &hitPointWorld, float photonFlux) const {
+            //
+            // 1. Transform the hit point from world space to camera space
+            //
+            // m_cameraTransform is presumably a component holding the camera's world matrix.
+            // We typically need the inverse of that matrix to go from world -> camera space.
+            glm::mat4 worldToCamera = glm::inverse(m_cameraTransform.getTransform());
+            glm::vec4 hitPointCam = worldToCamera * glm::vec4(hitPointWorld, 1.0f);
+            float xWorld = hitPointWorld.x;
+            float yWorld = hitPointWorld.y;
+            float zWorld = hitPointWorld.z;
+
+            //
+            // 2. Project to the image plane using pinhole intrinsics:
+            //    X_cam, Y_cam, Z_cam -> x_proj, y_proj
+            //
+            //    x_proj = (fx * X_cam / Z_cam) + cx
+            //    y_proj = (fy * Y_cam / Z_cam) + cy
+            //
+            // Important: Z_cam should be > 0 for a point in front of the camera.
+            //
+            float Xc = hitPointCam.x;
+            float Yc = hitPointCam.y;
+            float Zc = hitPointCam.z;
+
+            if (Zc <= 0.0f) {
+                return; // Behind the camera; discard
+            }
+
+            float xSensor_mm = m_camera->m_focalLength * (Xc / Zc);
+            float ySensor_mm = m_camera->m_focalLength * (Yc / Zc);
+
+            float xPitchSize = ((m_camera->m_focalLength) / m_camera->m_fx);
+            float yPitchSize = ((m_camera->m_focalLength) / m_camera->m_fy);
+
+            float xPixel = (xSensor_mm / xPitchSize) + m_camera->m_cx;
+            float yPixel = (ySensor_mm / yPitchSize) + m_camera->m_cy;
+
+            //float pxF = ((xSensor_mm / xPitchSize) + 0.5f) * (float)m_camera->m_width;
+            //float pyF = ((ySensor_mm / yPitchSize) + 0.5f) * (float)m_camera->m_height;
+            //
+            // 3. Convert to integer pixel coordinates (rounding or flooring)
+            //
+            // Often, we do a simple int cast or a floor + 0.5f offset,
+            // but you can choose what best suits your sampling approach.
+            //
+            int px = xPixel; // TODO map (bi
+            int py = yPixel;
+
+
+            //std::cout << "Photon: " << photonID << "Hit sensor at: (" << px << ", " << py <<") | flux: " << photonFlux << std::endl;
+            //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f), Hit Sensor at: (%d, %d), Flux: %f, Camera: (%f, %f)\n", photonID, hitPointCam.x, hitPointCam.y, hitPointCam.z, px, py, photonFlux, m_camera->m_width,m_camera->m_height);
+
+            //
+            // 4. Check bounds. If inside the image plane, accumulate flux
+            //
+            if (px >= 0 && px < static_cast<int>(m_camera->m_width) &&
+                py >= 0 && py < static_cast<int>(m_camera->m_height)) {
+                // Convert 2D coords -> 1D index
+                size_t pixelIndex =
+                        static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px);
+
+                float contribution = photonFlux;
+                m_gpuData.imageMemory[pixelIndex] += contribution;
+
+            }
+        }
+
+
+        // ---------------------------------------------------------
+        //  checkPinholeIntersection
+        // ---------------------------------------------------------
+        bool checkPinholeIntersection(const glm::vec3 &rayOrigin,
+                                      const glm::vec3 &rayDir,
+                                      const glm::vec3 &pinholeCenter,
+                                      float pinholeRadius,
+                                      glm::vec3 &outClosestPt,
+                                      float &outT) const {
+            // Step 1: find t* that minimizes distance from line to pinholeCenter
+            glm::vec3 OP = rayOrigin - pinholeCenter;
+            float denom = glm::dot(rayDir, rayDir); // typically 1 if rayDir is normalized
+            if (denom < 1e-14f) {
+                return false; // degenerately small direction
+            }
+
+            float tStar = -glm::dot(OP, rayDir) / denom;
+            if (tStar < 0.0f) {
+                return false; // intersection "behind" the emitter
+            }
+
+            // Step 2: compute the actual closest point
+            outClosestPt = rayOrigin + tStar * rayDir;
+            // distance from pinhole center
+            glm::vec3 diff = outClosestPt - pinholeCenter;
+            float distSq = glm::dot(diff, diff);
+
+            // If dist <= pinholeRadius => "hit"
+            if (distSq <= pinholeRadius * pinholeRadius) {
+                outT = tStar;
+                return true;
+            }
+            return false;
         }
 
         // ---------------------------------------------------------------------
@@ -374,106 +561,16 @@ namespace VkRender::RT {
             return false;
         }
 
+
         // ---------------------------------------------------------------------
         //  sampleEmissionDirection
         // ---------------------------------------------------------------------
         glm::vec3 sampleEmissionDirection(size_t photonID, const glm::vec3 &normal) const {
             // Hemisphere around normal or isotropic
-            glm::vec3 d = randomUnitVector(photonID * 2 + 0); // some PRNG usage
-            if (glm::dot(d, normal) < 0.f) {
-                d = -d;
-            }
+            glm::vec3 d = randomUnitVector(photonID * 999 + 1212 * m_frameID); // some PRNG usage
             return glm::normalize(d);
         }
 
-        // ---------------------------------------------------------------------
-        //  isSensorTriangle
-        // ---------------------------------------------------------------------
-        bool isSensorTriangle(size_t entityIdx, size_t triIdx) const {
-            // If you have a specific entity or material for the sensor, check that
-            // Or store a set of “sensorEntities” in GPUData, etc.
-            if (m_gpuData.materials[entityIdx].isSensor) {
-                return true;
-            }
-            return false;
-        }
-
-        // ---------------------------------------------------------------------
-        //  accumulateOnSensor
-        // ---------------------------------------------------------------------
-        void accumulateOnSensor(size_t photonID, const glm::vec3 &hitPointWorld, float photonFlux) const {
-            //
-            // 1. Transform the hit point from world space to camera space
-            //
-            // m_cameraTransform is presumably a component holding the camera's world matrix.
-            // We typically need the inverse of that matrix to go from world -> camera space.
-            glm::mat4 worldToCamera = glm::inverse(m_cameraTransform.getTransform());
-            glm::vec4 hitPointCam = worldToCamera * glm::vec4(hitPointWorld, 1.0f);
-
-            //
-            // 2. Project to the image plane using pinhole intrinsics:
-            //    X_cam, Y_cam, Z_cam -> x_proj, y_proj
-            //
-            //    x_proj = (fx * X_cam / Z_cam) + cx
-            //    y_proj = (fy * Y_cam / Z_cam) + cy
-            //
-            // Important: Z_cam should be > 0 for a point in front of the camera.
-            //
-            float X_cam = hitPointCam.x;
-            float Y_cam = hitPointCam.y;
-            float Z_cam = hitPointCam.z;
-
-            // Check if Z_cam is negative (the point is in front of the camera)
-            if (Z_cam >= 0.0f) {
-                return; // Behind the camera; discard
-            }
-
-            float x_proj = -((m_camera->m_fx * X_cam) / Z_cam) + m_camera->m_cx;
-            float y_proj = -((m_camera->m_fy * Y_cam) / Z_cam) + m_camera->m_cy;
-
-            //
-            // 3. Convert to integer pixel coordinates (rounding or flooring)
-            //
-            // Often, we do a simple int cast or a floor + 0.5f offset,
-            // but you can choose what best suits your sampling approach.
-            //
-            int px = x_proj;
-            int py = y_proj;
-
-            //std::cout << "Photon: " << photonID << "Hit sensor at: (" << px << ", " << py <<") | flux: " << photonFlux << std::endl;
-            //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f), Hit Sensor at: (%d, %d), Flux: %f, Camera: (%f, %f)\n", photonID, hitPointCam.x, hitPointCam.y, hitPointCam.z, px, py, photonFlux, m_camera->m_width,m_camera->m_height);
-
-            //
-            // 4. Check bounds. If inside the image plane, accumulate flux
-            //
-            if (px >= 0 && px < static_cast<int>(m_camera->m_width) &&
-                py >= 0 && py < static_cast<int>(m_camera->m_height)) {
-                // Convert 2D coords -> 1D index
-                size_t pixelIndex =
-                        (static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px)) *
-                        4;
-
-                uint8_t contribution = photonFlux * 10;
-                // Accumulate the flux
-                m_gpuData.imageMemory[pixelIndex + 0] += contribution;
-                m_gpuData.imageMemory[pixelIndex + 1] += contribution;
-                m_gpuData.imageMemory[pixelIndex + 2] += contribution;
-                m_gpuData.imageMemory[pixelIndex + 3] = 255;
-
-            }
-        }
-
-
-        // ---------------------------------------------------------------------
-        //  projectSensorPoint
-        // ---------------------------------------------------------------------
-        void projectSensorPoint(const glm::vec3 &pt, int &px, int &py) const {
-            // If your sensor is a plane at Z=-1, you can invert the same logic you had in camera code
-            // Or if the sensor is another entity, you'd do barycentric or something.
-            // For demonstration, do a simple orthographic map:
-            px = (int) (pt.x * 100 + 100);
-            py = (int) (pt.y * 100 + 100);
-        }
 
         // ---------------------------------------------------------------------
         //  sampleRandomHemisphere (Lambertian reflection)
@@ -481,7 +578,7 @@ namespace VkRender::RT {
         glm::vec3 sampleRandomHemisphere(const glm::vec3 &normal,
                                          size_t photonID,
                                          uint32_t bounce) const {
-            glm::vec3 r = randomUnitVector(photonID * 23 + bounce * 59);
+            glm::vec3 r = randomUnitVector(photonID * 23 + bounce * 59 * m_frameID);
             if (glm::dot(r, normal) < 0.f) {
                 r = -r;
             }
@@ -533,89 +630,71 @@ namespace VkRender::RT {
             return static_cast<float>(seed % 10000) / 10000.f;
         }
 
-        /**
-         * @brief Returns a random integer index in the range [minIndex, maxIndex].
-         *
-         * @param photonID A unique identifier for each photon (used as part of the seed).
-         * @param bounce   The current bounce (used as part of the seed).
-         * @param minIndex The inclusive lower bound of the range.
-         * @param maxIndex The inclusive upper bound of the range.
-         * @return int     A random integer in the range [minIndex, maxIndex].
-         */
-        int randomIndex(size_t photonID, uint32_t bounce, int minIndex, int maxIndex) const {
-            if (minIndex > maxIndex) {
-                std::swap(minIndex, maxIndex);
+
+        struct PCG32 {
+            uint64_t state;
+            uint64_t inc;
+
+            // Initialize the RNG with a seed and sequence
+            void init(uint64_t seed, uint64_t sequence = 1) {
+                state = 0;
+                inc = (sequence << 1u) | 1u; // Increment must be odd
+                nextUInt(); // Advance state
+                state += seed;
+                nextUInt(); // Advance state again
             }
 
-            uint32_t seed = static_cast<uint32_t>((photonID + 1) * 73856093ULL ^ (bounce + 1) * 19349663ULL);
-            seed = xorshift32(seed);
+            // Generate the next uint32_t random number
+            uint32_t nextUInt() {
+                uint64_t old_state = state;
+                state = old_state * 6364136223846793005ULL + inc;
+                uint32_t xorshifted = static_cast<uint32_t>(((old_state >> 18u) ^ old_state) >> 27u);
+                uint32_t rot = static_cast<uint32_t>(old_state >> 59u);
+                return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+            }
 
-            uint64_t range = static_cast<uint64_t>(maxIndex) - static_cast<uint64_t>(minIndex) + 1ULL;
-            uint64_t randInRange = seed % range;
-            return static_cast<int>(randInRange + minIndex);
+            // Generate a random float in [0, 1)
+            float nextFloat() {
+                return (nextUInt() & 0xFFFFFF) / static_cast<float>(1 << 24);
+            }
+
+
+        };
+
+        // ---------------------------------------------------------------------
+        //  randomUnitVector using PCG32
+        // ---------------------------------------------------------------------
+        glm::vec3 randomUnitVector(PCG32 &rng) {
+            float theta = rng.nextFloat() * 2.0f * M_PI; // [0, 2π)
+            float z = rng.nextFloat() * 2.0f - 1.0f;      // [-1, 1)
+            float r = sqrtf(1.0f - z * z);               // Radius at z
+
+            float x = r * cosf(theta);
+            float y = r * sinf(theta);
+
+            return glm::vec3(x, y, z); // Already normalized
         }
 
-        bool checkCameraPlaneIntersection(
-                const glm::vec3 &rayOriginWorld,
-                const glm::vec3 &rayDirWorld,
-                glm::vec3 &hitPointCam,   // out: intersection in camera space
-                float &tIntersect, // out: parameter t
-                float &contributionScore// out: parameter contributionScore
-        ) const {
-            // 1) Transform to camera space
-
-            glm::mat4 entityTransform = m_cameraTransform.getTransform();
-            // Camera plane normal in world space
-            glm::vec3 cameraPlaneNormalWorld = glm::normalize(
-                    glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
-            glm::vec3 cameraPlanePointWorld = glm::vec3(
-                    entityTransform * glm::vec4(0.0f, 0.0f, -1.0f, 1.0f)); // A point on the plane
-
-            // Ray-plane intersection
-
-            // Ray-plane intersection calculation
-            float denom = glm::dot(cameraPlaneNormalWorld, rayDirWorld);
-            if (std::abs(denom) < 1e-6) {
-                return false; // Ray is parallel to the plane
-            }
-            glm::vec3 p0l0 = cameraPlanePointWorld - rayOriginWorld;
-            float t = glm::dot(p0l0, cameraPlaneNormalWorld) / denom;
-            if (t < 1e-6) {
-                return false; // Intersection is behind the ray origin
-            }
-            glm::vec3 intersectionPoint = rayOriginWorld + t * rayDirWorld;
-
-            float hitx = intersectionPoint.x;
-            float hity = intersectionPoint.y;
-            float hitz = intersectionPoint.z;
-
-            glm::vec3 intersectionCamSpace = glm::vec3(glm::inverse(entityTransform) * glm::vec4(intersectionPoint, 1.0f));
-
-            float hitCx = intersectionCamSpace.x;
-            float hitCy = intersectionCamSpace.y;
-            float hitCz = intersectionCamSpace.z;
-
-            // Sensor plane bounds in camera space
-            float halfW = (m_camera->m_width * 0.5f) / m_camera->m_fx;
-            float halfH = (m_camera->m_height * 0.5f) / m_camera->m_fy;
-
-            // Check bounds
-            if (intersectionCamSpace.x < -halfW || intersectionCamSpace.x > halfW ||
-                intersectionCamSpace.y < -halfH || intersectionCamSpace.y > halfH) {
-                return false; // Outside sensor bounds
-            }
-
-            float cosAngle = std::abs(glm::dot(cameraPlaneNormalWorld, rayDirWorld)); // Ensure positive cosine
-            contributionScore = cosAngle; // Higher cosine means closer to perpendicular
-
-
-            // If we reach here, the ray intersects the camera plane within bounds
-            hitPointCam = intersectionPoint; // Intersection point in camera space
-            tIntersect = t;     // Distance along the ray to the intersection
-            return true;
+        // ---------------------------------------------------------------------
+        //  sampleEmissionDirection using PCG32
+        // ---------------------------------------------------------------------
+        glm::vec3 sampleEmissionDirection(const glm::vec3 &normal, PCG32 &rng) {
+            glm::vec3 d = randomUnitVector(rng);
+            return glm::normalize(d);
         }
+
+        // ---------------------------------------------------------------------
+        //  sampleRandomHemisphere (Lambertian reflection) using PCG32
+        // ---------------------------------------------------------------------
+        glm::vec3 sampleRandomHemisphere(const glm::vec3 &normal, PCG32 &rng) {
+            glm::vec3 r = randomUnitVector(rng);
+            if (glm::dot(r, normal) < 0.f) {
+                r = -r;
+            }
+            return glm::normalize(r);
+        }
+
     };
-
 
 }
 

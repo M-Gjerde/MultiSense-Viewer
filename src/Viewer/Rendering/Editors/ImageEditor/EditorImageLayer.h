@@ -139,6 +139,8 @@ namespace VkRender {
             if (imageUI->clearImageMemory){
                 imageUI->render = true;
             }
+            ImGui::SameLine();
+            imageUI->saveImage = ImGui::Button("Save");
 
             ImGui::End();
 

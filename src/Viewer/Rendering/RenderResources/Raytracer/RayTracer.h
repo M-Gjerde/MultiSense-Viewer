@@ -27,7 +27,7 @@ namespace VkRender::RT {
         void update(const EditorImageUI& editorImageUI);
 
 
-        uint8_t* getImage() {return m_imageMemory;}
+        float* getImage() {return m_imageMemory;}
 
         ~RayTracer();
 
@@ -37,10 +37,10 @@ namespace VkRender::RT {
     private:
         BaseCamera m_camera;
         Application* m_context;
-        SyclDeviceSelector m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
+        SyclDeviceSelector m_selector;
 
         std::shared_ptr<Scene> m_scene;
-        uint8_t* m_imageMemory = nullptr;
+        float* m_imageMemory = nullptr;
 
         uint32_t m_width = 0, m_height = 0;
 
@@ -51,6 +51,8 @@ namespace VkRender::RT {
         void saveAsPPM(const std::filesystem::path& filename) const;
 
         uint32_t m_frameID = 0;
+
+        void saveAsPFM(const std::filesystem::path &filename) const;
     };
 
 #else
@@ -61,7 +63,7 @@ namespace VkRender::RT {
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
         void update(const EditorImageUI& editorImageUI) {}
-        uint8_t* getImage() {return nullptr;}
+        float* getImage() {return nullptr;}
         ~RayTracer() {}
         void upload(std::shared_ptr<Scene> ptr) {}
     };

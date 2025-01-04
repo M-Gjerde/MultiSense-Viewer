@@ -236,7 +236,7 @@ namespace VkRender {
                     break;
                 }
                 case CameraComponent::PINHOLE: {
-                    auto &params = camera.pinHoleParameters;
+                    auto &params = camera.pinholeParameters;
                     out << YAML::Key << "PinHoleParameters";
                     out << YAML::BeginMap;
                     out << YAML::Key << "Height" << YAML::Value << params.height;
@@ -245,6 +245,8 @@ namespace VkRender {
                     out << YAML::Key << "Fy" << YAML::Value << params.fy;
                     out << YAML::Key << "Cx" << YAML::Value << params.cx;
                     out << YAML::Key << "Cy" << YAML::Value << params.cy;
+                    out << YAML::Key << "Focal Length" << YAML::Value << params.focalLength;
+                    out << YAML::Key << "Aperture" << YAML::Value << params.fNumber;
                     out << YAML::EndMap;
                     break;
                 }
@@ -519,12 +521,17 @@ namespace VkRender {
                         {
                             auto pinholeParams = cameraComponent["PinHoleParameters"];
                             if (pinholeParams) {
-                                camera.pinHoleParameters.height = pinholeParams["Height"].as<int>(720);
-                                camera.pinHoleParameters.width = pinholeParams["Width"].as<int>(1280);
-                                camera.pinHoleParameters.fx = pinholeParams["Fx"].as<float>(1280.0f);
-                                camera.pinHoleParameters.fy = pinholeParams["Fy"].as<float>(720.0f);
-                                camera.pinHoleParameters.cx = pinholeParams["Cx"].as<float>(640.0f);
-                                camera.pinHoleParameters.cy = pinholeParams["Cy"].as<float>(360.0f);
+                                camera.pinholeParameters.height = pinholeParams["Height"].as<int>(720);
+                                camera.pinholeParameters.width = pinholeParams["Width"].as<int>(1280);
+                                camera.pinholeParameters.fx = pinholeParams["Fx"].as<float>(1280.0f);
+                                camera.pinholeParameters.fy = pinholeParams["Fy"].as<float>(720.0f);
+                                camera.pinholeParameters.cx = pinholeParams["Cx"].as<float>(640.0f);
+                                camera.pinholeParameters.cy = pinholeParams["Cy"].as<float>(360.0f);
+                                if (pinholeParams["Focal Length"])
+                                    camera.pinholeParameters.focalLength = pinholeParams["Focal Length"].as<float>(100.0f);
+                                if (pinholeParams["Aperture"])
+                                    camera.pinholeParameters.fNumber = pinholeParams["Aperture"].as<float>(4.0f);
+
                             }
                             break;
                         }
