@@ -28,8 +28,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_executable(${PROJECT_NAME}
-        src/Viewer/Rendering/RenderResources/Raytracer/LightTracerKernels.h)
+add_executable(${PROJECT_NAME})
 
 # Set default build type if none was specified
 if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -113,7 +112,7 @@ endif ()
 if (ENABLE_SYCL)
     message(STATUS "SYCL backend: ${SYCL_BACKEND}")
     if (SYCL_BACKEND STREQUAL "dpcpp")
-        set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
+        set(CMAKE_CXX_COMPILER "clang++")
         #set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead
 
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=nvptx64-nvidia-cuda -g -O0" )
