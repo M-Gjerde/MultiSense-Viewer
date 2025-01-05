@@ -80,8 +80,8 @@ void main()
 
     // Assign to output color
     outColor = vec4(finalColor, 1.0);
-    // vec3 normalColor = normalize(inNormal) * 0.5 + 0.5; // Map from [-1,1] to [0,1]
-    // outColor = vec4(normalColor, 1.0); // Output as color
+    vec3 normalColor = normalize(inNormal) * 0.5 + 0.5; // Map from [-1,1] to [0,1]
+    outColor = vec4(normalColor, 1.0); // Output as color
     // Uncomment the following lines for depth debugging (ensure it's commented out in the final shader)
     // float depth = (camera.projection * camera.view * fragPos).z / (camera.projection * camera.view * fragPos).w;
     // outColor = vec4(vec3(depth), 1.0);

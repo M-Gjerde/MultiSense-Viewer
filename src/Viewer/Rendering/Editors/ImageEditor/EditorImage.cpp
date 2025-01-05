@@ -130,7 +130,7 @@ namespace VkRender {
         }
 
         if (imageUI->render) {
-            m_rayTracer->update(*imageUI);
+            m_rayTracer->update(*imageUI, m_context->activeScene());
             float* image = m_rayTracer->getImage();
             if (image) {
                 uint32_t width = m_colorTexture->width();
@@ -150,6 +150,47 @@ namespace VkRender {
                 // Upload the texture (ensure the format matches)
                 m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
             }
+        }
+        if (imageUI->saveImage){
+            float* image = m_rayTracer->getImage();
+            std::filesystem::path filename = "cornell.pfm";
+            std::ofstream file(filename, std::ios::binary);
+            uint32_t width = m_colorTexture->width();
+            uint32_t height = m_colorTexture->height();
+
+            if (!file.is_open()) {
+                throw std::runtime_error("Failed to open file for writing: " + filename.string());
+            }
+
+            // Write the PFM header
+            // "PF" indicates a color image. Use "Pf" for grayscale.
+            file << "PF\n" << width << " " << height << "\n-1.0\n";
+
+            // PFM expects the data in binary format, row by row from top to bottom
+            // Assuming your m_imageMemory is in RGBA format with floats
+
+            // Allocate a temporary buffer for RGB data
+            std::vector<float> rgbData(width * height * 3);
+
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    uint32_t pixelIndex = (y * width + x); // RGBA: 4 floats per pixel
+                    uint32_t rgbIndex = (y * width + x) * 3;
+
+                    rgbData[rgbIndex + 0] = image[pixelIndex]; // R
+                    rgbData[rgbIndex + 1] = image[pixelIndex]; // G
+                    rgbData[rgbIndex + 2] = image[pixelIndex]; // B
+                }
+            }
+
+            // Write the RGB float data
+            file.write(reinterpret_cast<const char *>(rgbData.data()), rgbData.size() * sizeof(float));
+
+            if (!file) {
+                throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
+            }
+
+            file.close();
         }
 
     }

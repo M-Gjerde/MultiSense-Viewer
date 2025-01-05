@@ -24,7 +24,7 @@ namespace VkRender::RT {
         void uploadGaussianData(std::shared_ptr<Scene>& scene);
         void uploadVertexData(std::shared_ptr<Scene>& scene);
 
-        void update(const EditorImageUI& editorImageUI);
+        void update(EditorImageUI& editorImageUI, std::shared_ptr<Scene> scene);
 
 
         float* getImage() {return m_imageMemory;}
@@ -54,6 +54,10 @@ namespace VkRender::RT {
         uint32_t m_frameID = 0;
 
         void saveAsPFM(const std::filesystem::path &filename) const;
+
+        void freeResources();
+
+        void resetState();
     };
 
 #else
@@ -63,7 +67,7 @@ namespace VkRender::RT {
         RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
-        void update(const EditorImageUI& editorImageUI) {}
+        void update(const EditorImageUI& editorImageUI, std::shared_ptr<Scene> &scene) {}
         float* getImage() {return nullptr;}
         ~RayTracer() {}
         void upload(std::shared_ptr<Scene> ptr) {}

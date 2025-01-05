@@ -18,7 +18,11 @@ namespace VkRender {
         bool clearImageMemory = false;
 
         std::string kernel = "Path Tracer: Mesh";
-        std::string selectedDevieType = "";
+        std::string kernelDevice = "GPU";
+        bool switchKernelDevice = false;
+
+        int photonCount = 1e6;
+        int numBounces = 12;
 
         // Constructor that copies everything from base EditorUI
         EditorImageUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
