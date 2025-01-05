@@ -30,7 +30,7 @@ namespace VkRender::RT {
     };
 
 struct RenderInformation {
-    uint32_t photonsAccumulated = 0;
+    int photonsAccumulated = 0;
     uint32_t frameID = 0;
 
 };

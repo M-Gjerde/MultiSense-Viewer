@@ -328,12 +328,13 @@ namespace VkRender::RT {
         uint32_t totalPhotons = 100000000;
 
         auto &queue = m_selector.getQueue();
-        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
         if (editorImageUI.clearImageMemory) {
             queue.fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
             m_frameID = 0;
+            m_renderInformation->photonsAccumulated = 0;
         }
+        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
         auto cameraEntity = m_scene->getEntityByName("Camera");
         if (cameraEntity && !editorImageUI.clearImageMemory) {
@@ -346,7 +347,6 @@ namespace VkRender::RT {
 
 
             if (editorImageUI.kernel == "Path Tracer: 2DGS") {
-                uint32_t totalPhotons = 100000;
                 sycl::range<1> globalRange(totalPhotons);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
@@ -386,7 +386,8 @@ namespace VkRender::RT {
         if (editorImageUI.saveImage)
             saveAsPFM("cornell.pfm");
 
-        Log::Logger::getInstance()->infoWithFrequency("PhotnCount", 60, "simulated {} Billion photons", totalPhotons/1e9 * m_renderInformation->frameID);
+        Log::Logger::getInstance()->infoWithFrequency("PhotonCount", 60, "simulated {} Billion photons. About {} Photons, {}% hit the sensor",
+            totalPhotons/1e9 * m_renderInformation->frameID, m_renderInformation->photonsAccumulated / 1000, m_renderInformation->photonsAccumulated / totalPhotons * 100);
     }
 
     RayTracer::~RayTracer() {

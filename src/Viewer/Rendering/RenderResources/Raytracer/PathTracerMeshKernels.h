@@ -225,9 +225,26 @@ namespace VkRender::RT {
                         photonFlux /= rrProb; // Adjust flux to maintain unbiasedness
                     }
 
+
+
                     // Sample new direction (Lambertian reflection)
-                    glm::vec3 newDir = sampleRandomHemisphere(hitNormalWorld, photonID, bounce);
+                    //glm::vec3 newDir = sampleRandomHemisphere(hitNormalWorld, photonID, bounce);
                     rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
+
+                    glm::vec3 newDir = sampleDirectionTowardAperture(
+                        rayOrigin,
+                        m_cameraTransform.getPosition(), // center of aperture
+                        glm::vec3(-1, 0, 0), // might be -X if your camera faces X, or -Z, etc.
+                        apertureDiameter * 0.5f,
+                        photonID * 999 + m_frameID
+                    );
+
+                    newDir = mix(sampleRandomHemisphere(hitNormalWorld, photonID, bounce), newDir, 0.3f); // Blend uniform sampling with light direction
+
+                    if (glm::dot(newDir, hitNormalWorld) < 0.f) {
+                        newDir = -newDir;
+                    }
+
                     rayDir = glm::normalize(newDir);
                 }
                 else {
@@ -237,6 +254,42 @@ namespace VkRender::RT {
             } // end for bounces
 
             // If we exit here, we used up all bounces w/o hitting sensor
+        }
+
+        glm::vec3 samplePointOnDisk(uint64_t seed,
+                            const glm::vec3& center,
+                            const glm::vec3& normal,
+                            float radius) const
+        {
+            // Or use any 2D disk sampling approach (e.g., concentric disk sampling).
+            // We'll do a simple naive approach:
+            float r = radius * sqrt(randomFloat(seed, 0));
+            float theta = 2.f * M_PI * randomFloat(seed, 1);
+
+            // Construct orthonormal basis for the disk plane
+            glm::vec3 u = normalize(cross(normal, glm::vec3(0.0f, 0.0f, 1.0f))); // pick any stable "someOtherVec"
+            glm::vec3 v = cross(normal, u);
+
+            float dx = r * cos(theta);
+            float dy = r * sin(theta);
+
+            glm::vec3 offset = dx * u + dy * v;
+            return center + offset;
+        }
+
+        glm::vec3 sampleDirectionTowardAperture(
+            const glm::vec3& lightPos,
+            const glm::vec3& apertureCenter,
+            const glm::vec3& apertureNormal,
+            float apertureRadius,
+            uint64_t seed) const
+        {
+            // pick random point on the lens
+            glm::vec3 lensPoint = samplePointOnDisk(seed, apertureCenter, apertureNormal, apertureRadius);
+
+            // direction from light to lens point
+            glm::vec3 dir = lensPoint - lightPos;
+            return normalize(dir);
         }
 
         bool checkCameraPlaneIntersection(
@@ -361,8 +414,14 @@ namespace VkRender::RT {
                     static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px);
 
                 float contribution = photonFlux;
-                m_gpuData.imageMemory[pixelIndex] += contribution;
-                m_gpuData.renderInformation->photonsAccumulated++;
+                // Atomic addition for imageMemory
+                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
+                    m_gpuData.imageMemory[pixelIndex]);
+                atomicImageMemory.fetch_add(contribution);
+                // Atomic increment for photonsAccumulated
+                sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicPhotonsAccumulated(
+                    m_gpuData.renderInformation->photonsAccumulated);
+                atomicPhotonsAccumulated.fetch_add(1);
             }
         }
 
