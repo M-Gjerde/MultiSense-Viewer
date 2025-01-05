@@ -144,7 +144,7 @@ namespace VkRender::RT {
                     }
                 }
 
-                /*
+
                 if (glm::length(contributionRayDir) > 0.1) {
                     // Trace our contribution ray
                     glm::vec3 camHit;
@@ -190,7 +190,7 @@ namespace VkRender::RT {
                         }
                     }
                 }
-                */
+
                 // If no hit or geometry hit first, proceed
                 if (hit) {
                     //std::cout << "Photon: " << photonID << "Hit sensor at: (" << px << ", " << py <<") | flux: " << photonFlux << std::endl;
@@ -208,7 +208,7 @@ namespace VkRender::RT {
                     if (cosTheta < 0.0f) cosTheta = 0.0f;
 
                     // Update photon flux based on albedo and cosine term
-                    photonFlux *= (albedo * cosTheta);
+                    photonFlux *= (albedo * cosTheta) * (1 / M_PI);
 
                     // Russian Roulette termination
                     float rrProb = 0.95f; // Base probability
@@ -225,6 +225,7 @@ namespace VkRender::RT {
                     //glm::vec3 newDir = sampleRandomHemisphere(hitNormalWorld, photonID, bounce);
                     rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
 
+
                     contributionRayDir = sampleDirectionTowardAperture(
                             rayOrigin,
                             m_cameraTransform.getPosition(), // center of aperture
@@ -236,7 +237,10 @@ namespace VkRender::RT {
                     contributionRayOrigin = rayOrigin;
 
 
-                    rayDir = sampleRandomHemisphere(hitNormalWorld, photonID, bounce);
+                    glm::vec3 newDir = sampleRandomHemisphere(hitNormalWorld, photonID, bounce);
+                    rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
+                    rayDir = glm::normalize(newDir);
+
                 } else {
                     // No hit; photon escapes the scene
                     return;
@@ -344,6 +348,7 @@ namespace VkRender::RT {
         bool geometryIntersection(size_t lightEntityIdx, const glm::vec3 &rayOrigin, const glm::vec3 &rayDir,
                                   size_t &hitEntity, float &closest_t, glm::vec3 &hitPointWorld,
                                   glm::vec3 &hitNormalWorld) const {
+            bool hit = false;
             for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
                 // Transform ray to local space
                 if (entityIdx == lightEntityIdx)
@@ -388,17 +393,16 @@ namespace VkRender::RT {
                             closest_t = dist;
                             hitEntity = entityIdx;
                             hitPointWorld = worldHit;
-
+                            hit = true;
                             // compute normal in world space
                             glm::vec3 nLocal = glm::cross(bLocal - aLocal, cLocal - aLocal);
                             glm::vec3 nWorld = glm::mat3(glm::transpose(glm::inverse(entityTransform))) * nLocal;
                             hitNormalWorld = glm::normalize(nWorld);
-                            return true;
                         }
                     }
                 }
             }
-            return false;
+            return hit;
         }
 
         // ---------------------------------------------------------------------
