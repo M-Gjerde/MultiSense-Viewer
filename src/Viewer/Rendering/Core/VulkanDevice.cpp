@@ -494,7 +494,7 @@ VkResult VulkanDevice::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPrope
 }
 
 /*
-/**
+*
 * Copy Buffer data from src to dst using VkCmdCopyBuffer
 *
 * @param src Pointer to the source buffer to copy from
