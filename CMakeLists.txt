@@ -14,8 +14,9 @@ option(BUILD_DOC "Build documentation" ON)
 option(PROPRIETARY_GIGEVISION_MODULE "Include the proprietary GigE-Vision module" OFF)
 
 option(ENABLE_SYCL "Compile with SYCL support. Provided that llvm-sycl clang++ is in path" FALSE)
-set(SYCL_BACKEND "adaptivecpp" CACHE STRING "Select SYCL backend (dpcpp or adaptivecpp)")
-set_property(CACHE SYCL_BACKEND PROPERTY STRINGS "dpcpp" "adaptivecpp")
+set(SYCL_IMPLEMENTATION "adaptivecpp" CACHE STRING "Select SYCL backend (dpcpp or adaptivecpp)")
+option(SYCL_BACKEND "Choose the SYCL backend (nvidia or amd)" "nvidia")
+set_property(CACHE SYCL_IMPLEMENTATION PROPERTY STRINGS "dpcpp" "adaptivecpp")
 set(DPCPP_COMPILER_PATH "" CACHE STRING "If Intel's DPCPP compiler is selected, the compiler path must be set")
 
 
@@ -110,28 +111,38 @@ set(USE_ROCM FALSE)
 
 # SYCL Backend selectionDefault
 if (ENABLE_SYCL)
-    message(STATUS "SYCL backend: ${SYCL_BACKEND}")
-    if (SYCL_BACKEND STREQUAL "dpcpp")
+    message(STATUS "SYCL backend: ${SYCL_IMPLEMENTATION}")
+
+    if(SYCL_BACKEND STREQUAL "nvidia")
+        set(SYCL_TARGET "spir64,nvptx64-nvidia-cuda")
+        message(STATUS "[VkRenderINFO]: Using NVIDIA backend for SYCL")
+    elseif(SYCL_BACKEND STREQUAL "amd")
+        set(SYCL_TARGET "spir64,amdgcn-amd-amdhsa")
+        set(SYCL_TARGET_OPTIONS "-Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
+        message(STATUS "[VkRenderINFO]: Using AMD backend for SYCL")
+    else()
+        message(FATAL_ERROR "Invalid SYCL_BACKEND option. Choose 'nvidia' or 'amd'.")
+    endif()
+
+    if (SYCL_IMPLEMENTATION STREQUAL "dpcpp")
         set(CMAKE_CXX_COMPILER "clang++")
         #set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead
 
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=nvptx64-nvidia-cuda -g -O0" )
 
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
-            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=spir64,amdgcn-amd-amdhsa -Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
-            message(STATUS "[VkRenderINFO]: Compiling using DPCPP With Optimization")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
+            message(STATUS "[VkRenderINFO]: Compiling using DPCPP with Optimization")
         else()
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64,nvptx64-nvidia-cuda")
-            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=spir64,amdgcn-amd-amdhsa -Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
-            message(STATUS "[VkRenderINFO]: Compiling using DPCPP With Debug flags")
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
+            message(STATUS "[VkRenderINFO]: Compiling using DPCPP with Debug flags")
         endif()
         #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=spir64 -ltbb")
 
         message(STATUS "[VkRenderINFO]: SYCL DPC++ support enabled. Compiler: ${CMAKE_CXX_COMPILER} Flags: ${CMAKE_CXX_FLAGS}")
         #target_link_libraries(${PROJECT_NAME} PRIVATE sycl ur_loader)
 
-    elseif (SYCL_BACKEND STREQUAL "adaptivecpp")
+    elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package
         find_package(AdaptiveCpp REQUIRED)
         # Check if ACPP_TARGETS is passed via command line or environment
