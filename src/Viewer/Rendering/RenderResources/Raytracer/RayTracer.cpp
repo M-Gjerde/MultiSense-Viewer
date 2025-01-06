@@ -30,6 +30,17 @@ namespace VkRender::RT {
 
 
     void RayTracer::update(EditorImageUI &editorImageUI, std::shared_ptr<Scene> scene) {
+
+        {
+            auto cameraEntity = m_scene->getEntityByName("Camera");
+            if (cameraEntity) {
+                auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
+                auto transform = cameraEntity.getComponent<TransformComponent>();
+                if (transform.moved())
+                    resetState();
+            }
+        }
+
         if (editorImageUI.switchKernelDevice) {
             freeResources();
             if (editorImageUI.kernelDevice == "CPU") {

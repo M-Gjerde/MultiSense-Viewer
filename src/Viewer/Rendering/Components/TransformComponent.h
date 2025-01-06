@@ -6,14 +6,16 @@
 #define TRANSFORMCOMPONENT_H
 
 #define GLM_ENABLE_EXPERIMENTAL
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 namespace VkRender {
-   struct TransformComponent {
+    struct TransformComponent {
         // Flip the up axis option
         bool m_flipUpAxis = false;
+        bool m_wasMoved = false;
 
         // Transformation components
         glm::vec3 translation = {0.0f, 0.0f, 0.0f};
@@ -36,6 +38,12 @@ namespace VkRender {
 
             return glm::translate(glm::mat4(1.0f), translation) * rotMat *
                    glm::scale(glm::mat4(1.0f), scale);
+        }
+
+        bool moved() const { return m_wasMoved; }
+
+        void setMoving(bool state) {
+            m_wasMoved = state;
         }
 
         // Set rotation using Euler angles (degrees)
@@ -73,6 +81,7 @@ namespace VkRender {
         glm::vec3 &getPosition() {
             return translation;
         }
+
         glm::vec3 getPosition() const {
             return translation;
         }
@@ -96,5 +105,5 @@ namespace VkRender {
         }
     };
 
-    }
+}
 #endif //TRANSFORMCOMPONENT_H

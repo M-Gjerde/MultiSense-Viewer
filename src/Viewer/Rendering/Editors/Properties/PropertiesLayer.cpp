@@ -490,11 +490,20 @@ namespace VkRender {
             ImGui::EndPopup();
         }
 
-        drawComponent<TransformComponent>("Transform", entity, [](auto &component) {
-            drawVec3Control("Translation", component.getPosition());
-            drawVec3Control("Rotation", component.getRotationEuler(), 0.0f, 2.0f);
-            component.updateFromEulerRotation();
-            drawVec3Control("Scale", component.getScale(), 1.0f);
+        drawComponent<TransformComponent>("Transform", entity, [](TransformComponent &component) {
+            bool paramsChanged = false;
+            component.setMoving(paramsChanged);
+
+            paramsChanged |= drawVec3Control("Translation", component.getPosition());
+            paramsChanged |= drawVec3Control("Rotation", component.getRotationEuler(), 0.0f, 2.0f);
+            paramsChanged |= drawVec3Control("Scale", component.getScale(), 1.0f);
+
+
+            if (paramsChanged) {
+                component.setMoving(paramsChanged);
+                component.updateFromEulerRotation();
+
+            }
         });
         drawComponent<CameraComponent>("Camera", entity, [this](CameraComponent &component) {
             //drawFloatControl("Field of View", component.camera->fov(), 1.0f);

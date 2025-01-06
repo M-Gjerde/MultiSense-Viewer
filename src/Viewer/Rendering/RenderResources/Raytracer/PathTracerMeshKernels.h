@@ -121,7 +121,7 @@ namespace VkRender::RT {
 
                             if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                 // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
                                         atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulated);
 
@@ -182,7 +182,7 @@ namespace VkRender::RT {
 
                             if (accumulateOnSensor(photonID, hitPointWorld, photonFlux)) {
                                 // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
                                         atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulatedDirect);
 
@@ -298,7 +298,7 @@ namespace VkRender::RT {
 
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                         // Atomic increment for photonsAccumulated
-                                        sycl::atomic_ref<int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                        sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
                                                 atomicPhotonsAccumulated(
                                                 m_gpuData.renderInformation->photonsAccumulated);
 

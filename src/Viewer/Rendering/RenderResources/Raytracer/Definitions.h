@@ -30,10 +30,10 @@ namespace VkRender::RT {
     };
 
 struct RenderInformation {
-    int photonsAccumulated = 0;
-    int photonsAccumulatedDirect = 0;
-    uint32_t frameID = 0;
-    uint32_t totalPhotons = 0;
+    unsigned long int photonsAccumulated = 0;
+    unsigned long int photonsAccumulatedDirect = 0;
+    uint64_t frameID = 0;
+    uint64_t totalPhotons = 0;
 
 };
     struct GPUData {
