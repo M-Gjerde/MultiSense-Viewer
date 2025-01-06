@@ -134,7 +134,7 @@ namespace VkRender {
             }
             ImGui::SameLine();            // Dropdown for selecting render kernel
             const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
-            static int selectedDevieType = 0; // Default selection
+            static int selectedDevieType = 1; // Default selection
             ImGui::SetNextItemWidth(100.0f);
             if (ImGui::Combo("##Select Device Type", &selectedDevieType, selections, IM_ARRAYSIZE(selections))) {
                 imageUI->kernelDevice = selections[selectedDevieType];
@@ -152,16 +152,19 @@ namespace VkRender {
             const int sliderMin = 1000;
             const int sliderMax = 10000000;
 
-            ImGui::SetNextItemWidth(300);
+            ImGui::SetNextItemWidth(150);
             if (ImGui::SliderInt("PhotonCount", &imageUI->photonCount, sliderMin, sliderMax, "%d", ImGuiSliderFlags_Logarithmic)) {
                 // Normalize to the nearest 10,000 and ensure it's at least 1000
                 imageUI->photonCount = std::max((imageUI->photonCount + 5000) / 10000 * 10000, sliderMin);
             }
             ImGui::SameLine();
-            ImGui::SetNextItemWidth(200);
+            ImGui::SetNextItemWidth(100);
             if(ImGui::SliderInt("Light Bounces", &imageUI->numBounces, 1, 100)){
                 imageUI->clearImageMemory = true;
             };
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            ImGui::SliderFloat("Gamma", &imageUI->shaderSelection.gammaCorrection, 0, 8);
 
             ImGui::End();
 

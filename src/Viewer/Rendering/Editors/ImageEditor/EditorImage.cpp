@@ -27,7 +27,7 @@ namespace VkRender {
                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
                     frameIndex,
-                    sizeof(int32_t), nullptr, "EditorImage:ShaderSelectionBuffer",
+                    sizeof(EditorImageUI::ShaderSelection), nullptr, "EditorImage:ShaderSelectionBuffer",
                     m_context->getDebugUtilsObjectNameFunction());
         }
 
@@ -123,6 +123,14 @@ namespace VkRender {
 
     void EditorImage::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorImageUI>(m_ui);
+
+        auto frameIndex = m_context->currentFrameIndex();
+
+        void *data;
+        vkMapMemory(m_context->vkDevice().m_LogicalDevice,
+                    m_shaderSelectionBuffer[frameIndex]->m_memory, 0, sizeof(EditorImageUI::ShaderSelection), 0, &data);
+        memcpy(data, &imageUI->shaderSelection, sizeof(EditorImageUI::ShaderSelection));
+        vkUnmapMemory(m_context->vkDevice().m_LogicalDevice, m_shaderSelectionBuffer[frameIndex]->m_memory);
 
         if (imageUI->uploadScene) {
             m_rayTracer->upload(m_context->activeScene());

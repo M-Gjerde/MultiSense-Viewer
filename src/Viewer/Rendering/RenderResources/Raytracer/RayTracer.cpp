@@ -139,10 +139,18 @@ namespace VkRender::RT {
             }
         }
         */
+        auto &queue = m_selector.getQueue();
 
         m_renderInformation->frameID++;
         int simulatePhotonCount = editorImageUI.photonCount;
-        auto &queue = m_selector.getQueue();
+
+        std::vector<PCG32> rng(simulatePhotonCount);
+        for (int i = 0; i < simulatePhotonCount; ++i)
+            rng[i].init(m_frameID, i * m_frameID);
+
+        auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
+        queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
+
 
         if (editorImageUI.clearImageMemory) {
             resetState();
@@ -161,6 +169,7 @@ namespace VkRender::RT {
             auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
             queue.memcpy(cameraGPU, camera.get(), sizeof(PinholeCamera));
 
+            queue.wait();
 
             if (editorImageUI.kernel == "Path Tracer: 2DGS") {
                 sycl::range<1> globalRange(simulatePhotonCount);
@@ -175,7 +184,7 @@ namespace VkRender::RT {
                 sycl::range<1> globalRange(simulatePhotonCount);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
-                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, transform, cameraGPU, editorImageUI.numBounces, m_frameID);
+                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, transform, cameraGPU, editorImageUI.numBounces, rngGPU);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (editorImageUI.kernel == "Hit-Test") {
@@ -195,6 +204,7 @@ namespace VkRender::RT {
             queue.wait();
 
             sycl::free(cameraGPU, queue);
+            sycl::free(rngGPU, queue);
             m_frameID++;
         }
         /** Any shared GPU/CPU debug information must be stored after here**/
@@ -348,10 +358,18 @@ namespace VkRender::RT {
             }
             if (entity.hasComponent<CameraComponent>())
                 skipEntity = true;
+
+            auto &meshComponent = entity.getComponent<MeshComponent>();
+            if (meshComponent.meshDataType() != OBJ_FILE)
+                skipEntity = true;
+
             // If an ancestor with visible == false was found, skip to the next entity
             if (skipEntity) {
                 continue;
             }
+
+
+
             auto &transform = entity.getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
 
@@ -360,13 +378,11 @@ namespace VkRender::RT {
 
             if (entity.hasComponent<MaterialComponent>()) {
                 auto &material = entity.getComponent<MaterialComponent>();
+                float diff = material.diffuse;
+                float specular = material.specular;
                 materials.emplace_back(material);
             }
 
-
-            auto &meshComponent = entity.getComponent<MeshComponent>();
-            if (meshComponent.meshDataType() != OBJ_FILE)
-                continue;
 
             std::shared_ptr<MeshData> meshData = m_meshManager.getMeshData(meshComponent);
             // Store vertex offset

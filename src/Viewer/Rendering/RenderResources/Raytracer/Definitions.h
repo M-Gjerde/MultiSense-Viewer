@@ -58,6 +58,33 @@ struct RenderInformation {
         RenderInformation* renderInformation;
     };
 
+    struct PCG32 {
+        uint64_t state{};
+        uint64_t inc{};
+
+        // Initialize the RNG with a seed and sequence
+        void init(uint64_t seed, uint64_t sequence = 1) {
+            state = 0;
+            inc = (sequence << 1u) | 1u; // Increment must be odd
+            nextUInt(); // Advance state
+            state += seed;
+            nextUInt(); // Advance state again
+        }
+
+        // Generate the next uint32_t random number
+        uint32_t nextUInt() {
+            uint64_t old_state = state;
+            state = old_state * 6364136223846793005ULL + inc;
+            uint32_t xorshifted = static_cast<uint32_t>(((old_state >> 18u) ^ old_state) >> 27u);
+            uint32_t rot = static_cast<uint32_t>(old_state >> 59u);
+            return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+        }
+
+        // Generate a random float in [0, 1)
+        float nextFloat() {
+            return nextUInt() / static_cast<float>(UINT32_MAX);
+        }
+    };
 
 }
 #endif //DEFINITIONS_H

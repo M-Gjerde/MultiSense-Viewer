@@ -22,8 +22,13 @@ namespace VkRender {
         bool switchKernelDevice = false;
 
         int photonCount = 1e6;
-        int numBounces = 12;
+        int numBounces = 32;
 
+        struct ShaderSelection {
+            int someVariable = 0;
+            float gammaCorrection = 2.2f;
+
+        }shaderSelection;
         // Constructor that copies everything from base EditorUI
         EditorImageUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };

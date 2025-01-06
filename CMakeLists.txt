@@ -126,9 +126,6 @@ if (ENABLE_SYCL)
 
     if (SYCL_IMPLEMENTATION STREQUAL "dpcpp")
         set(CMAKE_CXX_COMPILER "clang++")
-        #set(CMAKE_CXX_COMPILER /opt/intel/oneapi/compiler/2025.0/bin/icpx) ##TODO FUll path to compiler must be set as argument instead
-
-        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=nvptx64-nvidia-cuda -g -O0" )
 
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
@@ -137,10 +134,8 @@ if (ENABLE_SYCL)
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
             message(STATUS "[VkRenderINFO]: Compiling using DPCPP with Debug flags")
         endif()
-        #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -fsycl-targets=spir64 -ltbb")
 
         message(STATUS "[VkRenderINFO]: SYCL DPC++ support enabled. Compiler: ${CMAKE_CXX_COMPILER} Flags: ${CMAKE_CXX_FLAGS}")
-        #target_link_libraries(${PROJECT_NAME} PRIVATE sycl ur_loader)
 
     elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package

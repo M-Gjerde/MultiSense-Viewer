@@ -22,7 +22,7 @@ namespace VkRender {
 
     class DescriptorRegistry {
     public:
-        DescriptorSetManager& getManager(DescriptorManagerType type) {
+        DescriptorSetManager &getManager(DescriptorManagerType type) {
             if (!m_managers[type]) {
                 throw std::runtime_error("Tried to get DescriptorManager that was not initialized");
             }
@@ -30,67 +30,69 @@ namespace VkRender {
         }
 
         void createManager(
-            DescriptorManagerType type,
-            VulkanDevice& device
+                DescriptorManagerType type,
+                VulkanDevice &device
         ) {
             std::vector<VkDescriptorSetLayoutBinding> bindings;
 
 
             switch (type) {
-            case DescriptorManagerType::MVP:
-                bindings = {
-                    {
-                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-                        VK_SHADER_STAGE_VERTEX_BIT |
-                        VK_SHADER_STAGE_FRAGMENT_BIT,
-                        nullptr
-                    },
-                    {
-                        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
-                        nullptr
-                    },
-                };
+                case DescriptorManagerType::MVP:
+                    bindings = {
+                            {
+                                    0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+                                                                             VK_SHADER_STAGE_VERTEX_BIT |
+                                                                             VK_SHADER_STAGE_FRAGMENT_BIT,
+                                    nullptr
+                            },
+                            {
+                                    1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+                                    nullptr
+                            },
+                    };
 
-                break;
-            case DescriptorManagerType::Material:
-                bindings = {
-                    {
-                        0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                        nullptr
-                    },
-                    {
-                        1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-                        nullptr
-                    },
-                };
-                break;
-            case DescriptorManagerType::DynamicCameraGizmo:
-                bindings = {
-                    {
-                        0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
-                        nullptr
-                    },{
-                        1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
-                        nullptr
-                    }
-                };
-                break;
-            case DescriptorManagerType::Viewport3DTexture:
-                bindings = {
-                    {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-                    {
-                        1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT |
-                        VK_SHADER_STAGE_FRAGMENT_BIT,
-                        nullptr
-                    }
-                };
-                break;
+                    break;
+                case DescriptorManagerType::Material:
+                    bindings = {
+                            {
+                                    0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                                    nullptr
+                            },
+                            {
+                                    1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+                                    nullptr
+                            },
+                    };
+                    break;
+                case DescriptorManagerType::DynamicCameraGizmo:
+                    bindings = {
+                            {
+                                    0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+                                    nullptr
+                            },
+                            {
+                                    1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT,
+                                    nullptr
+                            }
+                    };
+                    break;
+                case DescriptorManagerType::Viewport3DTexture:
+                    bindings = {
+                            {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+                            {
+                             1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         1, VK_SHADER_STAGE_VERTEX_BIT |
+                                                                              VK_SHADER_STAGE_FRAGMENT_BIT,
+                                                                                                            nullptr
+                            }
+                    };
+                    break;
             }
 
 
             m_managers[type] =
-                std::make_unique<DescriptorSetManager>(device, bindings, type);
+                    std::make_unique<DescriptorSetManager>(device, bindings, type);
         }
+
     private:
         std::unordered_map<DescriptorManagerType, std::unique_ptr<DescriptorSetManager>> m_managers;
     };

@@ -6,10 +6,15 @@ layout (location = 0) out vec4 outColor;
 
 layout (binding = 1) uniform INFO {
     int selection;
+    float gammaCorrection;
 } info;
 
 
 void main() {
     vec3 value = texture(samplerColorMap, inUV).rgb; // Sample the single channel
-    outColor = vec4(value, 1.0f);
+
+    // Apply gamma correction (assuming gamma = 2.2)
+    vec3 correctedValue = pow(value, vec3(1.0 / info.gammaCorrection)); // Correct each channel
+
+    outColor = vec4(correctedValue, 1.0f);
 }
