@@ -13,12 +13,11 @@ namespace VkRender::RT {
         PathTracerMeshKernels(GPUData gpuData,
                               uint32_t numPhotons,
                               TransformComponent cameraPose,
-                              PinholeCamera *camera,
+                              PinholeCamera* camera,
                               uint32_t maxBounces,
-                              PCG32 *rng)
-                : m_gpuData(gpuData), m_numPhotons(numPhotons), m_cameraTransform(cameraPose), m_camera(camera),
-                  m_maxBounces(maxBounces), m_rng(rng) {
-
+                              PCG32* rng)
+            : m_gpuData(gpuData), m_numPhotons(numPhotons), m_cameraTransform(cameraPose), m_camera(camera),
+              m_maxBounces(maxBounces), m_rng(rng) {
         }
 
         void operator()(sycl::item<1> item) const {
@@ -35,9 +34,9 @@ namespace VkRender::RT {
         uint32_t m_numPhotons{};
         uint32_t m_maxBounces = 5; // e.g. 5, 8, or 10
 
-        PCG32 *m_rng;
+        PCG32* m_rng;
         TransformComponent m_cameraTransform{};
-        PinholeCamera *m_camera{};
+        PinholeCamera* m_camera{};
 
         // ---------------------------------------------------------
         // Single Photon Trace (Multi-Bounce)
@@ -54,7 +53,7 @@ namespace VkRender::RT {
 
             // Get the model transform matrix for the emissive entity
             TransformComponent lightEntityTransform = m_gpuData.transforms[lightEntityIdx];
-            char *tag = m_gpuData.tagComponents[lightEntityIdx].getTagForKernel();
+            char* tag = m_gpuData.tagComponents[lightEntityIdx].getTagForKernel();
             // Transform the sampled position to world space
             glm::vec3 emitPosWorld = glm::vec3(lightEntityTransform.getTransform() * glm::vec4(emitPosLocal, 1.0f));
 
@@ -63,7 +62,7 @@ namespace VkRender::RT {
             glm::vec3 emitNormalWorld = glm::normalize(normalMatrix * emitNormalLocal);
 
             // 2) Sample emission direction
-            glm::vec3 rayDir = sampleRandomDirection(emitNormalWorld, photonID);
+            glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalWorld, photonID);
 
             // The photon throughput tracks how much flux remains after each bounce
             float photonFlux = emissionPower; // or you can store a color as a vec3 if needed
@@ -83,11 +82,11 @@ namespace VkRender::RT {
             float apertureRadius = apertureDiameter * 0.5f;
 
             glm::vec3 directLightingDir = sampleDirectionTowardAperture(
-                    rayOrigin,
-                    m_cameraTransform.getPosition(), // center of aperture
-                    glm::vec3(-1, 0, 0), // might be -X if your camera faces X, or -Z, etc.
-                    apertureRadius,
-                    photonID
+                rayOrigin,
+                m_cameraTransform.getPosition(), // center of aperture
+                glm::vec3(-1, 0, 0), // might be -X if your camera faces X, or -Z, etc.
+                apertureRadius,
+                photonID
             );
             // Check if contribution ray intersects geometry
             glm::vec3 directLightingOrigin = rayOrigin;
@@ -118,11 +117,11 @@ namespace VkRender::RT {
                         float cosTheta = glm::dot(directLightingDir, glm::vec3(1.0f, 0.0f, 0.0f));
                         float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
                         if (cosTheta > 0.1f) {
-
                             if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                 // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                        atomicPhotonsAccumulated(
+                                sycl::atomic_ref<
+                                        unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                    atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulated);
 
                                 atomicPhotonsAccumulated.fetch_add(1);
@@ -153,12 +152,12 @@ namespace VkRender::RT {
                 float apertureDiameter = (m_camera->m_focalLength / m_camera->m_fNumber) / 1000;
                 float apertureRadius = apertureDiameter * 0.5f;
                 pinholeHit = checkPinholeIntersection(
-                        rayOrigin,
-                        rayDir,
-                        m_cameraTransform.getPosition(),
-                        apertureRadius,
-                        closePt, // out: the closest approach on the ray
-                        tPinhole // out: parameter t
+                    rayOrigin,
+                    rayDir,
+                    m_cameraTransform.getPosition(),
+                    apertureRadius,
+                    closePt, // out: the closest approach on the ray
+                    tPinhole // out: parameter t
                 );
 
                 if (pinholeHit) {
@@ -179,11 +178,11 @@ namespace VkRender::RT {
                         float zWorld = hitPointWorld.z;
                         //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f)\n", photonID, hitPointWorld.x, hitPointWorld.y, hitPointWorld.z);
                         if (tCam < tGeom) {
-
                             if (accumulateOnSensor(photonID, hitPointWorld, photonFlux)) {
                                 // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                        atomicPhotonsAccumulated(
+                                sycl::atomic_ref<
+                                        unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                    atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulatedDirect);
 
                                 atomicPhotonsAccumulated.fetch_add(1);
@@ -194,54 +193,96 @@ namespace VkRender::RT {
                 }
 
 
-
-
                 // If no hit or geometry hit first, proceed
                 if (hit) {
-
+                    /*
                     const MaterialComponent &mat = m_gpuData.materials[hitEntity];
-                    float albedo = mat.albedo.x; // Assuming monochrome; replace with mat.albedo.x if applicable
+                    float albedo = mat.albedo.x; // mat.albedo.x; // Assuming monochrome; replace with mat.albedo.x if applicable
                     float cosTheta = glm::dot(hitNormalWorld, -rayDir);
-                    if (cosTheta < 0.0f) cosTheta = 0.0f;
+                    if (cosTheta <= 0.01f) cosTheta = 0.0f;
 
-                    float diffuseFlux = albedo * 2.0f * cosTheta;
+                    float pdf = 1 / M_PIf;
                     //photonFlux *= diffuseFlux;
                     if (bounce == 0)
                         photonFlux *= albedo * cosTheta / (M_PIf * 2);
                     else
                         photonFlux *= albedo * cosTheta / M_PIf;
 
-                    /*
-                    // Retrieve material properties
-                    const MaterialComponent& mat = m_gpuData.materials[hitEntity];
-                    const float& diffuse = mat.diffuse;        // Diffuse color
-                    const float& specular = mat.specular;      // Specular color
-                    const float phongExponent = mat.phongExponent; // Shininess factor
-
-                    float albedo = 0.4f; // Assuming monochrome; replace with mat.albedo.x if applicable
-
-                    // Calculate cosine of the angle between normal and incoming direction
-                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
-                    if (cosTheta < 0.0f) cosTheta = 0.0f;
-
-                    // Compute view vector (toward the sensor or camera)
-                    glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
-
-                    // Compute half-vector between view and light directions
-                    glm::vec3 halfVector = glm::normalize(reflectedDir - rayDir);
-
-                    // Compute Blinn-Phong terms
-                    float specularTerm = glm::dot(hitNormalWorld, halfVector);
-                    if (specularTerm > 0.0f) {
-                        specularTerm = powf(specularTerm, phongExponent);
-                    } else {
-                        specularTerm = 0.0f;
-                    }
                     */
 
-                    // Update photon flux based on diffuse and specular components
-                    //float specularFlux = specular * specularTerm; // Blinn-Phong specular
+                    // Fetch material parameters
+                    const MaterialComponent& mat = m_gpuData.materials[hitEntity];
+                    float albedo = mat.albedo.x; // Assuming monochrome for simplicity
+                    float specular = mat.specular; // Specular coefficient
+                    float shininess = mat.phongExponent;
+                    float diffusion = mat.diffuse; // Diffuse coefficient
 
+                    // Compute cosTheta for the diffuse term
+                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
+                    cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
+
+                    // We'll accumulate our contribution here
+                    float totalContribution = 0.0f;
+
+                    if (diffusion <= 0.0f) {
+                        // ----------------------------------
+                        // METALLIC branch (diffuse == 0)
+                        // ----------------------------------
+                        // For a purely metallic surface, ignore diffuse lighting altogether.
+                        // Optionally tint the specular by albedo if you want colored metals.
+
+                        // Compute reflection direction
+                        glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
+
+                        // Compute specular highlight (cosAlpha)
+                        float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
+                        cosAlpha = glm::max(0.0f, cosAlpha);
+
+                        // You can multiply by albedo if metals have tinted reflection
+                        // e.g. specularContribution = specular * albedo * ...
+                        float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
+
+                        // Purely specular => total = specular only
+                        totalContribution = specularContribution;
+                    }
+                    else {
+                        // ----------------------------------
+                        // NON-METALLIC branch (diffuse > 0)
+                        // ----------------------------------
+
+                        // 1) Diffuse contribution
+                        float diffuseContribution = diffusion * albedo * cosTheta / M_PIf;
+
+                        // 2) Specular contribution
+                        glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
+                        float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
+                        cosAlpha = glm::max(0.0f, cosAlpha);
+                        float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
+
+                        // 3) Combine (simple sum)
+                        float sumUnweighted = diffuseContribution + specularContribution;
+
+                        // 4) Energy conservation / normalization:
+                        //    If you want to ensure that the total reflection doesn't exceed 1,
+                        //    you can weight diffuse vs. specular so that sum of their "weights" is 1.
+                        //    Example: weight them according to albedo vs. specular, or any other scheme.
+                        float sumForWeights = albedo + specular;
+                        if (sumForWeights > 0.0f) {
+                            float diffuseWeight = albedo / sumForWeights;
+                            float specularWeight = specular / sumForWeights;
+
+                            // Weighted sum
+                            totalContribution = diffuseWeight * diffuseContribution
+                                + specularWeight * specularContribution;
+                        }
+                        else {
+                            // Fallback if albedo + specular == 0
+                            totalContribution = 0.0f;
+                        }
+                    }
+
+                    // Finally, scale the photonFlux (or outgoing radiance) by total contribution
+                    photonFlux *= totalContribution;
                     // Combine diffuse and specular contributions
                     // Russian Roulette termination
                     float rrProb = photonFlux * 0.9f;
@@ -251,21 +292,21 @@ namespace VkRender::RT {
                     float rnd = m_rng[photonID].nextFloat();
                     if (rnd > rrProb) {
                         return; // Photon terminated i.e. absorbed by the last surface
-                    } else {
-                        photonFlux = photonFlux / rrProb;
                     }
 
+                    photonFlux = photonFlux / rrProb;
+
                     // Sample new direction (Lambertian reflection)
-                    glm::vec3 newDir = sampleRandomHemisphere(hitNormalWorld, photonID);
+                    glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
                     rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
                     rayDir = glm::normalize(newDir);
 
                     glm::vec3 contributionRayDir = sampleDirectionTowardAperture(
-                            rayOrigin,
-                            m_cameraTransform.getPosition(), // center of aperture
-                            glm::vec3(-1, 0, 0), // might be -X if your camera faces X, or -Z, etc.
-                            apertureRadius,
-                            photonID
+                        rayOrigin,
+                        m_cameraTransform.getPosition(), // center of aperture
+                        glm::vec3(-1, 0, 0), // might be -X if your camera faces X, or -Z, etc.
+                        apertureRadius,
+                        photonID
                     );
                     // Check if contribution ray intersects geometry
                     glm::vec3 contributionRayOrigin = rayOrigin;
@@ -295,11 +336,12 @@ namespace VkRender::RT {
                                 float cosTheta = glm::dot(contributionRayDir, glm::vec3(1.0f, 0.0f, 0.0f));
                                 float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
                                 if (cosTheta > 0.1f) {
-
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                         // Atomic increment for photonsAccumulated
-                                        sycl::atomic_ref<unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                                atomicPhotonsAccumulated(
+                                        sycl::atomic_ref<
+                                                unsigned long int, sycl::memory_order::relaxed,
+                                                sycl::memory_scope::device>
+                                            atomicPhotonsAccumulated(
                                                 m_gpuData.renderInformation->photonsAccumulated);
 
                                         atomicPhotonsAccumulated.fetch_add(1);
@@ -308,7 +350,8 @@ namespace VkRender::RT {
                             }
                         }
                     }
-                } else {
+                }
+                else {
                     // No hit; photon escapes the scene
                     return;
                 }
@@ -318,8 +361,8 @@ namespace VkRender::RT {
         }
 
         glm::vec3 samplePointOnDisk(size_t photonID,
-                                    const glm::vec3 &center,
-                                    const glm::vec3 &normal,
+                                    const glm::vec3& center,
+                                    const glm::vec3& normal,
                                     float radius) const {
             // Or use any 2D disk sampling approach (e.g., concentric disk sampling).
             // We'll do a simple naive approach:
@@ -338,11 +381,11 @@ namespace VkRender::RT {
         }
 
         glm::vec3 sampleDirectionTowardAperture(
-                const glm::vec3 &lightPos,
-                const glm::vec3 &apertureCenter,
-                const glm::vec3 &apertureNormal,
-                float apertureRadius,
-                uint64_t photonID) const {
+            const glm::vec3& lightPos,
+            const glm::vec3& apertureCenter,
+            const glm::vec3& apertureNormal,
+            float apertureRadius,
+            uint64_t photonID) const {
             // pick random point on the lens
             glm::vec3 lensHitPoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
             // direction from light to lens point
@@ -351,21 +394,21 @@ namespace VkRender::RT {
         }
 
         bool checkCameraPlaneIntersection(
-                const glm::vec3 &rayOriginWorld,
-                const glm::vec3 &rayDirWorld,
-                glm::vec3 &hitPointCam, // out: intersection in camera space
-                float &tIntersect, // out: parameter t
-                float &contributionScore // out: parameter contributionScore
+            const glm::vec3& rayOriginWorld,
+            const glm::vec3& rayDirWorld,
+            glm::vec3& hitPointCam, // out: intersection in camera space
+            float& tIntersect, // out: parameter t
+            float& contributionScore // out: parameter contributionScore
         ) const {
             // 1) Transform to camera space
 
             glm::mat4 entityTransform = m_cameraTransform.getTransform();
             // Camera plane normal in world space
             glm::vec3 cameraPlaneNormalWorld = glm::normalize(
-                    glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
+                glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
             glm::vec3 cameraPlanePointWorld = glm::vec3(
-                    entityTransform *
-                    glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
+                entityTransform *
+                glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
 
             // Ray-plane intersection
 
@@ -386,7 +429,7 @@ namespace VkRender::RT {
             float hitz = intersectionPoint.z;
 
             glm::vec3 intersectionCamSpace = glm::vec3(
-                    glm::inverse(entityTransform) * glm::vec4(intersectionPoint, 1.0f));
+                glm::inverse(entityTransform) * glm::vec4(intersectionPoint, 1.0f));
 
             float hitCx = intersectionCamSpace.x;
             float hitCy = intersectionCamSpace.y;
@@ -412,16 +455,16 @@ namespace VkRender::RT {
             return true;
         }
 
-        bool geometryIntersection(size_t lightEntityIdx, const glm::vec3 &rayOrigin, const glm::vec3 &rayDir,
-                                  size_t &hitEntity, float &closest_t, glm::vec3 &hitPointWorld,
-                                  glm::vec3 &hitNormalWorld) const {
+        bool geometryIntersection(size_t lightEntityIdx, const glm::vec3& rayOrigin, const glm::vec3& rayDir,
+                                  size_t& hitEntity, float& closest_t, glm::vec3& hitPointWorld,
+                                  glm::vec3& hitNormalWorld) const {
             bool hit = false;
             for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
                 // Transform ray to local space
                 if (entityIdx == lightEntityIdx)
                     continue;
 
-                const char *entityTag = m_gpuData.tagComponents[entityIdx].getTagForKernel();
+                const char* entityTag = m_gpuData.tagComponents[entityIdx].getTagForKernel();
 
                 glm::mat4 entityTransform = m_gpuData.transforms[entityIdx].getTransform();
                 glm::mat4 invEntityTransform = glm::inverse(entityTransform);
@@ -432,8 +475,8 @@ namespace VkRender::RT {
                 // Figure out index range for this entity
                 uint32_t startIndex = m_gpuData.indexOffsets[entityIdx];
                 uint32_t endIndex = (entityIdx + 1 < m_gpuData.numEntities)
-                                    ? m_gpuData.indexOffsets[entityIdx + 1]
-                                    : m_gpuData.totalIndices;
+                                        ? m_gpuData.indexOffsets[entityIdx + 1]
+                                        : m_gpuData.totalIndices;
 
                 if (endIndex <= startIndex) {
                     continue; // no triangles
@@ -448,9 +491,9 @@ namespace VkRender::RT {
                     uint32_t i1 = m_gpuData.indices[startIndex + t * 3 + 1];
                     uint32_t i2 = m_gpuData.indices[startIndex + t * 3 + 2];
 
-                    const glm::vec3 &aLocal = m_gpuData.vertices[i0].position;
-                    const glm::vec3 &bLocal = m_gpuData.vertices[i1].position;
-                    const glm::vec3 &cLocal = m_gpuData.vertices[i2].position;
+                    const glm::vec3& aLocal = m_gpuData.vertices[i0].position;
+                    const glm::vec3& bLocal = m_gpuData.vertices[i1].position;
+                    const glm::vec3& cLocal = m_gpuData.vertices[i2].position;
 
                     glm::vec3 localHit(0.f);
                     if (rayTriangleIntersect(localRayOrigin, localRayDir, aLocal, bLocal, cLocal, localHit)) {
@@ -475,7 +518,7 @@ namespace VkRender::RT {
         // ---------------------------------------------------------------------
         //  accumulateOnSensor
         // ---------------------------------------------------------------------
-        bool accumulateOnSensor(size_t photonID, const glm::vec3 &hitPointWorld, float photonFlux) const {
+        bool accumulateOnSensor(size_t photonID, const glm::vec3& hitPointWorld, float photonFlux) const {
             //
             // 1. Transform the hit point from world space to camera space
             //
@@ -529,14 +572,14 @@ namespace VkRender::RT {
                 py >= 0 && py < static_cast<int>(m_camera->m_height)) {
                 // Convert 2D coords -> 1D index
                 size_t pixelIndex =
-                        static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px);
+                    static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px);
 
                 float gamma = 2.2f; // Gamma value > 1 brightens dark areas
                 photonFlux = std::pow(photonFlux, 1.0f / gamma);
 
                 // Atomic addition for imageMemory
                 sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
-                        m_gpuData.imageMemory[pixelIndex]);
+                    m_gpuData.imageMemory[pixelIndex]);
                 atomicImageMemory.fetch_add(photonFlux);
 
                 return true;
@@ -548,12 +591,12 @@ namespace VkRender::RT {
         // ---------------------------------------------------------
         //  checkPinholeIntersection
         // ---------------------------------------------------------
-        bool checkPinholeIntersection(const glm::vec3 &rayOrigin,
-                                      const glm::vec3 &rayDir,
-                                      const glm::vec3 &pinholeCenter,
+        bool checkPinholeIntersection(const glm::vec3& rayOrigin,
+                                      const glm::vec3& rayDir,
+                                      const glm::vec3& pinholeCenter,
                                       float pinholeRadius,
-                                      glm::vec3 &outClosestPt,
-                                      float &outT) const {
+                                      glm::vec3& outClosestPt,
+                                      float& outT) const {
             glm::vec3 pinholeNormal = glm::vec3(-1, 0, 0);
             return intersectDisk(pinholeNormal, pinholeCenter, pinholeRadius, rayOrigin, rayDir, outClosestPt, outT);
 
@@ -563,7 +606,7 @@ namespace VkRender::RT {
         // ---------------------------------------------------------------------
         //  Helper: sample an emissive triangle
         // ---------------------------------------------------------------------
-        size_t sampleRandomEmissiveTriangle(size_t photonID, size_t &emissiveEntityIdx) const {
+        size_t sampleRandomEmissiveTriangle(size_t photonID, size_t& emissiveEntityIdx) const {
             // Simple Linear Congruential Generator (LCG) for RNG
 
 
@@ -582,8 +625,8 @@ namespace VkRender::RT {
             // Found an emissive entity
             uint32_t startIndex = m_gpuData.indexOffsets[entityIdx];
             uint32_t endIndex = (entityIdx + 1 < m_gpuData.numEntities)
-                                ? m_gpuData.indexOffsets[entityIdx + 1]
-                                : m_gpuData.totalIndices;
+                                    ? m_gpuData.indexOffsets[entityIdx + 1]
+                                    : m_gpuData.totalIndices;
 
 
             if (endIndex <= startIndex) {
@@ -615,9 +658,9 @@ namespace VkRender::RT {
         void sampleTrianglePositionAndNormal(size_t triIndex,
                                              size_t emissiveEntityIdx,
                                              size_t photonID,
-                                             glm::vec3 &outPos,
-                                             glm::vec3 &outNormal,
-                                             float &emissionPower) const {
+                                             glm::vec3& outPos,
+                                             glm::vec3& outNormal,
+                                             float& emissionPower) const {
             // triIndex is the starting index of the triangle in the indices array (must be a multiple of 3)
             if (triIndex + 2 >= m_gpuData.totalIndices) {
                 // Fallback to default values
@@ -635,13 +678,13 @@ namespace VkRender::RT {
             // For simplicity, assume there's a single entity transform or identity:
             // (In reality, you'd figure out which entity this tri belongs to, apply transform, etc.)
             // Retrieve Triangle Vertices and Their Normals
-            const glm::vec3 &A = m_gpuData.vertices[i0].position;
-            const glm::vec3 &B = m_gpuData.vertices[i1].position;
-            const glm::vec3 &C = m_gpuData.vertices[i2].position;
+            const glm::vec3& A = m_gpuData.vertices[i0].position;
+            const glm::vec3& B = m_gpuData.vertices[i1].position;
+            const glm::vec3& C = m_gpuData.vertices[i2].position;
 
-            const glm::vec3 &N_A = m_gpuData.vertices[i0].normal;
-            const glm::vec3 &N_B = m_gpuData.vertices[i1].normal;
-            const glm::vec3 &N_C = m_gpuData.vertices[i2].normal;
+            const glm::vec3& N_A = m_gpuData.vertices[i0].normal;
+            const glm::vec3& N_B = m_gpuData.vertices[i1].normal;
+            const glm::vec3& N_C = m_gpuData.vertices[i2].normal;
 
             // Barycentric Sample for a Random Point
             float r1 = m_rng[photonID].nextFloat();
@@ -665,19 +708,19 @@ namespace VkRender::RT {
             outNormal = interpolatedNormal;
 
             // Derive Emission Power from Material
-            const MaterialComponent &material = m_gpuData.materials[emissiveEntityIdx];
+            const MaterialComponent& material = m_gpuData.materials[emissiveEntityIdx];
             emissionPower = material.emission;
             if (emissionPower > 0.1f)
                 int interesting = 1;
         }
 
         static bool rayTriangleIntersect(
-                glm::vec3 &ray_origin,
-                glm::vec3 &ray_dir,
-                const glm::vec3 &a,
-                const glm::vec3 &b,
-                const glm::vec3 &c,
-                glm::vec3 &out_intersection) {
+            glm::vec3& ray_origin,
+            glm::vec3& ray_dir,
+            const glm::vec3& a,
+            const glm::vec3& b,
+            const glm::vec3& c,
+            glm::vec3& out_intersection) {
             float epsilon = 1e-7f;
 
             glm::vec3 edge1 = b - a;
@@ -712,11 +755,11 @@ namespace VkRender::RT {
         // ---------------------------------------------------------
         // Intersection with plane
         // ---------------------------------------------------------
-        bool intersectPlane(const glm::vec3 &planeNormal,
-                            const glm::vec3 &planePos,
-                            const glm::vec3 &rayOrigin,
-                            const glm::vec3 &rayDir,
-                            float &t) const {
+        bool intersectPlane(const glm::vec3& planeNormal,
+                            const glm::vec3& planePos,
+                            const glm::vec3& rayOrigin,
+                            const glm::vec3& rayDir,
+                            float& t) const {
             float denom = glm::dot(planeNormal, rayDir);
             if (fabs(denom) > 1e-6f) {
                 glm::vec3 p0l0 = planePos - rayOrigin;
@@ -726,9 +769,9 @@ namespace VkRender::RT {
             return false;
         }
 
-        bool intersectDisk(const glm::vec3 &normal, const glm::vec3 &center, const float &radius,
-                           const glm::vec3 &rayOrigin, const glm::vec3 &rayDir, glm::vec3 &outP,
-                           float &t) const {
+        bool intersectDisk(const glm::vec3& normal, const glm::vec3& center, const float& radius,
+                           const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outP,
+                           float& t) const {
             if (intersectPlane(normal, center, rayOrigin, rayDir, t)) {
                 outP = rayOrigin + rayDir * t; // Calculate intersection point
                 glm::vec3 v = outP - center; // Vector from disk center to intersection point
@@ -757,10 +800,45 @@ namespace VkRender::RT {
         }
 
 
+        // Constructs an orthonormal basis (T, B, N) given a normal N.
+        inline void buildTangentBasis(const glm::vec3& N, glm::vec3& T, glm::vec3& B) const {
+            // Any vector not collinear with N will do for "temp"
+            glm::vec3 temp = (fabs(N.x) > 0.9f) ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
+
+            T = glm::normalize(glm::cross(temp, N));
+            B = glm::cross(N, T);
+            // Now T, B, N is an orthonormal basis
+        }
+
+        glm::vec3 sampleCosineWeightedHemisphere(
+            const glm::vec3& normal,
+            size_t photonID) // random [0,1]
+        const {
+            // Step 1: Convert to spherical coords for cosine-weighted distribution
+            float u1 = m_rng[photonID].nextFloat();
+            float u2 = m_rng[photonID].nextFloat();
+            float r = std::sqrt(u1);
+            float phi = 2.0f * M_PIf * u2; // M_PIf = float version of pi
+
+            // Step 2: Local coordinates (z up)
+            float x = r * std::cos(phi);
+            float y = r * std::sin(phi);
+            float z = std::sqrt(1.0f - u1);
+
+            // Step 3: Build a local orthonormal basis around 'normal'
+            glm::vec3 t, b;
+            buildTangentBasis(normal, t, b);
+
+            // Step 4: Transform from local [x, y, z] into world space
+            glm::vec3 sampleWorld = x * t + y * b + z * normal;
+            return glm::normalize(sampleWorld);
+        }
+
+
         // ---------------------------------------------------------------------
         //  sampleRandomHemisphere (Lambertian reflection) using PCG32
         // ---------------------------------------------------------------------
-        glm::vec3 sampleRandomHemisphere(const glm::vec3 &normal, size_t photonID) const {
+        glm::vec3 sampleRandomHemisphere(const glm::vec3& normal, size_t photonID) const {
             glm::vec3 r = randomUnitVector(photonID);
             if (glm::dot(r, normal) < 0.f) {
                 r = -r;
@@ -771,7 +849,7 @@ namespace VkRender::RT {
         // ---------------------------------------------------------------------
         //  sampleRandomDirection (Lambertian reflection) using PCG32
         // ---------------------------------------------------------------------
-        glm::vec3 sampleRandomDirection(const glm::vec3 &normal, size_t photonID) const {
+        glm::vec3 sampleRandomDirection(const glm::vec3& normal, size_t photonID) const {
             glm::vec3 r = randomUnitVector(photonID);
             return glm::normalize(r);
         }
