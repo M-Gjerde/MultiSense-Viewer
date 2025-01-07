@@ -125,6 +125,10 @@ namespace VkRender {
             }
             ImGui::SameLine();
 
+            ImGui::Checkbox("Denoise", &imageUI->denoise);
+
+            ImGui::SameLine();
+
             // Dropdown for selecting render kernel
             const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
             static int selectedKernelIndex = 1; // Default selection
@@ -146,8 +150,6 @@ namespace VkRender {
             if (imageUI->clearImageMemory){
                 imageUI->render = true;
             }
-            ImGui::SameLine();
-            imageUI->saveImage = ImGui::Button("Save");
 
             const int sliderMin = 1000;
             const int sliderMax = 10000000;
@@ -165,6 +167,10 @@ namespace VkRender {
             ImGui::SameLine();
             ImGui::SetNextItemWidth(100);
             ImGui::SliderFloat("Gamma", &imageUI->shaderSelection.gammaCorrection, 0, 8);
+
+            ImGui::SameLine();
+            imageUI->saveImage = ImGui::Button("Save");
+
 
             ImGui::End();
 

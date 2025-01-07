@@ -14,6 +14,7 @@ namespace VkRender {
         bool uploadScene = false;
         bool render = false;
         bool saveImage = false;
+        bool denoise = false;
 
         bool clearImageMemory = false;
 

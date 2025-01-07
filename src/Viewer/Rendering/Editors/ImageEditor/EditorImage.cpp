@@ -7,8 +7,10 @@
 #include "EditorImageLayer.h"
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 
+#include <OpenImageDenoise/oidn.hpp>
+
 namespace VkRender {
-    EditorImage::EditorImage(EditorCreateInfo &createInfo, UUID uuid) : Editor(createInfo, uuid) {
+    EditorImage::EditorImage(EditorCreateInfo& createInfo, UUID uuid) : Editor(createInfo, uuid) {
         addUI("EditorImageLayer");
         addUI("EditorUILayer");
         addUI("DebugWindow");
@@ -22,15 +24,14 @@ namespace VkRender {
         m_colorTexture = EditorUtils::createEmptyTexture(1280, 720, VK_FORMAT_R8G8B8A8_UNORM, m_context,
                                                          VMA_MEMORY_USAGE_GPU_ONLY, true);
         m_shaderSelectionBuffer.resize(m_context->swapChainBuffers().size());
-        for (auto &frameIndex: m_shaderSelectionBuffer) {
+        for (auto& frameIndex : m_shaderSelectionBuffer) {
             m_context->vkDevice().createBuffer(
-                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                    VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                    frameIndex,
-                    sizeof(EditorImageUI::ShaderSelection), nullptr, "EditorImage:ShaderSelectionBuffer",
-                    m_context->getDebugUtilsObjectNameFunction());
+                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                frameIndex,
+                sizeof(EditorImageUI::ShaderSelection), nullptr, "EditorImage:ShaderSelectionBuffer",
+                m_context->getDebugUtilsObjectNameFunction());
         }
-
     }
 
     void EditorImage::onEditorResize() {
@@ -39,12 +40,12 @@ namespace VkRender {
         float width = m_createInfo.width;
         float height = m_createInfo.height;
         float editorAspect = static_cast<float>(m_createInfo.width) /
-                             static_cast<float>(m_createInfo.height);
-        PinholeCamera *pinholeCamera = nullptr;
+            static_cast<float>(m_createInfo.height);
+        PinholeCamera* pinholeCamera = nullptr;
         auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
-        for (auto e: view) {
+        for (auto e : view) {
             Entity entity(e, m_context->activeScene().get());
-            auto &cameraComponent = entity.getComponent<CameraComponent>();
+            auto& cameraComponent = entity.getComponent<CameraComponent>();
 
             if (cameraComponent.cameraType == CameraComponent::PINHOLE) {
                 // Use the first camera found that can render from viewpoint
@@ -60,7 +61,8 @@ namespace VkRender {
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
                 scaleX = sceneCameraAspect / editorAspect;
-            } else {
+            }
+            else {
                 scaleY = editorAspect / sceneCameraAspect;
             }
             // Reset and rebuild mesh
@@ -71,7 +73,7 @@ namespace VkRender {
         m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
     }
 
-    void EditorImage::onFileDrop(const std::filesystem::path &path) {
+    void EditorImage::onFileDrop(const std::filesystem::path& path) {
         std::string extension = path.extension().string();
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
         if (extension == ".png" || extension == ".jpg") {
@@ -84,12 +86,12 @@ namespace VkRender {
         float width = m_createInfo.width;
         float height = m_createInfo.height;
         float editorAspect = static_cast<float>(m_createInfo.width) /
-                             static_cast<float>(m_createInfo.height);
-        PinholeCamera *pinholeCamera = nullptr;
+            static_cast<float>(m_createInfo.height);
+        PinholeCamera* pinholeCamera = nullptr;
         auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
-        for (auto e: view) {
+        for (auto e : view) {
             Entity entity(e, m_context->activeScene().get());
-            auto &cameraComponent = entity.getComponent<CameraComponent>();
+            auto& cameraComponent = entity.getComponent<CameraComponent>();
 
             if (cameraComponent.cameraType == CameraComponent::PINHOLE) {
                 // Use the first camera found that can render from viewpoint
@@ -105,7 +107,8 @@ namespace VkRender {
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
                 scaleX = sceneCameraAspect / editorAspect;
-            } else {
+            }
+            else {
                 scaleY = editorAspect / sceneCameraAspect;
             }
             // Reset and rebuild mesh
@@ -114,11 +117,57 @@ namespace VkRender {
         }
         m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, scene, width, height);
         m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
-
     }
 
 
     void EditorImage::onPipelineReload() {
+    }
+
+    // Example function for single-channel to 3-channel expansion
+    std::vector<float> expandTo3Channels(const float* singleChannelImage, uint32_t width, uint32_t height) {
+        std::vector<float> rgbImage(width * height * 3);
+        for (uint32_t i = 0; i < width * height; ++i) {
+            rgbImage[i * 3 + 0] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // R
+            rgbImage[i * 3 + 1] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // G
+            rgbImage[i * 3 + 2] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // B
+        }
+        return rgbImage;
+    }
+
+    void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output) {
+        // Expand single-channel image to 3 channels
+        // Initialize OIDN
+        oidn::DeviceRef device = oidn::newDevice();
+        device.commit();
+        uint32_t imageSize = width * height;
+        // Allocate input and output buffers
+        oidn::BufferRef inputBuffer = device.newBuffer(imageSize * sizeof(float));
+        oidn::BufferRef outputBuffer = device.newBuffer(imageSize * sizeof(float));
+
+        // Copy input data to OIDN buffer
+        std::memcpy(inputBuffer.getData(), singleChannelImage, imageSize * sizeof(float));
+
+        // Create and configure the denoising filter
+        oidn::FilterRef filter = device.newFilter("RT");
+        filter.set("hdr", true);
+        filter.setImage("color", inputBuffer, oidn::Format::Float, width, height);
+        filter.setImage("output", outputBuffer, oidn::Format::Float, width, height);
+        filter.commit();
+
+        // Execute the filter
+        filter.execute();
+
+        // Check for errors
+        const char* errorMessage;
+        if (device.getError(errorMessage) != oidn::Error::None) {
+            std::cerr << "OIDN Error: " << errorMessage << std::endl;
+            return;
+        }
+
+        // Retrieve the denoised image
+        output.resize(imageSize);
+        std::memcpy(output.data(), outputBuffer.getData(), output.size() * sizeof(float));
+
     }
 
     void EditorImage::onUpdate() {
@@ -126,7 +175,7 @@ namespace VkRender {
 
         auto frameIndex = m_context->currentFrameIndex();
 
-        void *data;
+        void* data;
         vkMapMemory(m_context->vkDevice().m_LogicalDevice,
                     m_shaderSelectionBuffer[frameIndex]->m_memory, 0, sizeof(EditorImageUI::ShaderSelection), 0, &data);
         memcpy(data, &imageUI->shaderSelection, sizeof(EditorImageUI::ShaderSelection));
@@ -134,7 +183,6 @@ namespace VkRender {
 
         if (imageUI->uploadScene) {
             m_rayTracer->upload(m_context->activeScene());
-
         }
 
         if (imageUI->render) {
@@ -143,33 +191,44 @@ namespace VkRender {
             if (image) {
                 uint32_t width = m_colorTexture->width();
                 uint32_t height = m_colorTexture->height();
+                // Handle denoising if enabled
                 std::vector<uint8_t> convertedImage(width * height * 4); // 4 channels: RGBA
-                // Parallelize the conversion loop for better performance
-                for (int i = 0; i < static_cast<int>(width * height); ++i) {
-                    float intensity = image[i];
-                    // Clamp and scale to [0, 255]
-                    uint8_t value = static_cast<uint8_t>(std::clamp(intensity, 0.0f, 1.0f) * 255.0f);
-                    convertedImage[i * 4 + 0] = value; // R
-                    convertedImage[i * 4 + 1] = value; // G
-                    convertedImage[i * 4 + 2] = value; // B
-                    convertedImage[i * 4 + 3] = 255;   // A (fully opaque)
-                }
 
-                // Upload the texture (ensure the format matches)
+                if (imageUI->denoise) {
+                    std::vector<float> denoisedImage;
+                    denoiseImage(image, width, height, denoisedImage);
+                    for (uint32_t i = 0; i < width * height; ++i) {
+                        float r = denoisedImage[i]; // Assuming grayscale in the red channel
+
+                        convertedImage[i * 4 + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // R
+                        convertedImage[i * 4 + 1] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // G
+                        convertedImage[i * 4 + 2] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // B
+                        convertedImage[i * 4 + 3] = 255; // A (fully opaque)
+                    }
+
+                } else {
+                    for (uint32_t i = 0; i < width * height; ++i) {
+                        float r = image[i]; // Assuming grayscale in the red channel
+                        convertedImage[i * 4 + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // R
+                        convertedImage[i * 4 + 1] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // G
+                        convertedImage[i * 4 + 2] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // B
+                        convertedImage[i * 4 + 3] = 255; // A (fully opaque)
+                    }
+                }
+                // Upload the texture
                 m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
             }
         }
-        if (imageUI->saveImage){
+        if (imageUI->saveImage) {
+            uint32_t width = m_colorTexture->width();
+            uint32_t height = m_colorTexture->height();
             float* image = m_rayTracer->getImage();
             std::filesystem::path filename = "cornell.pfm";
             std::ofstream file(filename, std::ios::binary);
-            uint32_t width = m_colorTexture->width();
-            uint32_t height = m_colorTexture->height();
 
             if (!file.is_open()) {
                 throw std::runtime_error("Failed to open file for writing: " + filename.string());
             }
-
             // Write the PFM header
             // "PF" indicates a color image. Use "Pf" for grayscale.
             file << "PF\n" << width << " " << height << "\n-1.0\n";
@@ -182,7 +241,7 @@ namespace VkRender {
 
             for (uint32_t y = 0; y < height; ++y) {
                 for (uint32_t x = 0; x < width; ++x) {
-                    uint32_t pixelIndex = (y * width + x); // RGBA: 4 floats per pixel
+                    uint32_t pixelIndex = (y * width + x);
                     uint32_t rgbIndex = (y * width + x) * 3;
 
                     rgbData[rgbIndex + 0] = image[pixelIndex]; // R
@@ -192,7 +251,7 @@ namespace VkRender {
             }
 
             // Write the RGB float data
-            file.write(reinterpret_cast<const char *>(rgbData.data()), rgbData.size() * sizeof(float));
+            file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
 
             if (!file) {
                 throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
@@ -200,23 +259,22 @@ namespace VkRender {
 
             file.close();
         }
-
     }
 
-    void EditorImage::onMouseMove(const MouseButtons &mouse) {
+    void EditorImage::onMouseMove(const MouseButtons& mouse) {
     }
 
     void EditorImage::onMouseScroll(float change) {
     }
 
-    void EditorImage::onRender(CommandBuffer &commandBuffer) {
+    void EditorImage::onRender(CommandBuffer& commandBuffer) {
         std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> renderGroups;
         collectRenderCommands(renderGroups, commandBuffer.frameIndex);
 
         // Render each group
-        for (auto &[pipeline, commands]: renderGroups) {
+        for (auto& [pipeline, commands] : renderGroups) {
             pipeline->bind(commandBuffer);
-            for (auto &command: commands) {
+            for (auto& command : commands) {
                 // Bind resources and draw
                 bindResourcesAndDraw(commandBuffer, command);
             }
@@ -224,8 +282,8 @@ namespace VkRender {
     }
 
     void EditorImage::collectRenderCommands(
-            std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> &renderGroups,
-            uint32_t frameIndex) {
+        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
+        uint32_t frameIndex) {
         if (!m_meshInstances) {
             m_meshInstances = EditorUtils::setupMesh(m_context);
             Log::Logger::getInstance()->info("Created MeshInstance for 3DViewport");
@@ -253,20 +311,20 @@ namespace VkRender {
         writeDescriptors[1].pBufferInfo = &m_shaderSelectionBuffer[frameIndex]->m_descriptorBufferInfo;
         std::vector descriptorWrites = {writeDescriptors[0], writeDescriptors[1]};
         VkDescriptorSet descriptorSet = m_descriptorRegistry.getManager(
-                DescriptorManagerType::Viewport3DTexture).getOrCreateDescriptorSet(descriptorWrites);
+            DescriptorManagerType::Viewport3DTexture).getOrCreateDescriptorSet(descriptorWrites);
         key.setLayouts[0] = m_descriptorRegistry.getManager(
-                DescriptorManagerType::Viewport3DTexture).getDescriptorSetLayout();
+            DescriptorManagerType::Viewport3DTexture).getDescriptorSetLayout();
         // Use default descriptor set layout
         key.vertexShaderName = "default2D.vert";
         key.fragmentShaderName = "EditorImageViewportTexture.frag";
         key.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
         key.polygonMode = VK_POLYGON_MODE_FILL;
         std::vector<VkVertexInputBindingDescription> vertexInputBinding = {
-                {0, sizeof(VkRender::ImageVertex), VK_VERTEX_INPUT_RATE_VERTEX}
+            {0, sizeof(VkRender::ImageVertex), VK_VERTEX_INPUT_RATE_VERTEX}
         };
         std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
-                {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
-                {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 2},
+            {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
+            {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float) * 2},
         };
         key.vertexInputBindingDescriptions = vertexInputBinding;
         key.vertexInputAttributes = vertexInputAttributes;
@@ -286,7 +344,7 @@ namespace VkRender {
         renderGroups[pipeline].push_back(command);
     }
 
-    void EditorImage::bindResourcesAndDraw(const CommandBuffer &commandBuffer, RenderCommand &command) {
+    void EditorImage::bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command) {
         VkCommandBuffer cmdBuffer = commandBuffer.getActiveBuffer();
         uint32_t frameIndex = commandBuffer.frameIndex;
 
@@ -305,16 +363,16 @@ namespace VkRender {
                           command.pipeline->pipeline()->getPipeline());
 
 
-        for (auto &[index, descriptorSet]: command.descriptorSets) {
+        for (auto& [index, descriptorSet] : command.descriptorSets) {
             vkCmdBindDescriptorSets(
-                    cmdBuffer,
-                    VK_PIPELINE_BIND_POINT_GRAPHICS,
-                    command.pipeline->pipeline()->getPipelineLayout(),
-                    0, // TODO can't reuse the approach in SceneRenderer since we have different manager types
-                    1,
-                    &descriptorSet,
-                    0,
-                    nullptr
+                cmdBuffer,
+                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                command.pipeline->pipeline()->getPipelineLayout(),
+                0, // TODO can't reuse the approach in SceneRenderer since we have different manager types
+                1,
+                &descriptorSet,
+                0,
+                nullptr
             );
         }
 
@@ -322,5 +380,4 @@ namespace VkRender {
             vkCmdDrawIndexed(cmdBuffer, command.meshInstance->indexCount, 1, 0, 0, 0);
         }
     }
-
 }
