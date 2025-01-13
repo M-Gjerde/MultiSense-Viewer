@@ -511,7 +511,9 @@ namespace VkRender {
             ImGui::Checkbox("Render scene from viewpoint", &component.renderFromViewpoint());
 
             bool paramsChanged = false;
-            paramsChanged |= ImGui::Checkbox("Flip Y", &component.flipY);
+            paramsChanged |= ImGui::Checkbox("Flip Y", &component.cameraSettings.flipY);
+            ImGui::SameLine();
+            paramsChanged |= ImGui::Checkbox("Flip X", &component.cameraSettings.flipX);
 
             static const auto allCameraTypes = CameraComponent::getAllCameraTypes();
             static const auto cameraTypeStrings = []() {
@@ -551,19 +553,19 @@ namespace VkRender {
             switch (component.cameraType) {
 
                 case CameraComponent::PERSPECTIVE:
-                    paramsChanged |= ImGui::SliderFloat("Field of View", &component.projectionParameters.fov, 5.0f,
+                    paramsChanged |= ImGui::SliderFloat("Field of View", &component.baseCameraParameters.fov, 5.0f,
                                                         180.0f);
-                    paramsChanged |= ImGui::SliderFloat("Aspect Ratio", &component.projectionParameters.aspect, 0.1f,
+                    paramsChanged |= ImGui::SliderFloat("Aspect Ratio", &component.baseCameraParameters.aspect, 0.1f,
                                                         10.0f);
-                    paramsChanged |= ImGui::SliderFloat("Near Plane", &component.projectionParameters.near, 0.01f,
+                    paramsChanged |= ImGui::SliderFloat("Near Plane", &component.baseCameraParameters.near, 0.01f,
                                                         10.0f);
-                    paramsChanged |= ImGui::SliderFloat("Far Plane", &component.projectionParameters.far, 1.0f,
+                    paramsChanged |= ImGui::SliderFloat("Far Plane", &component.baseCameraParameters.far, 1.0f,
                                                         1000.0f);
 
                     break;
                 case CameraComponent::PINHOLE:
-                    paramsChanged |= ImGui::SliderInt("Width", &component.pinholeParameters.width, 1.0, 4096);
-                    paramsChanged |= ImGui::SliderInt("Height", &component.pinholeParameters.height, 1.0, 4096);
+                    paramsChanged |= ImGui::SliderFloat("Width", &component.pinholeParameters.width, 1.0, 4096, "%.0f");
+                    paramsChanged |= ImGui::SliderFloat("Height", &component.pinholeParameters.height, 1.0f, 4096.0f, "%.0f");
 
                     paramsChanged |= ImGui::SliderFloat("Fx", &component.pinholeParameters.fx, 1.0f, 4096.0f);
                     paramsChanged |= ImGui::SliderFloat("Fy", &component.pinholeParameters.fy, 1.0f, 4096.0f);
@@ -758,7 +760,7 @@ namespace VkRender {
                             auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPerspectiveMeshParameters>(
                                     component.meshParameters);
                             if (cameraGizmoParams) {
-                                auto &cameraParams = entity.getComponent<CameraComponent>().projectionParameters;
+                                auto &cameraParams = entity.getComponent<CameraComponent>().baseCameraParameters;
                                 // Update focal point and check if it has changed
                                 if (cameraGizmoParams->parameters != cameraParams) {
                                     cameraGizmoParams->parameters = cameraParams;

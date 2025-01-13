@@ -16,7 +16,7 @@ namespace VkRender {
         float near = 0.1f;
         float far = 100.0f;
         float aspect = 1.6f;
-        float fov = 60.0f;
+        float fov = 60.0f; // FOV in degrees
 
         // Overload equality operator
         bool operator==(const ProjectionParameters &other) const {
@@ -37,13 +37,12 @@ namespace VkRender {
         virtual ~BaseCamera() = default;
         BaseCamera() = default;
 
-        explicit BaseCamera(float aspect, float fov = 60.0f) : m_aspectRatio(aspect), m_fov(fov) {
+        explicit BaseCamera(float aspect, float fov = 60.0f) {
+            m_parameters.aspect = aspect;
+            m_parameters.fov = fov;
             BaseCamera::updateProjectionMatrix();
         }
 
-        BaseCamera(float aspect, float fov, float near, float far) : m_aspectRatio(aspect), m_fov(fov), m_zNear(near), m_zFar(far){
-
-        }
         BaseCamera(const SharedCameraSettings& sharedSettings, const ProjectionParameters& projectionParameters) : m_settings(sharedSettings), m_parameters(projectionParameters) {
 
         }
@@ -58,13 +57,6 @@ namespace VkRender {
         SharedCameraSettings m_settings;
         ProjectionParameters m_parameters;
 
-        float m_zNear = 0.1f;
-        float m_zFar = 100.0f;
-        float m_fov = 60.0f; // FOV in degrees
-        float m_aspectRatio = 1.6f; // 16/10 aspect ratio
-
-        bool m_flipYProjection = false;
-        bool m_flipXProjection = false;
         // Instead of storing pose in here, just rely on external transforms.
 
         virtual void updateViewMatrix(const glm::mat4& worldTransform) {
@@ -81,11 +73,11 @@ namespace VkRender {
         virtual void updateProjectionMatrix() {
 
             // Guide: https://vincent-p.github.io/posts/vulkan_perspective_matrix/
-            float tanHalfFovy = tanf(glm::radians(m_fov) * 0.5f);
-            float x = 1 / (tanHalfFovy * m_aspectRatio);
+            float tanHalfFovy = tanf(glm::radians(m_parameters.fov) * 0.5f);
+            float x = 1 / (tanHalfFovy * m_parameters.aspect);
             float y = 1 / tanHalfFovy;
-            float A = m_zFar / (m_zNear - m_zFar);
-            float B = -(m_zFar * m_zNear) / (m_zFar - m_zNear);
+            float A = m_parameters.far / (m_parameters.near - m_parameters.far);
+            float B = -(m_parameters.far * m_parameters.near) / (m_parameters.far - m_parameters.near);
             matrices.projection = glm::mat4(
                     x, 0.0f, 0.0f, 0.0f,
                     0.0f, y, 0.0f, 0.0f,
@@ -101,10 +93,10 @@ namespace VkRender {
                 m_zFar
             );
             */
-            if (m_flipYProjection) {
+            if (m_settings.flipY) {
                 matrices.projection[1][1] *= -1;
             }
-            if (m_flipXProjection) {
+            if (m_settings.flipX) {
                 matrices.projection[0][0] *= -1; // Flip X-axis for left-to-right flipping
             }
         };

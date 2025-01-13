@@ -225,7 +225,7 @@ namespace VkRender {
                     // ARCBALL-specific serialization (if any) can be added here
                     break;
                 case CameraComponent::PERSPECTIVE: {
-                    auto &params = camera.projectionParameters;
+                    auto &params = camera.baseCameraParameters;
                     out << YAML::Key << "ProjectionParameters";
                     out << YAML::BeginMap;
                     out << YAML::Key << "Near" << YAML::Value << params.near;
@@ -508,10 +508,10 @@ namespace VkRender {
                         {
                             auto projectionParams = cameraComponent["ProjectionParameters"];
                             if (projectionParams) {
-                                camera.projectionParameters.near = projectionParams["Near"].as<float>(0.1f);
-                                camera.projectionParameters.far = projectionParams["Far"].as<float>(100.0f);
-                                camera.projectionParameters.aspect = projectionParams["Aspect"].as<float>(1.6f);
-                                camera.projectionParameters.fov = projectionParams["FOV"].as<float>(60.0f);
+                                camera.baseCameraParameters.near = projectionParams["Near"].as<float>(0.1f);
+                                camera.baseCameraParameters.far = projectionParams["Far"].as<float>(100.0f);
+                                camera.baseCameraParameters.aspect = projectionParams["Aspect"].as<float>(1.6f);
+                                camera.baseCameraParameters.fov = projectionParams["FOV"].as<float>(60.0f);
                                 camera.updateParametersChanged();
                             }
                             break;

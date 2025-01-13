@@ -48,7 +48,7 @@ namespace VkRender {
 
         if (m_lastActiveCamera) {
             auto camera = m_lastActiveCamera->getPinholeCamera();
-            float textureAspect = static_cast<float>(camera->m_width) / static_cast<float>(camera->m_height);
+            float textureAspect = static_cast<float>(camera->parameters().width) / static_cast<float>(camera->parameters().height);
             float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
             // Calculate scaling factors
             float scaleX = 1.0f, scaleY = 1.0f;
@@ -61,8 +61,8 @@ namespace VkRender {
             m_meshInstances = nullptr;
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             auto &ci = m_sceneRenderer->getCreateInfo();
-            ci.width = camera->m_width;
-            ci.height = camera->m_height;
+            ci.width = camera->parameters().width;
+            ci.height = camera->parameters().height;
             m_sceneRenderer->resize(ci);
             onRenderSettingsChanged();
         } else {
@@ -100,7 +100,7 @@ namespace VkRender {
 
         if (m_lastActiveCamera) {
             auto camera = m_lastActiveCamera->getPinholeCamera();
-            float textureAspect = static_cast<float>(camera->m_width) / static_cast<float>(camera->m_height);
+            float textureAspect = static_cast<float>(camera->parameters().width) / static_cast<float>(camera->parameters().height);
             float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
             // Calculate scaling factors
             float scaleX = 1.0f, scaleY = 1.0f;
@@ -113,8 +113,8 @@ namespace VkRender {
             m_meshInstances = nullptr;
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             auto &ci = m_sceneRenderer->getCreateInfo();
-            ci.width = camera->m_width;
-            ci.height = camera->m_height;
+            ci.width = camera->parameters().width;
+            ci.height = camera->parameters().height;
             m_sceneRenderer->resize(ci);
             onRenderSettingsChanged();
         } else {
@@ -193,16 +193,16 @@ namespace VkRender {
                 switch (sceneCameraToUse->cameraType) {
                     case CameraComponent::PERSPECTIVE: {
                         auto perspectiveCamera = sceneCameraToUse->getPerspectiveCamera();
-                        sceneCameraAspect = perspectiveCamera->m_aspectRatio;
+                        sceneCameraAspect = perspectiveCamera->m_parameters.aspect;
                         width = m_createInfo.width;
                         height = m_createInfo.height;
                         break;
                     }
                     case CameraComponent::PINHOLE: {
                         auto pinholeCamera = sceneCameraToUse->getPinholeCamera();
-                        sceneCameraAspect = pinholeCamera->m_width / pinholeCamera->m_height;
-                        width = pinholeCamera->m_width;
-                        height = pinholeCamera->m_height;
+                        sceneCameraAspect = pinholeCamera->parameters().width / pinholeCamera->parameters().height;
+                        width = pinholeCamera->parameters().width;
+                        height = pinholeCamera->parameters().height;
                         break;
                     }
                     default:

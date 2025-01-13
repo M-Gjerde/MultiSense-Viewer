@@ -10,14 +10,16 @@
 
 namespace VkRender {
     struct PinholeParameters {
-        int height = 720; // Default image height
-        int width = 1280; // Default image width
+        float height = 720; // Default image height
+        float width = 1280; // Default image width
         float fx = 1280.0f; // Default horizontal focal length (pixels)
         float fy = 720.0f; // Default vertical focal length (pixels)
         float cx = 640.0f; // Default principal point x-coordinate (pixels)
         float cy = 360.0f; // Default principal point y-coordinate (pixels)
         float focalLength = 4; // focal length in mm
         float fNumber = 1.0f / 2.8f; // focal length in mm
+        float near = 0.01f;
+        float far = 100.0f;
         // Overload equality operator
         bool operator==(const PinholeParameters &other) const {
             return height == other.height &&
@@ -41,11 +43,11 @@ namespace VkRender {
 
         PinholeCamera() = default;
 
-        float m_fx, m_fy, m_cx, m_cy;
-        float m_width, m_height;
-        float m_focalLength;
-        float m_fNumber;
+        PinholeParameters m_parameters{};
+        SharedCameraSettings m_settings{};
 
+        const PinholeParameters& parameters() const{return m_parameters;}
+        /*
         PinholeCamera(uint32_t width, uint32_t height, float fx, float fy, float cx, float cy,
                       float focalLength = 10.0f, float zNear = 0.1f,
                       float zFar = 100.0f) {
@@ -60,35 +62,28 @@ namespace VkRender {
             m_zFar = zFar;
             PinholeCamera::updateProjectionMatrix();
         }
+        */
 
-        explicit PinholeCamera(PinholeParameters parameters, float zNear = 0.1f,
-                               float zFar = 100.0f) {
-            m_width = static_cast<float>(parameters.width);
-            m_height = static_cast<float>(parameters.height);
-            m_fx = parameters.fx;
-            m_fy = parameters.fy;
-            m_cx = parameters.cx;
-            m_cy = parameters.cy;
-            m_focalLength = parameters.focalLength;
-            m_fNumber = parameters.fNumber;
-            m_zNear = zNear;
-            m_zFar = zFar;
+        explicit PinholeCamera(const SharedCameraSettings& sharedSettings, const PinholeParameters& pinholeParameters) : m_settings(sharedSettings), m_parameters(pinholeParameters){
             PinholeCamera::updateProjectionMatrix();
         }
 
 
         void updateProjectionMatrix() override {
-            float A = m_zFar / (m_zNear - m_zFar);
-            float B = -(m_zFar * m_zNear) / (m_zFar - m_zNear);
-            float w = m_width;
-            float h = m_height;
+            float A = m_parameters.far / (m_parameters.near - m_parameters.far);
+            float B = -(m_parameters.far * m_parameters.near) / (m_parameters.far - m_parameters.near);
+            float w = m_parameters.width;
+            float h = m_parameters.height;
 
-            float fxNorm = (2.0f * m_fx) / w;
-            float fyNorm = (2.0f * m_fy) / h;
-            float cxNorm = -((2.0f * m_cx) - w) / w;
-            float cyNorm = -((2.0f * m_cy) - h) / h;
-            if (m_flipYProjection) {
+            float fxNorm = (2.0f * m_parameters.fx) / w;
+            float fyNorm = (2.0f * m_parameters.fy) / h;
+            float cxNorm = -((2.0f * m_parameters.cx) - w) / w;
+            float cyNorm = -((2.0f * m_parameters.cy) - h) / h;
+            if (m_settings.flipY) {
                 fyNorm *= -1;
+            }
+            if (m_settings.flipX) {
+                fxNorm *= -1;
             }
 
             matrices.projection = glm::mat4(

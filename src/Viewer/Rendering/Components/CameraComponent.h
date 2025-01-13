@@ -76,11 +76,9 @@ namespace VkRender {
             switch (cameraType) {
                 case PERSPECTIVE:
                     camera = std::make_shared<BaseCamera>(cameraSettings, baseCameraParameters);
-                    camera->m_flipYProjection = flipY;
                     break;
                 case PINHOLE:
-                    camera = std::make_shared<PinholeCamera>(pinholeParameters);
-                    camera->m_flipYProjection = flipY;
+                    camera = std::make_shared<PinholeCamera>(cameraSettings, pinholeParameters);
                     break;
                 default:
                     Log::Logger::getInstance()->warning(
@@ -90,6 +88,7 @@ namespace VkRender {
             }
             m_updateTrigger = true;
         }
+        bool render = false;
 
         bool &renderFromViewpoint() { return render; }
 

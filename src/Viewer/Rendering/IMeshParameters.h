@@ -56,7 +56,7 @@ namespace VkRender {
 
     class CameraGizmoPerspectiveMeshParameters : public IMeshParameters {
     public:
-        CameraComponent::ProjectionParameters parameters;
+        ProjectionParameters parameters;
         std::string getIdentifier() const override {
             return "CameraGizmoPerspective_" + std::to_string(uuid);
         }

@@ -17,7 +17,7 @@ option(ENABLE_SYCL "Compile with SYCL support. Provided that llvm-sycl clang++ i
 set(SYCL_IMPLEMENTATION "adaptivecpp" CACHE STRING "Select SYCL backend (dpcpp or adaptivecpp)")
 option(SYCL_BACKEND "Choose the SYCL backend (nvidia or amd)" "nvidia")
 set_property(CACHE SYCL_IMPLEMENTATION PROPERTY STRINGS "dpcpp" "adaptivecpp")
-set(DPCPP_COMPILER_PATH "" CACHE STRING "If Intel's DPCPP compiler is selected, the compiler path must be set")
+option(OIDN_DIR "Set the path for OpenImageDenoise" OFF)
 
 
 # Paths for proprietary module
@@ -47,12 +47,8 @@ set(PYTORCH_AVAILABLE FALSE)
 set(USE_CUDA FALSE)
 set(USE_ROCM FALSE)
 
-# Specify the path to OIDN
-set(OIDN_DIR "/home/magnus/Downloads/oidn")
-
 # Include the OIDN headers
 include_directories("${OIDN_DIR}/include")
-
 # Link the OIDN library
 target_link_libraries(${PROJECT_NAME} PRIVATE
         "${OIDN_DIR}/lib/libOpenImageDenoise.so"

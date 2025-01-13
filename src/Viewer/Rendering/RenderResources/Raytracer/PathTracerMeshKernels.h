@@ -78,7 +78,7 @@ namespace VkRender::RT {
             float Ldy = rayDir.y;
             float Ldz = rayDir.z;
             // Calculate direct lighting
-            float apertureDiameter = (m_camera->m_focalLength / m_camera->m_fNumber) / 1000;
+            float apertureDiameter = (m_camera->parameters().focalLength / m_camera->parameters().fNumber) / 1000;
             float apertureRadius = apertureDiameter * 0.5f;
 
             glm::vec3 directLightingDir = sampleDirectionTowardAperture(
@@ -149,7 +149,7 @@ namespace VkRender::RT {
                 bool pinholeHit = false;
                 float tPinhole = 0.0f;
                 glm::vec3 closePt(0.f);
-                float apertureDiameter = (m_camera->m_focalLength / m_camera->m_fNumber) / 1000;
+                float apertureDiameter = (m_camera->parameters().focalLength / m_camera->parameters().fNumber) / 1000;
                 float apertureRadius = apertureDiameter * 0.5f;
                 pinholeHit = checkPinholeIntersection(
                     rayOrigin,
@@ -212,7 +212,7 @@ namespace VkRender::RT {
 
                     // Fetch material parameters
                     const MaterialComponent& mat = m_gpuData.materials[hitEntity];
-                    float albedo = mat.albedo.x; // Assuming monochrome for simplicity
+                    float albedo = 0.7f; //mat.albedo.x; // Assuming monochrome for simplicity
                     float specular = mat.specular; // Specular coefficient
                     float shininess = mat.phongExponent;
                     float diffusion = mat.diffuse; // Diffuse coefficient
@@ -436,8 +436,8 @@ namespace VkRender::RT {
             float hitCz = intersectionCamSpace.z;
 
             // Sensor plane bounds in camera space
-            float halfW = (m_camera->m_width * 0.5f) / m_camera->m_fx;
-            float halfH = (m_camera->m_height * 0.5f) / m_camera->m_fy;
+            float halfW = (m_camera->parameters().width * 0.5f) / m_camera->parameters().fx;
+            float halfH = (m_camera->parameters().height * 0.5f) / m_camera->parameters().fy;
 
             // Check bounds
             if (intersectionCamSpace.x < -halfW || intersectionCamSpace.x > halfW ||
@@ -547,18 +547,18 @@ namespace VkRender::RT {
             }
 
 
-            float xSensor_mm = m_camera->m_focalLength * (Xc_mm / Zc_mm);
-            float ySensor_mm = m_camera->m_focalLength * (Yc_mm / Zc_mm);
+            float xSensor_mm = m_camera->parameters().focalLength * (Xc_mm / Zc_mm);
+            float ySensor_mm = m_camera->parameters().focalLength * (Yc_mm / Zc_mm);
 
-            float xPitchSize = ((m_camera->m_focalLength) / m_camera->m_fx);
-            float yPitchSize = ((m_camera->m_focalLength) / m_camera->m_fy);
+            float xPitchSize = ((m_camera->parameters().focalLength) / m_camera->parameters().fx);
+            float yPitchSize = ((m_camera->parameters().focalLength) / m_camera->parameters().fy);
 
-            float xPixel = (xSensor_mm / xPitchSize) + m_camera->m_cx;
-            float yPixel = (ySensor_mm / yPitchSize) + m_camera->m_cy;
+            float xPixel = (xSensor_mm / xPitchSize) + m_camera->parameters().cx;
+            float yPixel = (ySensor_mm / yPitchSize) + m_camera->parameters().cy;
 
 
-            //float xPixel = m_camera->m_fx * (Xc_m / Zc_m) + m_camera->m_cx;
-            //float yPixel = m_camera->m_fy * (Yc_m / Zc_m) + m_camera->m_cy;
+            //float xPixel = m_camera->parameters().fx * (Xc_m / Zc_m) + m_camera->parameters().cx;
+            //float yPixel = m_camera->parameters().fy * (Yc_m / Zc_m) + m_camera->parameters().cy;
 
 
             int px = static_cast<int>(std::round(xPixel));
@@ -568,11 +568,11 @@ namespace VkRender::RT {
             //
             // 4. Check bounds. If inside the image plane, accumulate flux
             //
-            if (px >= 0 && px < static_cast<int>(m_camera->m_width) &&
-                py >= 0 && py < static_cast<int>(m_camera->m_height)) {
+            if (px >= 0 && px < static_cast<int>(m_camera->parameters().width) &&
+                py >= 0 && py < static_cast<int>(m_camera->parameters().height)) {
                 // Convert 2D coords -> 1D index
                 size_t pixelIndex =
-                    static_cast<size_t>(py) * static_cast<size_t>(m_camera->m_width) + static_cast<size_t>(px);
+                    static_cast<size_t>(py) * static_cast<size_t>(m_camera->parameters().width) + static_cast<size_t>(px);
 
                 float gamma = 2.2f; // Gamma value > 1 brightens dark areas
                 photonFlux = std::pow(photonFlux, 1.0f / gamma);

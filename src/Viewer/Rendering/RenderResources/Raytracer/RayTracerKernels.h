@@ -69,10 +69,10 @@ namespace VkRender::RT::Kernels {
             if (pixelIndex >= m_size)
                 return;
 
-            float fx = m_camera->m_fx;
-            float fy = m_camera->m_fy;
-            float cx = m_camera->m_cx;
-            float cy = m_camera->m_cy;
+            float fx = m_camera->parameters().fx;
+            float fy = m_camera->parameters().fy;
+            float cx = m_camera->parameters().cx;
+            float cy = m_camera->parameters().cy;
             float Z_plane = -1.0f;
 
             auto mapPixelTo3D = [&](float u, float v) {

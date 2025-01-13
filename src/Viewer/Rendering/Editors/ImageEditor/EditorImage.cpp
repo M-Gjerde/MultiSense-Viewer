@@ -54,9 +54,9 @@ namespace VkRender {
             }
         }
         if (pinholeCamera) {
-            float sceneCameraAspect = pinholeCamera->m_width / pinholeCamera->m_height;
-            width = pinholeCamera->m_width;
-            height = pinholeCamera->m_height;
+            float sceneCameraAspect = pinholeCamera->parameters().width / pinholeCamera->parameters().height;
+            width = pinholeCamera->parameters().width;
+            height = pinholeCamera->parameters().height;
 
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
@@ -100,9 +100,9 @@ namespace VkRender {
             }
         }
         if (pinholeCamera) {
-            float sceneCameraAspect = pinholeCamera->m_width / pinholeCamera->m_height;
-            width = pinholeCamera->m_width;
-            height = pinholeCamera->m_height;
+            float sceneCameraAspect = pinholeCamera->parameters().width / pinholeCamera->parameters().height;
+            width = pinholeCamera->parameters().width;
+            height = pinholeCamera->parameters().height;
 
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
