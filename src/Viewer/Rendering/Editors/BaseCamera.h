@@ -7,9 +7,31 @@
 
 #include <glm/glm.hpp>
 
+#include "CameraDefinitions.h"
 #include "Viewer/Rendering/Components/TransformComponent.h"
 
 namespace VkRender {
+
+    struct ProjectionParameters {
+        float near = 0.1f;
+        float far = 100.0f;
+        float aspect = 1.6f;
+        float fov = 60.0f;
+
+        // Overload equality operator
+        bool operator==(const ProjectionParameters &other) const {
+            return near == other.near &&
+                   far == other.far &&
+                   aspect == other.aspect &&
+                   fov == other.fov;
+        }
+
+        // Overload inequality operator for convenience
+        bool operator!=(const ProjectionParameters &other) const {
+            return !(*this == other);
+        }
+    };
+
     class BaseCamera {
     public:
         virtual ~BaseCamera() = default;
@@ -22,6 +44,10 @@ namespace VkRender {
         BaseCamera(float aspect, float fov, float near, float far) : m_aspectRatio(aspect), m_fov(fov), m_zNear(near), m_zFar(far){
 
         }
+        BaseCamera(const SharedCameraSettings& sharedSettings, const ProjectionParameters& projectionParameters) : m_settings(sharedSettings), m_parameters(projectionParameters) {
+
+        }
+
 
         struct Matrices {
             glm::mat4 view = glm::mat4(1.0f);
@@ -29,11 +55,16 @@ namespace VkRender {
             glm::vec3 position = glm::vec3(0.0f);
         } matrices;
 
+        SharedCameraSettings m_settings;
+        ProjectionParameters m_parameters;
+
         float m_zNear = 0.1f;
         float m_zFar = 100.0f;
         float m_fov = 60.0f; // FOV in degrees
         float m_aspectRatio = 1.6f; // 16/10 aspect ratio
+
         bool m_flipYProjection = false;
+        bool m_flipXProjection = false;
         // Instead of storing pose in here, just rely on external transforms.
 
         virtual void updateViewMatrix(const glm::mat4& worldTransform) {
@@ -70,9 +101,11 @@ namespace VkRender {
                 m_zFar
             );
             */
-
             if (m_flipYProjection) {
                 matrices.projection[1][1] *= -1;
+            }
+            if (m_flipXProjection) {
+                matrices.projection[0][0] *= -1; // Flip X-axis for left-to-right flipping
             }
         };
 

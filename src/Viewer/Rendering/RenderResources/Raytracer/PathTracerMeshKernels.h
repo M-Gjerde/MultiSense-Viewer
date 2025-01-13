@@ -124,7 +124,7 @@ namespace VkRender::RT {
                                     atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulated);
 
-                                atomicPhotonsAccumulated.fetch_add(1);
+                                //atomicPhotonsAccumulated.fetch_add(1);
                             }
                         }
                     }
@@ -185,7 +185,7 @@ namespace VkRender::RT {
                                     atomicPhotonsAccumulated(
                                         m_gpuData.renderInformation->photonsAccumulatedDirect);
 
-                                atomicPhotonsAccumulated.fetch_add(1);
+                                //atomicPhotonsAccumulated.fetch_add(1);
                             }
                             return; // Photon path terminates
                         }
@@ -344,7 +344,7 @@ namespace VkRender::RT {
                                             atomicPhotonsAccumulated(
                                                 m_gpuData.renderInformation->photonsAccumulated);
 
-                                        atomicPhotonsAccumulated.fetch_add(1);
+                                        //atomicPhotonsAccumulated.fetch_add(1);
                                     }
                                 }
                             }
@@ -576,11 +576,13 @@ namespace VkRender::RT {
 
                 float gamma = 2.2f; // Gamma value > 1 brightens dark areas
                 photonFlux = std::pow(photonFlux, 1.0f / gamma);
-
+                m_gpuData.imageMemory[pixelIndex] += photonFlux;
                 // Atomic addition for imageMemory
+               /*
                 sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
                     m_gpuData.imageMemory[pixelIndex]);
                 atomicImageMemory.fetch_add(photonFlux);
+                */
 
                 return true;
             }

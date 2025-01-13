@@ -48,7 +48,7 @@ set(USE_CUDA FALSE)
 set(USE_ROCM FALSE)
 
 # Specify the path to OIDN
-set(OIDN_DIR "/home/magnus-desktop/Downloads/oidn-2.3.1.x86_64.linux")
+set(OIDN_DIR "/home/magnus/Downloads/oidn")
 
 # Include the OIDN headers
 include_directories("${OIDN_DIR}/include")

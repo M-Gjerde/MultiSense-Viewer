@@ -8,6 +8,7 @@
 #include "Viewer/Tools/Logger.h"
 #include "Viewer/Rendering/Editors/BaseCamera.h"
 #include "Viewer/Rendering/Editors/PinholeCamera.h"
+#include "Viewer/Rendering/Editors/CameraDefinitions.h"
 
 namespace VkRender {
     struct CameraComponent {
@@ -63,37 +64,18 @@ namespace VkRender {
         // we use a shared pointer as storage since most often we need to share this data with the rendering loop.
         std::shared_ptr<BaseCamera> camera = std::make_shared<BaseCamera>();
         // Possibly not required to be a pointer type, but we're passing it quite often so might be beneficial at the risk of safety
-        bool render = false;
-        bool flipY = false;
+
         CameraType cameraType = PERSPECTIVE;
 
+
         PinholeParameters pinholeParameters;
-
-        struct ProjectionParameters {
-            float near = 0.1f;
-            float far = 100.0f;
-            float aspect = 1.6f;
-            float fov = 60.0f;
-
-            // Overload equality operator
-            bool operator==(const ProjectionParameters &other) const {
-                return near == other.near &&
-                       far == other.far &&
-                       aspect == other.aspect &&
-                       fov == other.fov;
-            }
-
-            // Overload inequality operator for convenience
-            bool operator!=(const ProjectionParameters &other) const {
-                return !(*this == other);
-            }
-        } projectionParameters;
+        ProjectionParameters  baseCameraParameters;
+        SharedCameraSettings cameraSettings;
 
         void updateParametersChanged() {
             switch (cameraType) {
                 case PERSPECTIVE:
-                    camera = std::make_shared<BaseCamera>(projectionParameters.aspect, projectionParameters.fov,
-                                                          projectionParameters.near, projectionParameters.far);
+                    camera = std::make_shared<BaseCamera>(cameraSettings, baseCameraParameters);
                     camera->m_flipYProjection = flipY;
                     break;
                 case PINHOLE:
