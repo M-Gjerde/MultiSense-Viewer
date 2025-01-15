@@ -24,7 +24,7 @@ namespace VkRender {
         void deleteAllEntities();
 
         ~Scene() {
-            deleteAllEntities();
+
         }
         void update();
 

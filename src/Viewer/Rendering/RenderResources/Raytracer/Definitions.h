@@ -29,21 +29,22 @@ namespace VkRender::RT {
         float phongExponent;     // Shininess exponent
     };
 
-struct RenderInformation {
-    unsigned long int photonsAccumulated = 0;
-    unsigned long int photonsAccumulatedDirect = 0;
-    uint64_t frameID = 0;
-    uint64_t totalPhotons = 0;
+    struct RenderInformation {
+        unsigned long int photonsAccumulated = 0;
+        unsigned long int photonsAccumulatedDirect = 0;
+        uint64_t frameID = 0;
+        uint64_t totalPhotons = 0;
 
-};
+        float gamma = 2.2f;
+    };
     struct GPUData {
         InputAssembly *vertices = nullptr;
         uint32_t *indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
         uint32_t *vertexOffsets = nullptr;
         uint32_t *indexOffsets = nullptr;
         TransformComponent *transforms = nullptr;
-        MaterialComponent* materials = nullptr;
-        TagComponent* tagComponents = nullptr;
+        MaterialComponent *materials = nullptr;
+        TagComponent *tagComponents = nullptr;
         uint32_t numEntities = 0;
 
         uint32_t totalVertices;
@@ -54,8 +55,9 @@ struct RenderInformation {
         size_t numGaussians;
 
         float *imageMemory;
+        float *contribution;
 
-        RenderInformation* renderInformation;
+        RenderInformation *renderInformation;
     };
 
     struct PCG32 {

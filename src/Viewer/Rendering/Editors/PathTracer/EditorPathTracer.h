@@ -1,10 +1,9 @@
 //
-// Created by magnus on 7/29/24.
+// Created by magnus on 1/15/25.
 //
 
-#ifndef MULTISENSE_VIEWER_EDITORIMAGE
-#define MULTISENSE_VIEWER_EDITORIMAGE
-
+#ifndef MULTISENSE_VIEWER_EDITORPATHTRACER_H
+#define MULTISENSE_VIEWER_EDITORPATHTRACER_H
 
 #include "Viewer/Rendering/Core/DescriptorRegistry.h"
 #include "Viewer/Rendering/Core/PipelineManager.h"
@@ -17,27 +16,26 @@
 #include "Viewer/Rendering/RenderResources/DifferentiableRenderer/DiffRenderEntry.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
 #include "Viewer/Rendering/Editors/RenderCommand.h"
+#include "Viewer/Rendering/Editors/ArcballCamera.h"
 
 namespace VkRender {
 
 
-    class EditorImage : public Editor {
+    class EditorPathTracer : public Editor {
     public:
-        EditorImage() = delete;
+        EditorPathTracer() = delete;
 
-        explicit EditorImage(EditorCreateInfo &createInfo, UUID uuid);
+        explicit EditorPathTracer(EditorCreateInfo &createInfo, UUID uuid);
 
         void onUpdate() override;
 
         void onRender(CommandBuffer &drawCmdBuffers) override;
         void collectRenderCommands(
-            std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
-            uint32_t frameIndex);
+                std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
+                uint32_t frameIndex);
         void bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command);
 
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
-
-        ~EditorImage() override = default;
 
         void onMouseMove(const MouseButtons &mouse) override;
         void onPipelineReload() override;
@@ -55,7 +53,14 @@ namespace VkRender {
         std::shared_ptr<MeshInstance> m_meshInstances;
         std::shared_ptr<VulkanTexture2D> m_colorTexture;
 
+        std::unique_ptr<RT::RayTracer> m_rayTracer;
+
+        std::shared_ptr<ArcballCamera> m_editorCamera;
+        CameraComponent* m_lastActiveCamera = nullptr;
+        bool m_wasSceneCameraActive = false;
+        bool m_movedCamera = false;
+        std::shared_ptr<Scene> m_activeScene;
+        void updateActiveCamera();
     };
 }
-
-#endif //MULTISENSE_VIEWER_EDITORIMAGE
+#endif //MULTISENSE_VIEWER_EDITORPATHTRACER_H

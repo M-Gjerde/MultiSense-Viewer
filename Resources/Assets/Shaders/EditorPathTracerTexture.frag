@@ -11,7 +11,10 @@ layout (binding = 1) uniform INFO {
 
 
 void main() {
-    vec3 value = texture(samplerColorMap, inUV).rgb; // Sample the single channel
+    vec3 value = texture(samplerColorMap, vec2(1.0 - inUV.x, 1.0 - inUV.y)).rgb;
+
+    // Apply gamma correction (assuming gamma = 2.2)
+    //vec3 correctedValue = pow(value, vec3(1.0 / info.gammaCorrection)); // Correct each channel
 
     outColor = vec4(value, 1.0f);
 }

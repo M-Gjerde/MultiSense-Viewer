@@ -15,7 +15,7 @@ editors:
     x: 0
     y: 50
   - borderSize: 5
-    editorTypeDescription: "Image Editor"
+    editorTypeDescription: "Path Tracer"
     width: 40
     height: 50
     x: 40

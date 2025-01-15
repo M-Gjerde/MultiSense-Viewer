@@ -106,7 +106,6 @@ namespace VkRender {
         ImGuiContext *getMainUIContext() { return m_mainEditor->guiContext(); }
         Entity& getSelectedEntity() {return m_selectedEntity;}
         void setSelectedEntity(Entity entity){m_selectedEntity = entity;}
-        std::shared_ptr<BaseCamera> getViewportCamera();
         Editor3DViewport* getViewport();
 
         uint32_t currentFrameIndex() { return currentFrame; }

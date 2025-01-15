@@ -64,8 +64,8 @@ namespace VkRender {
             uint32_t numTiles = tileGrid.x * tileGrid.y;
 
             CameraParams params;
-            params.focalX = camera->m_fx;
-            params.focalY = camera->m_fy;
+            params.focalX = camera->parameters().fx;
+            params.focalY = camera->parameters().fy;
 
             m_preProcessData.camera = *camera;
             m_preProcessData.width = outputTexture->width();

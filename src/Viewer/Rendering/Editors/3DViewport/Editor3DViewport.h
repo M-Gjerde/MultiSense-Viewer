@@ -67,6 +67,8 @@ namespace VkRender {
         PipelineManager m_pipelineManager;
         DescriptorRegistry m_descriptorRegistry;
         std::shared_ptr<MeshInstance> m_meshInstances;
+
+        void updateActiveCamera();
     };
 }
 

@@ -93,6 +93,8 @@ namespace VkRender {
     }
 
     void Editor3DViewport::onSceneLoad(std::shared_ptr<Scene> scene) {
+        m_sceneRenderer->onSceneLoad(scene);
+
         m_editorCamera = std::make_shared<ArcballCamera>(
                 static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
@@ -147,120 +149,14 @@ namespace VkRender {
     }
 
     void Editor3DViewport::onUpdate() {
-        auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
 
         m_activeScene = m_context->activeScene();
         if (!m_activeScene)
             return;
 
-        // By default, assume we are *not* using a scene camera this frame
-        bool isSceneCameraActive = false;
-        CameraComponent *sceneCameraToUse = nullptr;
+        updateActiveCamera();
 
-        // If the user wants to render from a viewpoint, see if there's a valid scene camera
-        if (imageUI->renderFromViewpoint) {
-            auto view = m_activeScene->getRegistry().view<CameraComponent>();
-            for (auto e: view) {
-                Entity entity(e, m_activeScene.get());
-                auto &cameraComponent = entity.getComponent<CameraComponent>();
-
-                if (cameraComponent.renderFromViewpoint()) {
-                    // Use the first camera found that can render from viewpoint
-                    sceneCameraToUse = &cameraComponent;
-                    break;
-                }
-            }
-        }
-
-        // If we found a valid scene camera, use that
-        if (sceneCameraToUse) {
-            isSceneCameraActive = true;
-
-            // Detect if we’re switching from editor camera to scene camera,
-            // switching from one scene camera to another, or if the scene camera
-            // explicitly requests an update (updateTrigger).
-            bool isNewCameraSelected = (!m_wasSceneCameraActive ||
-                                        (m_lastActiveCamera != sceneCameraToUse));
-
-            if (isNewCameraSelected || sceneCameraToUse->updateTrigger()) {
-                // Recompute mesh scaling for the new camera
-                float sceneCameraAspect = 1.0f;
-                float width;
-                float height;
-                float editorAspect = static_cast<float>(m_createInfo.width) /
-                                     static_cast<float>(m_createInfo.height);
-
-                switch (sceneCameraToUse->cameraType) {
-                    case CameraComponent::PERSPECTIVE: {
-                        auto perspectiveCamera = sceneCameraToUse->getPerspectiveCamera();
-                        sceneCameraAspect = perspectiveCamera->m_parameters.aspect;
-                        width = m_createInfo.width;
-                        height = m_createInfo.height;
-                        break;
-                    }
-                    case CameraComponent::PINHOLE: {
-                        auto pinholeCamera = sceneCameraToUse->getPinholeCamera();
-                        sceneCameraAspect = pinholeCamera->parameters().width / pinholeCamera->parameters().height;
-                        width = pinholeCamera->parameters().width;
-                        height = pinholeCamera->parameters().height;
-                        break;
-                    }
-                    default:
-                        Log::Logger::getInstance()->error("Camera type not implemented for scene cameras");
-                        width = m_createInfo.width;
-                        height = m_createInfo.height;
-                        sceneCameraAspect = editorAspect;
-                        break;
-                }
-
-                float scaleX = 1.0f, scaleY = 1.0f;
-                if (editorAspect > sceneCameraAspect) {
-                    scaleX = sceneCameraAspect / editorAspect;
-                } else {
-                    scaleY = editorAspect / sceneCameraAspect;
-                }
-
-                // Reset and rebuild mesh
-                m_meshInstances.reset();
-                m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-
-                // Resize the scene renderer
-                auto &ci = m_sceneRenderer->getCreateInfo();
-                ci.width = width;
-                ci.height = height;
-                m_sceneRenderer->resize(ci);
-
-                onRenderSettingsChanged();
-            }
-
-            // Activate the scene camera
-            m_sceneRenderer->setActiveCamera(sceneCameraToUse->camera);
-            m_lastActiveCamera = sceneCameraToUse;
-        } else {
-            // No valid scene camera — revert to editor camera
-            isSceneCameraActive = false;
-
-            // Only do the mesh/aspect revert if we were using a scene camera last frame
-            if (m_wasSceneCameraActive) {
-                // Restore editor mesh and aspect ratio
-                m_meshInstances.reset();
-                m_meshInstances = EditorUtils::setupMesh(m_context);
-
-                auto &ci = m_sceneRenderer->getCreateInfo();
-                ci.width = m_createInfo.width;
-                ci.height = m_createInfo.height;
-                m_sceneRenderer->resize(ci);
-
-                onRenderSettingsChanged();
-            }
-
-            m_sceneRenderer->setActiveCamera(m_editorCamera);
-            m_lastActiveCamera = nullptr;
-        }
-
-        // Store this frame's scene camera status for next frame’s comparison
-        m_wasSceneCameraActive = isSceneCameraActive;
-
+        auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
         m_sceneRenderer->m_saveNextFrame = imageUI->saveNextFrame;
 
 
@@ -396,6 +292,9 @@ namespace VkRender {
         if (ui()->hovered && mouse.left && !ui()->resizeActive) {
             m_editorCamera->rotate(mouse.dx, mouse.dy);
         }
+        else if (ui()->hovered && mouse.right && !ui()->resizeActive) {
+            m_editorCamera->translate(mouse.dx, mouse.dy);
+        }
     }
 
     void Editor3DViewport::onMouseScroll(float change) {
@@ -405,5 +304,116 @@ namespace VkRender {
     }
 
     void Editor3DViewport::onKeyCallback(const Input &input) {
+    }
+
+    void Editor3DViewport::updateActiveCamera(){
+        auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
+        // By default, assume we are *not* using a scene camera this frame
+        bool isSceneCameraActive = false;
+        CameraComponent *sceneCameraToUse = nullptr;
+
+        // If the user wants to render from a viewpoint, see if there's a valid scene camera
+        if (imageUI->renderFromViewpoint) {
+            auto view = m_activeScene->getRegistry().view<CameraComponent>();
+            for (auto e: view) {
+                Entity entity(e, m_activeScene.get());
+                auto &cameraComponent = entity.getComponent<CameraComponent>();
+
+                if (cameraComponent.renderFromViewpoint()) {
+                    // Use the first camera found that can render from viewpoint
+                    sceneCameraToUse = &cameraComponent;
+                    break;
+                }
+            }
+        }
+
+        // If we found a valid scene camera, use that
+        if (sceneCameraToUse) {
+            isSceneCameraActive = true;
+
+            // Detect if we’re switching from editor camera to scene camera,
+            // switching from one scene camera to another, or if the scene camera
+            // explicitly requests an update (updateTrigger).
+            bool isNewCameraSelected = (!m_wasSceneCameraActive ||
+                                        (m_lastActiveCamera != sceneCameraToUse));
+
+            if (isNewCameraSelected || sceneCameraToUse->updateTrigger()) {
+                // Recompute mesh scaling for the new camera
+                float sceneCameraAspect = 1.0f;
+                float width;
+                float height;
+                float editorAspect = static_cast<float>(m_createInfo.width) /
+                                     static_cast<float>(m_createInfo.height);
+
+                switch (sceneCameraToUse->cameraType) {
+                    case CameraComponent::PERSPECTIVE: {
+                        auto perspectiveCamera = sceneCameraToUse->getPerspectiveCamera();
+                        sceneCameraAspect = perspectiveCamera->m_parameters.aspect;
+                        width = m_createInfo.width;
+                        height = m_createInfo.height;
+                        break;
+                    }
+                    case CameraComponent::PINHOLE: {
+                        auto pinholeCamera = sceneCameraToUse->getPinholeCamera();
+                        sceneCameraAspect = pinholeCamera->parameters().width / pinholeCamera->parameters().height;
+                        width = pinholeCamera->parameters().width;
+                        height = pinholeCamera->parameters().height;
+                        break;
+                    }
+                    default:
+                        Log::Logger::getInstance()->error("Camera type not implemented for scene cameras");
+                        width = m_createInfo.width;
+                        height = m_createInfo.height;
+                        sceneCameraAspect = editorAspect;
+                        break;
+                }
+
+                float scaleX = 1.0f, scaleY = 1.0f;
+                if (editorAspect > sceneCameraAspect) {
+                    scaleX = sceneCameraAspect / editorAspect;
+                } else {
+                    scaleY = editorAspect / sceneCameraAspect;
+                }
+
+                // Reset and rebuild mesh
+                m_meshInstances.reset();
+                m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+
+                // Resize the scene renderer
+                auto &ci = m_sceneRenderer->getCreateInfo();
+                ci.width = width;
+                ci.height = height;
+                m_sceneRenderer->resize(ci);
+
+                onRenderSettingsChanged();
+            }
+
+            // Activate the scene camera
+            m_sceneRenderer->setActiveCamera(sceneCameraToUse->camera);
+            m_lastActiveCamera = sceneCameraToUse;
+        } else {
+            // No valid scene camera — revert to editor camera
+            isSceneCameraActive = false;
+
+            // Only do the mesh/aspect revert if we were using a scene camera last frame
+            if (m_wasSceneCameraActive) {
+                // Restore editor mesh and aspect ratio
+                m_meshInstances.reset();
+                m_meshInstances = EditorUtils::setupMesh(m_context);
+
+                auto &ci = m_sceneRenderer->getCreateInfo();
+                ci.width = m_createInfo.width;
+                ci.height = m_createInfo.height;
+                m_sceneRenderer->resize(ci);
+
+                onRenderSettingsChanged();
+            }
+
+            m_sceneRenderer->setActiveCamera(m_editorCamera);
+            m_lastActiveCamera = nullptr;
+        }
+
+        // Store this frame's scene camera status for next frame’s comparison
+        m_wasSceneCameraActive = isSceneCameraActive;
     }
 };

@@ -12,13 +12,15 @@
 namespace VkRender{
     enum class DescriptorManagerType : uint32_t;
 
+
+
     class DescriptorSetManager {
     public:
         DescriptorSetManager(
             VulkanDevice& device,
             const std::vector<VkDescriptorSetLayoutBinding>& bindings,
             DescriptorManagerType descriptorManagerType,
-            uint32_t maxDescriptorSets = 1000);
+            uint32_t maxDescriptorSets = 100);
         ~DescriptorSetManager();
         VkDescriptorSetLayout& getDescriptorSetLayout(){return m_descriptorSetLayout;}
 
@@ -35,6 +37,7 @@ namespace VkRender{
         std::unordered_map<size_t, VkDescriptorSet> m_descriptorSetCache;
         uint32_t m_maxDescriptorSets;
         DescriptorManagerType m_descriptorManagerType;
+        uint32_t m_allocatedDescriptors = 0;
 
         size_t hashDescriptorImageInfo(const VkDescriptorImageInfo& imageInfo);
         size_t hashDescriptorBufferInfo(const VkDescriptorBufferInfo& bufferInfo);

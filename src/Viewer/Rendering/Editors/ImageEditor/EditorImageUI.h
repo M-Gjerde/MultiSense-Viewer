@@ -11,20 +11,6 @@ namespace VkRender {
 
     struct EditorImageUI : public EditorUI {
 
-        bool uploadScene = false;
-        bool render = false;
-        bool saveImage = false;
-        bool denoise = false;
-
-        bool clearImageMemory = false;
-
-        std::string kernel = "Path Tracer: Mesh";
-        std::string kernelDevice = "GPU";
-        bool switchKernelDevice = false;
-
-        int photonCount = 1e6;
-        int numBounces = 32;
-
         struct ShaderSelection {
             int someVariable = 0;
             float gammaCorrection = 2.2f;

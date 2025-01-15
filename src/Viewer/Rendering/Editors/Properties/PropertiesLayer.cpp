@@ -18,225 +18,6 @@
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 
 namespace VkRender {
-    /*
-    struct CameraModel {
-        enum Type {
-            PINHOLE,
-            SIMPLE_PINHOLE,
-            OPENCV,
-            SIMPLE_RADIAL,
-            // Add other models as needed
-            UNKNOWN
-        };
-
-        static Type fromString(const std::string& modelStr) {
-            if (modelStr == "PINHOLE") return PINHOLE;
-            if (modelStr == "SIMPLE_PINHOLE") return SIMPLE_PINHOLE;
-            if (modelStr == "OPENCV") return OPENCV;
-            if (modelStr == "SIMPLE_RADIAL") return SIMPLE_RADIAL;
-            return UNKNOWN;
-        }
-    };
-
-    struct ColmapCamera {
-        uint32_t camera_id;
-        CameraModel::Type model;
-        uint32_t width;
-        uint32_t height;
-        std::vector<double> params; // Intrinsic parameters
-    };
-
-    struct Image {
-        uint32_t image_id;
-        glm::quat rotation; // Quaternion representing rotation (qw, qx, qy, qz)
-        glm::vec3 translation; // Translation vector (tx, ty, tz)
-        uint32_t camera_id;
-        std::string image_name;
-        // Add other fields if needed
-    };
-
-    bool
-    parseCameras(const std::filesystem::path& camerasFilePath, std::unordered_map<uint32_t, ColmapCamera>& cameras) {
-        std::ifstream file(camerasFilePath);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open " << camerasFilePath << std::endl;
-            return false;
-        }
-
-        std::string line;
-        while (std::getline(file, line)) {
-            // Skip comments and empty lines
-            if (line.empty() || line[0] == '#') continue;
-
-            std::istringstream iss(line);
-            uint32_t camera_id;
-            std::string model_str;
-            uint32_t width, height;
-            std::vector<double> params;
-
-            iss >> camera_id >> model_str >> width >> height;
-
-            CameraModel::Type model = CameraModel::fromString(model_str);
-            if (model == CameraModel::UNKNOWN) {
-                std::cerr << "Unknown camera model: " << model_str << std::endl;
-                continue;
-            }
-
-            double param;
-            while (iss >> param) {
-                params.push_back(param);
-            }
-
-            ColmapCamera camera = {camera_id, model, width, height, params};
-            cameras[camera_id] = camera;
-        }
-
-        return true;
-    }
-
-    bool parseImages(const std::filesystem::path& imagesFilePath, std::unordered_map<uint32_t, Image>& images) {
-        std::ifstream file(imagesFilePath);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open " << imagesFilePath << std::endl;
-            return false;
-        }
-
-        std::string line;
-        while (std::getline(file, line)) {
-            // Skip comments and empty lines
-            if (line.empty() || line[0] == '#') continue;
-
-            std::istringstream iss(line);
-            uint32_t image_id;
-            double qw, qx, qy, qz;
-            double tx, ty, tz;
-            uint32_t camera_id;
-            std::string image_name;
-
-            iss >> image_id >> qw >> qx >> qy >> qz >> tx >> ty >> tz >> camera_id >> image_name;
-            // Handle image names with spaces
-            while (iss >> line) {
-                image_name += " " + line;
-            }
-
-            // Read and discard the next line (2D points)
-            std::getline(file, line);
-
-            Image image;
-            image.image_id = image_id;
-            image.rotation = glm::quat(qw, qx, qy, qz);
-            image.translation = glm::vec3(tx, ty, tz);
-            image.camera_id = camera_id;
-            image.image_name = image_name;
-
-            images[image_id] = image;
-        }
-
-        return true;
-    }
-
-    struct FOV {
-        double horizontal; // In radians
-        double vertical; // In radians
-    };
-
-    FOV computeFOV(const ColmapCamera& camera) {
-        FOV fov = {0.0, 0.0};
-
-        if (camera.model == CameraModel::PINHOLE || camera.model == CameraModel::OPENCV) {
-            // For PINHOLE and OPENCV models, params are [fx, fy, cx, cy]
-            double fx = camera.params[0];
-            double fy = camera.params[1];
-            fov.horizontal = 2.0 * atan(camera.width / (2.0 * fx));
-            fov.vertical = 2.0 * atan(camera.height / (2.0 * fy));
-        }
-        else if (camera.model == CameraModel::SIMPLE_PINHOLE) {
-            // For SIMPLE_PINHOLE, params are [f, cx, cy]
-            double f = camera.params[0];
-            fov.horizontal = 2.0 * atan(camera.width / (2.0 * f));
-            fov.vertical = 2.0 * atan(camera.height / (2.0 * f));
-        }
-        else {
-            std::cerr << "FOV computation not implemented for this camera model." << std::endl;
-        }
-
-        return fov;
-    }
-
-    void PropertiesLayer::addEntitiesFromColmap(const std::filesystem::path& colmapFolderPath) {
-        std::filesystem::path imagesTXTfile = colmapFolderPath / "sparse" / "0" / "images.txt";
-        std::filesystem::path camerasTXTfile = colmapFolderPath / "sparse" / "0" / "cameras.txt";
-
-        std::unordered_map<uint32_t, ColmapCamera> cameras;
-        if (!parseCameras(camerasTXTfile, cameras)) {
-            std::cerr << "Failed to parse cameras.txt" << std::endl;
-        }
-
-        std::unordered_map<uint32_t, Image> images;
-        if (!parseImages(imagesTXTfile, images)) {
-            std::cerr << "Failed to parse images.txt" << std::endl;
-        }
-
-        // Now, for each image, get the camera info and compute FOV
-        for (const auto& [image_id, image] : images) {
-            auto camera_it = cameras.find(image.camera_id);
-            if (camera_it == cameras.end()) {
-                std::cerr << "Camera ID " << image.camera_id << " not found for image " << image.image_name
-                    << std::endl;
-                continue;
-            }
-
-            const ColmapCamera& camera = camera_it->second;
-
-            // Compute FOV
-            FOV fov = computeFOV(camera);
-
-            // Output the information
-            std::cout << "Image ID: " << image.image_id << std::endl;
-            std::cout << "Image Name: " << image.image_name << std::endl;
-            std::cout << "Camera ID: " << image.camera_id << std::endl;
-            std::cout << "Position (T): [" << image.translation.x << ", " << image.translation.y << ", "
-                << image.translation.z << "]" << std::endl;
-            std::cout << "Rotation (Q): [" << image.rotation.w << ", " << image.rotation.x << ", " << image.rotation.y
-                << ", " << image.rotation.z << "]" << std::endl;
-            std::cout << "Width: " << camera.width << ", Height: " << camera.height << std::endl;
-            std::cout << "FOV Horizontal (degrees): " << glm::degrees(fov.horizontal) << std::endl;
-            std::cout << "FOV Vertical (degrees): " << glm::degrees(fov.vertical) << std::endl;
-            std::cout << "----------------------------------------" << std::endl;
-
-            // You can now create entities or perform further processing with this data
-            auto scene = m_context->activeScene();
-            auto entity = scene->createEntity(image.image_name);
-            Camera newCamera(camera.width, camera.height);
-            newCamera.setType(Camera::flycam);
-            newCamera.fov() = std::min(glm::degrees(fov.horizontal), glm::degrees(fov.vertical));
-
-            auto& cameraComponent = entity.addComponent<CameraComponent>(newCamera);
-            cameraComponent.renderFromViewpoint() = false;
-
-            auto& transformComponent = entity.getComponent<TransformComponent>();
-            glm::quat q_wc(image.rotation.w, image.rotation.x, image.rotation.y, image.rotation.z);
-            glm::quat q_cw = glm::conjugate(q_wc);
-            glm::vec3 position = -(q_cw * image.translation);
-
-
-            glm::quat q(1.0f, 0.0f, 0.0f, 0.0f);
-            transformComponent.setPosition(position);
-            transformComponent.setRotationQuaternion(q_cw * glm::quat(0.0f, 1.0f, 0.0f, 0.0f));
-            //transformComponent.setRotationQuaternion(q_cw);
-            transformComponent.setScale({0.5f, 0.5f, 0.5f});
-
-            auto& material = entity.addComponent<MaterialComponent>();
-            material.fragmentShaderName = "defaultTexture.frag";
-            material.albedoTexturePath = "";
-
-
-            entity.setParent(m_selectionContext);
-            m_selectionContext.getComponent<GroupComponent>().colmapPath = colmapFolderPath;
-        }
-
-    }
-    */
     /** Called once upon this object creation**/
     void PropertiesLayer::onAttach() {
     }
@@ -592,44 +373,6 @@ namespace VkRender {
                 component.updateParametersChanged();
             }
             component.camera->updateProjectionMatrix();
-
-            /*
-            // Controls for Camera Resolution (Width and Height)
-            int width = static_cast<int>(component.camera->width());
-            int height = static_cast<int>(component.camera->height());
-            ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::InputInt("Width", &width)) {
-                if (width > 0) {
-                    //component.camera->setCameraResolution(static_cast<uint32_t>(width), component.camera->height());
-                    component.camera->updateProjectionMatrix();
-                }
-            }
-            ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::InputInt("Height", &height)) {
-                if (height > 0) {
-                    //component.camera->setCameraResolution(component.camera->width(), static_cast<uint32_t>(height));
-                    component.camera->updateProjectionMatrix();
-                }
-            }
-
-
-            static const std::array<const char*, 3> cameraTypeNames = {"Arcball", "Flycam", "Pinhole"};
-
-            // Variable to store the current camera type as an index
-            auto currentTypeIndex = static_cast<int32_t>(component.camera->m_type);
-
-            // Dropdown for selecting the camera type
-            if (ImGui::Combo("Camera Type", &currentTypeIndex, cameraTypeNames.data(), static_cast<int>(cameraTypeNames.size()))) {
-                // Update the camera type based on the selected index
-                component.camera->setType(static_cast<Camera::CameraType>(currentTypeIndex));
-
-                // Optionally update other settings when the type changes
-                if (component.camera->m_type == Camera::CameraType::pinhole) {
-                    // Adjust projection matrix or settings for the pinhole camera
-                    component.camera->updateProjectionMatrix();
-                }
-            }
-            */
         });
 
         drawComponent<MeshComponent>("Mesh", entity, [this, &entity](MeshComponent &component) {
@@ -916,7 +659,7 @@ namespace VkRender {
                 }
             }
         });
-        /*
+
         drawComponent<GaussianComponent>("Gaussian Model", entity, [this](auto &component) {
             ImGui::Text("Gaussian Model Properties");
 
@@ -978,24 +721,11 @@ namespace VkRender {
                 }
             }
         });
-        */
+
 
 
         drawComponent<GroupComponent>("Group", entity, [this](auto &component) {
-            /*
-            ImGui::Text("Load cameras from file");
-            ImGui::Text("Colmap Path: %s", component.colmapPath.string().c_str());
-            if (ImGui::Button("Set Colmap Folder")) {
-                std::vector<std::string> types{""};
-                EditorUtils::openImportFolderDialog("Load 3DGS .ply file", types, LayerUtils::COLMAP_FOLDER,
-                                                    &m_loadFileFuture);
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Load colmap from path")) {
-                if (std::filesystem::exists(component.colmapPath))
-                    addEntitiesFromColmap(component.colmapPath);
-            }
-            */
+
         });
     }
 

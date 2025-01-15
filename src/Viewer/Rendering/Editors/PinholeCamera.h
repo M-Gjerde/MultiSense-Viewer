@@ -46,23 +46,7 @@ namespace VkRender {
         PinholeParameters m_parameters{};
         SharedCameraSettings m_settings{};
 
-        const PinholeParameters& parameters() const{return m_parameters;}
-        /*
-        PinholeCamera(uint32_t width, uint32_t height, float fx, float fy, float cx, float cy,
-                      float focalLength = 10.0f, float zNear = 0.1f,
-                      float zFar = 100.0f) {
-            m_width = static_cast<float>(width);
-            m_height = static_cast<float>(height);
-            m_fx = fx;
-            m_fy = fy;
-            m_cx = cx;
-            m_cy = cy;
-            m_focalLength = focalLength;
-            m_zNear = zNear;
-            m_zFar = zFar;
-            PinholeCamera::updateProjectionMatrix();
-        }
-        */
+        [[nodiscard]] const PinholeParameters& parameters() const{return m_parameters;}
 
         explicit PinholeCamera(const SharedCameraSettings& sharedSettings, const PinholeParameters& pinholeParameters) : m_settings(sharedSettings), m_parameters(pinholeParameters){
             PinholeCamera::updateProjectionMatrix();

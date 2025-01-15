@@ -5,6 +5,8 @@
 #include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
 
+#include <utility>
+
 #include "LightTracerKernels.h"
 #include "Viewer/Rendering/RenderResources/Raytracer/PathTracerMeshKernels.h"
 
@@ -17,7 +19,6 @@ namespace VkRender::RT {
             ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU)) {
         ;
 
-        m_scene = scene;
         m_width = width;
         m_height = height;
         // Load the scene into gpu memory
@@ -29,131 +30,29 @@ namespace VkRender::RT {
     }
 
 
-    void RayTracer::update(EditorImageUI &editorImageUI, std::shared_ptr<Scene> scene) {
+    void RayTracer::update(EditorPathTracerLayerUI &uiLayer, std::shared_ptr<Scene> scene) {
 
-        {
-            auto cameraEntity = m_scene->getEntityByName("Camera");
-            if (cameraEntity) {
-                auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
-                auto transform = cameraEntity.getComponent<TransformComponent>();
-                if (transform.moved())
-                    resetState();
-            }
-        }
 
-        if (editorImageUI.switchKernelDevice) {
+        if (m_cameraTransform.moved())
+            resetState();
+
+
+        if (uiLayer.switchKernelDevice) {
             freeResources();
-            if (editorImageUI.kernelDevice == "CPU") {
+            if (uiLayer.kernelDevice == "CPU") {
                 m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
-            } else if (editorImageUI.kernelDevice == "GPU") {
+            } else if (uiLayer.kernelDevice == "GPU") {
                 m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
             }
-            upload(scene);
+            upload(std::move(scene));
             resetState();
-            editorImageUI.switchKernelDevice = false;
+            uiLayer.switchKernelDevice = false;
         }
-        /*
-         {
-            auto view = m_scene->getRegistry().view<CameraComponent, TransformComponent, MeshComponent>();
-            for (auto e: view) {
-                Entity entity(e, m_scene.get());
-                auto &transform = entity.getComponent<TransformComponent>();
-                auto camera = std::dynamic_pointer_cast<PinholeCamera>(entity.getComponent<CameraComponent>().camera);
-                if (!camera || entity.getComponent<CameraComponent>().renderFromViewpoint())
-                    continue;
-                float fx = camera->m_fx;
-                float fy = camera->m_fy;
-                float cx = camera->m_cx;
-                float cy = camera->m_cy;
-                float width = camera->m_width;
-                float height = camera->m_height;
 
-
-                // Helper lambda to create a ray entity
-                auto updateRayEntity = [&](Entity cornerEntity, float x, float y) {
-                    MeshComponent *mesh;
-                    if (!cornerEntity.hasComponent<MeshComponent>())
-                        mesh = &cornerEntity.addComponent<MeshComponent>(CYLINDER);
-                    else
-                        mesh = &cornerEntity.getComponent<MeshComponent>();
-
-                    if (!cornerEntity.hasComponent<TemporaryComponent>())
-                        cornerEntity.addComponent<TemporaryComponent>();
-
-
-                    cornerEntity.getComponent<TransformComponent>() = transform;
-                    auto cylinderParams = std::dynamic_pointer_cast<CylinderMeshParameters>(mesh->meshParameters);
-                    // The cylinder magnitude is how long the cylinder is.
-                    // Start the cylinder at the camera origin
-                    cylinderParams->origin = glm::vec3(0.0f, 0.0f, 0.0f);
-
-                    // Choose a plane at Z = -1 for visualization. Objects in front of the camera have negative Z.
-                    float Z_plane = -1.0f;
-
-                    auto mapPixelTo3D = [&](float u, float v) {
-                        float X = -(u - cx) * Z_plane / fx;
-                        float Y = -(v - cy) * Z_plane / fy; // Notice the minus sign before (v - cy)
-                        float Z = Z_plane;
-                        return glm::vec3(X, Y, Z);
-                    };
-                    glm::vec3 direction = mapPixelTo3D(x, y);
-
-
-                    cylinderParams->direction = glm::normalize(direction);
-                    cylinderParams->magnitude = glm::length(direction);
-                    cylinderParams->radius = 0.01f;
-                    mesh->updateMeshData = true;
-                };
-
-                auto groupEntity = m_scene->getOrCreateEntityByName("Rays");
-                if (!groupEntity.hasComponent<GroupComponent>())
-                    groupEntity.addComponent<GroupComponent>();
-                if (!groupEntity.hasComponent<TemporaryComponent>())
-                    groupEntity.addComponent<TemporaryComponent>();
-                if (!groupEntity.hasComponent<VisibleComponent>())
-                    groupEntity.addComponent<VisibleComponent>(); // For visibility toggling
-
-                auto topLeftEntity = m_scene->getOrCreateEntityByName("TopLeft");
-                auto topRightEntity = m_scene->getOrCreateEntityByName("TopRight");
-
-                auto bottomLeftEntity = m_scene->getOrCreateEntityByName("BottomLeft");
-                auto bottomRightEntity = m_scene->getOrCreateEntityByName("BottomRight");
-
-
-                updateRayEntity(topLeftEntity, 0.0f, 0.0f);
-                updateRayEntity(topRightEntity, width, 0.0f);
-                updateRayEntity(bottomLeftEntity, width, height);
-                updateRayEntity(bottomRightEntity, 0.0f, height);
-
-                topLeftEntity.setParent(groupEntity);
-                topRightEntity.setParent(groupEntity);
-                bottomLeftEntity.setParent(groupEntity);
-                bottomRightEntity.setParent(groupEntity);
-
-                //auto centerRayEntity = m_scene->getOrCreateEntityByName("CenterRay");
-                //updateRayEntity(centerRayEntity, width / 2, height / 2);
-
-                // Generate rays for every 10th pixel
-                for (int x = 0; x < width; x += 100) {
-                    for (int y = 0; y < height; y += 100) {
-                        // Create a unique name for the ray entity
-                        std::string rayEntityName = "Ray_" + std::to_string(x) + "_" + std::to_string(y);
-
-                        // Get or create the entity for this ray
-                        auto rayEntity = m_scene->getOrCreateEntityByName(rayEntityName);
-                        rayEntity.setParent(groupEntity);
-
-                        // Update the ray entity's position or other attributes based on the pixel coordinates
-                        updateRayEntity(rayEntity, static_cast<float>(x), static_cast<float>(y));
-                    }
-                }
-            }
-        }
-        */
         auto &queue = m_selector.getQueue();
 
         m_renderInformation->frameID++;
-        int simulatePhotonCount = editorImageUI.photonCount;
+        int simulatePhotonCount = uiLayer.photonCount;
 
         std::vector<PCG32> rng(simulatePhotonCount);
         for (int i = 0; i < simulatePhotonCount; ++i)
@@ -163,42 +62,42 @@ namespace VkRender::RT {
         queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
 
 
-        if (editorImageUI.clearImageMemory) {
+        if (uiLayer.clearImageMemory) {
             resetState();
         }
         m_renderInformation->totalPhotons += simulatePhotonCount;
-
+        m_renderInformation->gamma = uiLayer.shaderSelection.gammaCorrection;
         /** Any shared GPU/CPU debug information must be stored before here**/
         queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
-        auto cameraEntity = m_scene->getEntityByName("Camera");
-        if (cameraEntity && !editorImageUI.clearImageMemory) {
-            auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
-            auto transform = cameraEntity.getComponent<TransformComponent>();
+        //auto cameraEntity = m_scene->getEntityByName("Camera");
+        if (!uiLayer.clearImageMemory) {
+            //auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
+            //auto transform = cameraEntity.getComponent<TransformComponent>();
 
-            PinholeCamera cam;
             auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
-            queue.memcpy(cameraGPU, camera.get(), sizeof(PinholeCamera));
+            queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
 
             queue.wait();
 
-            if (editorImageUI.kernel == "Path Tracer: 2DGS") {
+            if (uiLayer.kernel == "Path Tracer: 2DGS") {
                 sycl::range<1> globalRange(simulatePhotonCount);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     RenderKernelLightTracing kernel(m_gpu, simulatePhotonCount, m_width, m_height,
                                                     m_width * m_height * 4,
-                                                    transform, cameraGPU, 1);
+                                                    m_cameraTransform, cameraGPU, 1);
                     cgh.parallel_for(globalRange, kernel);
                 });
-            } else if (editorImageUI.kernel == "Path Tracer: Mesh") {
+            } else if (uiLayer.kernel == "Path Tracer: Mesh") {
                 sycl::range<1> globalRange(simulatePhotonCount);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
-                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, transform, cameraGPU, editorImageUI.numBounces, rngGPU);
+                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                                 uiLayer.numBounces, rngGPU);
                     cgh.parallel_for(globalRange, kernel);
                 });
-            } else if (editorImageUI.kernel == "Hit-Test") {
+            } else if (uiLayer.kernel == "Hit-Test") {
                 uint32_t tileWidth = 16;
                 uint32_t tileHeight = 16;
                 sycl::range localWorkSize(tileHeight, tileWidth);
@@ -206,7 +105,7 @@ namespace VkRender::RT {
 
                 queue.submit([&](sycl::handler &h) {
                     // Create a kernel instance with the required parameters
-                    Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, transform,
+                    Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, m_cameraTransform,
                                                  cameraGPU);
                     h.parallel_for<class RenderKernel>(
                             sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
@@ -221,23 +120,25 @@ namespace VkRender::RT {
         /** Any shared GPU/CPU debug information must be stored after here**/
         queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
         queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
-        if (editorImageUI.saveImage)
+        if (uiLayer.saveImage)
             saveAsPFM("cornell.pfm");
 
         Log::Logger::getInstance()->info(
                 "simulated {:.3f} Billion photons. About {}k Photons hit the sensor, of which {}k hit directly",
                 m_renderInformation->totalPhotons / 1e9 * m_renderInformation->frameID,
-                (static_cast<float>(m_renderInformation->photonsAccumulatedDirect + m_renderInformation->photonsAccumulated)) / 1000,
+                (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
+                                    m_renderInformation->photonsAccumulated)) / 1000,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
     }
 
-    void RayTracer::resetState(){
+    void RayTracer::resetState() {
         m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
         m_frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
     }
-    void RayTracer::upload(std::shared_ptr<Scene> scene) {
+
+    void RayTracer::upload(std::weak_ptr<Scene> scene) {
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
@@ -246,6 +147,10 @@ namespace VkRender::RT {
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
+            throw std::runtime_error("Device memory allocation failed.");
+        }        // Allocate device memory for RGBA image (4 floats per pixel)
+        m_gpu.contribution = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
+        if (!m_gpu.contribution) {
             throw std::runtime_error("Device memory allocation failed.");
         }
 
@@ -268,6 +173,14 @@ namespace VkRender::RT {
 
     void RayTracer::freeResources() {
         m_selector.getQueue().wait();
+        if (m_gpu.imageMemory) {
+            sycl::free(m_gpu.imageMemory, m_selector.getQueue());
+            m_gpu.imageMemory = nullptr;
+        }
+        if (m_gpu.contribution) {
+            sycl::free(m_gpu.contribution, m_selector.getQueue());
+            m_gpu.contribution = nullptr;
+        }
         if (m_gpu.vertices) {
             sycl::free(m_gpu.vertices, m_selector.getQueue());
             m_gpu.vertices = nullptr;
@@ -303,14 +216,15 @@ namespace VkRender::RT {
         m_selector.getQueue().wait();
     }
 
-    void RayTracer::uploadGaussianData(std::shared_ptr<Scene> &scene) {
+    void RayTracer::uploadGaussianData(std::weak_ptr<Scene> &scene) {
+        auto scenePtr = scene.lock();
         auto &queue = m_selector.getQueue();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
-        auto &registry = scene->getRegistry();
+        auto &registry = scenePtr->getRegistry();
         // Find all entities with GaussianComponent
-        auto view = scene->getRegistry().view<GaussianComponent2DGS>();
+        auto view = scenePtr->getRegistry().view<GaussianComponent2DGS>();
         for (auto e: view) {
-            auto &component = Entity(e, scene.get()).getComponent<GaussianComponent2DGS>();
+            auto &component = Entity(e, scenePtr.get()).getComponent<GaussianComponent2DGS>();
             for (size_t i = 0; i < component.size(); ++i) {
                 GaussianInputAssembly point{};
                 point.position = component.positions[i];
@@ -333,7 +247,9 @@ namespace VkRender::RT {
         m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
     }
 
-    void RayTracer::uploadVertexData(std::shared_ptr<Scene> &scene) {
+    void RayTracer::uploadVertexData(std::weak_ptr<Scene> &scene) {
+
+        auto scenePtr = scene.lock();
         std::vector<InputAssembly> vertexData;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> indexOffsets;       // Offset for each entity's indices
@@ -341,12 +257,12 @@ namespace VkRender::RT {
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
         std::vector<MaterialComponent> materials; // Transformation matrices for entities
         std::vector<TagComponent> tagComponents; // Transformation matrices for entities
-        auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
+        auto view = scenePtr->getRegistry().view<MeshComponent, TransformComponent>();
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
 
         for (auto e: view) {
-            Entity entity(e, scene.get());
+            Entity entity(e, scenePtr.get());
             std::string tag = entity.getName();
             // Initialize a flag to determine if we should skip this entity
             bool skipEntity = false;
@@ -378,7 +294,6 @@ namespace VkRender::RT {
             if (skipEntity) {
                 continue;
             }
-
 
 
             auto &transform = entity.getComponent<TransformComponent>();
@@ -447,9 +362,7 @@ namespace VkRender::RT {
             delete[] m_imageMemory;
         }
 
-        if (m_gpu.imageMemory) {
-            sycl::free(m_gpu.imageMemory, m_selector.getQueue());
-        }
+        freeResources();
     }
 
     void RayTracer::saveAsPPM(const std::filesystem::path &filename) const {
@@ -514,4 +427,122 @@ namespace VkRender::RT {
 
         file.close();
     }
+    // For editorCamera
+    void RayTracer::setActiveCamera(const TransformComponent &transformComponent,float width, float height) {
+            PinholeParameters pinholeParameters;
+            SharedCameraSettings cameraSettings;
+            pinholeParameters.width = width;
+            pinholeParameters.height = height;
+            pinholeParameters.cx = width / 2;
+            pinholeParameters.cy = height / 2;
+            pinholeParameters.fx = 600.0f;
+            pinholeParameters.fy = 600.0f;
+            PinholeCamera camera = PinholeCamera(cameraSettings, pinholeParameters);
+            m_camera = std::move(camera);
+            m_cameraTransform = transformComponent;
+    }
+    // For pinhole scene camera
+    void RayTracer::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent* cameraTransform) {
+            m_camera = *camera;
+            m_cameraTransform = *cameraTransform;
+    }
+
+    /* Draw rays
+     {
+        auto view = m_scene->getRegistry().view<CameraComponent, TransformComponent, MeshComponent>();
+        for (auto e: view) {
+            Entity entity(e, m_scene.get());
+            auto &transform = entity.getComponent<TransformComponent>();
+            auto camera = std::dynamic_pointer_cast<PinholeCamera>(entity.getComponent<CameraComponent>().camera);
+            if (!camera || entity.getComponent<CameraComponent>().renderFromViewpoint())
+                continue;
+            float fx = camera->m_fx;
+            float fy = camera->m_fy;
+            float cx = camera->m_cx;
+            float cy = camera->m_cy;
+            float width = camera->m_width;
+            float height = camera->m_height;
+
+
+            // Helper lambda to create a ray entity
+            auto updateRayEntity = [&](Entity cornerEntity, float x, float y) {
+                MeshComponent *mesh;
+                if (!cornerEntity.hasComponent<MeshComponent>())
+                    mesh = &cornerEntity.addComponent<MeshComponent>(CYLINDER);
+                else
+                    mesh = &cornerEntity.getComponent<MeshComponent>();
+
+                if (!cornerEntity.hasComponent<TemporaryComponent>())
+                    cornerEntity.addComponent<TemporaryComponent>();
+
+
+                cornerEntity.getComponent<TransformComponent>() = transform;
+                auto cylinderParams = std::dynamic_pointer_cast<CylinderMeshParameters>(mesh->meshParameters);
+                // The cylinder magnitude is how long the cylinder is.
+                // Start the cylinder at the camera origin
+                cylinderParams->origin = glm::vec3(0.0f, 0.0f, 0.0f);
+
+                // Choose a plane at Z = -1 for visualization. Objects in front of the camera have negative Z.
+                float Z_plane = -1.0f;
+
+                auto mapPixelTo3D = [&](float u, float v) {
+                    float X = -(u - cx) * Z_plane / fx;
+                    float Y = -(v - cy) * Z_plane / fy; // Notice the minus sign before (v - cy)
+                    float Z = Z_plane;
+                    return glm::vec3(X, Y, Z);
+                };
+                glm::vec3 direction = mapPixelTo3D(x, y);
+
+
+                cylinderParams->direction = glm::normalize(direction);
+                cylinderParams->magnitude = glm::length(direction);
+                cylinderParams->radius = 0.01f;
+                mesh->updateMeshData = true;
+            };
+
+            auto groupEntity = m_scene->getOrCreateEntityByName("Rays");
+            if (!groupEntity.hasComponent<GroupComponent>())
+                groupEntity.addComponent<GroupComponent>();
+            if (!groupEntity.hasComponent<TemporaryComponent>())
+                groupEntity.addComponent<TemporaryComponent>();
+            if (!groupEntity.hasComponent<VisibleComponent>())
+                groupEntity.addComponent<VisibleComponent>(); // For visibility toggling
+
+            auto topLeftEntity = m_scene->getOrCreateEntityByName("TopLeft");
+            auto topRightEntity = m_scene->getOrCreateEntityByName("TopRight");
+
+            auto bottomLeftEntity = m_scene->getOrCreateEntityByName("BottomLeft");
+            auto bottomRightEntity = m_scene->getOrCreateEntityByName("BottomRight");
+
+
+            updateRayEntity(topLeftEntity, 0.0f, 0.0f);
+            updateRayEntity(topRightEntity, width, 0.0f);
+            updateRayEntity(bottomLeftEntity, width, height);
+            updateRayEntity(bottomRightEntity, 0.0f, height);
+
+            topLeftEntity.setParent(groupEntity);
+            topRightEntity.setParent(groupEntity);
+            bottomLeftEntity.setParent(groupEntity);
+            bottomRightEntity.setParent(groupEntity);
+
+            //auto centerRayEntity = m_scene->getOrCreateEntityByName("CenterRay");
+            //updateRayEntity(centerRayEntity, width / 2, height / 2);
+
+            // Generate rays for every 10th pixel
+            for (int x = 0; x < width; x += 100) {
+                for (int y = 0; y < height; y += 100) {
+                    // Create a unique name for the ray entity
+                    std::string rayEntityName = "Ray_" + std::to_string(x) + "_" + std::to_string(y);
+
+                    // Get or create the entity for this ray
+                    auto rayEntity = m_scene->getOrCreateEntityByName(rayEntityName);
+                    rayEntity.setParent(groupEntity);
+
+                    // Update the ray entity's position or other attributes based on the pixel coordinates
+                    updateRayEntity(rayEntity, static_cast<float>(x), static_cast<float>(y));
+                }
+            }
+        }
+    }
+    */
 }

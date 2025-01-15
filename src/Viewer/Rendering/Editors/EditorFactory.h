@@ -15,6 +15,7 @@
 #include "Viewer/Rendering/Editors/Test/EditorTest.h"
 #include "Viewer/Rendering/Editors/Properties/EditorProperties.h"
 #include "Viewer/Rendering/Editors/ImageEditor/EditorImage.h"
+#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracer.h"
 #include "SceneRenderer.h"
 #ifdef SYCL_ENABLED
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.h"
@@ -31,12 +32,6 @@ namespace VkRender {
             registerEditor(EditorType::SceneHierarchy, [](EditorCreateInfo &ci, UUID uuid) {
                 return std::make_unique<EditorSceneHierarchy>(ci, uuid);
             });
-            registerEditor(EditorType::MultiSenseViewer_Sidebar, [](EditorCreateInfo &ci, UUID uuid) {
-                return std::make_unique<SideBarEditor>(ci, uuid);
-            });
-            registerEditor(EditorType::MultiSenseViewer_Configuration, [](EditorCreateInfo &ci, UUID uuid) {
-                return std::make_unique<ConfigurationEditor>(ci, uuid);
-            });
             registerEditor(EditorType::Viewport3D, [](EditorCreateInfo &ci, UUID uuid) {
                 return std::make_unique<VkRender::Editor3DViewport>(ci, uuid);
             });
@@ -52,6 +47,9 @@ namespace VkRender {
 #ifdef SYCL_ENABLED
             registerEditor(EditorType::GaussianViewer, [](EditorCreateInfo &ci, UUID uuid) {
                 return std::make_unique<EditorGaussianViewer>(ci, uuid);
+            });
+            registerEditor(EditorType::PathTracer, [](EditorCreateInfo &ci, UUID uuid) {
+                return std::make_unique<EditorPathTracer>(ci, uuid);
             });
 #endif
         }

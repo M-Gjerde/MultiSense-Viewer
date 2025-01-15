@@ -20,6 +20,19 @@ namespace VkRender {
         // TODO This only works as long as we're not confusing Viewport3DTexture with SceneRenderer
     };
 
+    static std::string descriptorManagerTypeToString(DescriptorManagerType type){
+        switch (type) {
+            case DescriptorManagerType::MVP:
+                return "MVP";
+            case DescriptorManagerType::Material:
+                return "Material";
+            case DescriptorManagerType::DynamicCameraGizmo:
+                return "DynamicCameraGizmo";
+            case DescriptorManagerType::Viewport3DTexture:
+                return "Viewport3DTexture";
+        }
+    }
+
     class DescriptorRegistry {
     public:
         DescriptorSetManager &getManager(DescriptorManagerType type) {

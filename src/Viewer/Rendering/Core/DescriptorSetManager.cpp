@@ -3,6 +3,7 @@
 //
 
 #include "DescriptorSetManager.h"
+#include "DescriptorRegistry.h"
 
 #include <unordered_set>
 
@@ -22,7 +23,7 @@ namespace VkRender {
         VkResult result = vkCreateDescriptorSetLayout(m_device.m_LogicalDevice, &layoutInfo, nullptr,
                                                       &m_descriptorSetLayout);
         if (result != VK_SUCCESS) {
-            throw std::runtime_error("Failed to create descriptor set layout");
+            throw std::runtime_error("Failed to create descriptor set layout for " + descriptorManagerTypeToString(m_descriptorManagerType));
         }
 
         // Calculate descriptor pool sizes based on the provided bindings
@@ -83,9 +84,21 @@ namespace VkRender {
 
         VkDescriptorSet descriptorSet;
         VkResult result = vkAllocateDescriptorSets(m_device.m_LogicalDevice, &allocInfo, &descriptorSet);
-        if (result != VK_SUCCESS) {
-            throw std::runtime_error("Failed to allocate descriptor set");
+        if (result == VK_ERROR_OUT_OF_POOL_MEMORY) {
+            // Attempt to free descriptors and try again
+            Log::Logger::getInstance()->warning("Failed to allocate descriptors, cleaning up old sets and trying again");
+            freeDescriptorSets();
+
+            result = vkAllocateDescriptorSets(m_device.m_LogicalDevice, &allocInfo, &descriptorSet);
+            if (result != VK_SUCCESS){
+                throw std::runtime_error("Failed to allocate descriptor set for " +
+                                         descriptorManagerTypeToString(m_descriptorManagerType));
+            }
+        } else if (result != VK_SUCCESS){
+                throw std::runtime_error("Failed to allocate descriptor set for " +
+                                         descriptorManagerTypeToString(m_descriptorManagerType));
         }
+        m_allocatedDescriptors++;
 
         // Update the descriptor set with the provided writes
         std::vector<VkWriteDescriptorSet> writes = descriptorWrites;

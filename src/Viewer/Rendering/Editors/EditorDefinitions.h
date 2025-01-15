@@ -14,11 +14,10 @@ namespace VkRender {
         None,
         SceneRenderer,
         Viewport3D,
+        PathTracer,
         ImageEditor,
         Properties,
         GaussianViewer,
-        MultiSenseViewer_Sidebar,
-        MultiSenseViewer_Configuration,
         SceneHierarchy,
         TestWindow,
         };
@@ -27,17 +26,17 @@ namespace VkRender {
         return {
                 EditorType::SceneRenderer,
                 EditorType::Viewport3D,
+                EditorType::PathTracer,
                 EditorType::ImageEditor,
                 EditorType::Properties,
                 EditorType::GaussianViewer,
-                EditorType::MultiSenseViewer_Sidebar,
-                EditorType::MultiSenseViewer_Configuration,
                 EditorType::SceneHierarchy,
                 EditorType::TestWindow};
     };
     static std::vector<EditorType> getSelectableEditorTypes() {
         return {
                 EditorType::Viewport3D,
+                EditorType::PathTracer,
                 EditorType::ImageEditor,
                 EditorType::GaussianViewer,
                 EditorType::Properties,
@@ -49,11 +48,10 @@ namespace VkRender {
     static std::string editorTypeToString(EditorType type) {
         switch(type) {
             case EditorType::SceneRenderer: return "Scene Renderer";
-            case EditorType::MultiSenseViewer_Sidebar: return "MultiSense Viewer Sidebar";
-            case EditorType::MultiSenseViewer_Configuration: return "MultiSense Viewer Configuration";
             case EditorType::SceneHierarchy: return "Scene Hierarchy";
             case EditorType::TestWindow: return "Test Window";
             case EditorType::Viewport3D: return "3D Viewport";
+            case EditorType::PathTracer: return "Path Tracer";
             case EditorType::Properties: return "Properties";
             case EditorType::GaussianViewer: return "Gaussian Viewer";
             case EditorType::ImageEditor: return "Image Editor";
@@ -67,11 +65,10 @@ namespace VkRender {
         if (str == "Scene Hierarchy") return EditorType::SceneHierarchy;
         if (str == "Test Window") return EditorType::TestWindow;
         if (str == "3D Viewport") return EditorType::Viewport3D;
+        if (str == "Path Tracer") return EditorType::PathTracer;
         if (str == "Properties") return EditorType::Properties;
         if (str == "Gaussian Viewer") return EditorType::GaussianViewer;
         if (str == "Image Editor") return EditorType::ImageEditor;
-        if (str == "MultiSense Viewer Sidebar") return EditorType::MultiSenseViewer_Sidebar;
-        if (str == "MultiSense Viewer Configuration") return EditorType::MultiSenseViewer_Configuration;
         throw std::invalid_argument("Unknown editor type string");
     }
 }

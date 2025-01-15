@@ -21,12 +21,8 @@ namespace VkRender {
         addUI("DebugWindow");
         addUI("EditorGaussianViewerLayer");
         addUIData<EditorGaussianViewerUI>();
-        diffRenderEntry = std::make_unique<DR::DiffRenderEntry>();
-        diffRenderEntry->setup();
 
         m_descriptorRegistry.createManager(DescriptorManagerType::Viewport3DTexture, m_context->vkDevice());
-
-
         m_editorCamera = std::make_shared<Camera>(m_createInfo.width, m_createInfo.height);
 
         RenderPassInfo renderPassInfo{};
@@ -72,25 +68,19 @@ namespace VkRender {
             diffRenderEntry->update();
 
         }
-        //gaussianRenderer2D.setActiveCamera(m_editorCamera);
-        /*
-        gaussianRenderer3D.setActiveCamera(m_editorCamera);
-
 
         auto &e = m_context->getSelectedEntity();
         if (e && e.hasComponent<CameraComponent>()) {
             auto &camera = e.getComponent<CameraComponent>();
             if (camera.renderFromViewpoint()) {
                 // If the selected entity has a camera with renderFromViewpoint, use it
-                camera.camera->setCameraResolution(m_createInfo.width, m_createInfo.height);
-                gaussianRenderer3D.setActiveCamera(camera.camera);
+                //gaussianRenderer3D.setActiveCamera(camera.camera);
                 m_lastActiveCamera = &camera; // Update the last active camera
             }
         } else if (m_lastActiveCamera && m_lastActiveCamera->renderFromViewpoint()) {
             // Use the last active camera if it still has renderFromViewpoint enabled
-            gaussianRenderer3D.setActiveCamera(m_lastActiveCamera->camera);
+            //gaussianRenderer3D.setActiveCamera(m_lastActiveCamera->camera);
         }
-        */
 
 
         auto frameIndex = m_context->currentFrameIndex();

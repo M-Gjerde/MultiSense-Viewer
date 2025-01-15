@@ -140,14 +140,8 @@ namespace VkRender {
             otherEditorInfo.editorTypeDescription = EditorType::TestWindow;
             otherEditorInfo.uiContext = getMainUIContext();
             auto editor = createEditor(otherEditorInfo);
+            editor->loadScene(scene);
             m_editors.push_back(std::move(editor));
-        }
-
-        for (auto& editor : m_sceneRenderers) {
-            editor.second->loadScene(m_activeScene);
-        }
-        for (auto& editor : m_editors) {
-            editor->loadScene(m_activeScene);
         }
 
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();
@@ -158,6 +152,7 @@ namespace VkRender {
     void Application::loadProject(const Project& project) {
         // Remove project if already loaded
         m_editors.clear();
+        m_sceneRenderers.clear();
         // Apply general settings
 
         Log::Logger::getInstance()->info("Loading project '{}', scene '{}'...", project.projectName, project.sceneName);
@@ -203,18 +198,10 @@ namespace VkRender {
         Log::Logger::getInstance()->info("Loaded project '{}', scene '{}'.", project.projectName, project.sceneName);
         auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
         userSetting.projectName = project.projectName;
-    }
 
-    std::shared_ptr<BaseCamera> Application::getViewportCamera() {
         for (auto& editor : m_editors) {
-            auto& ci = editor->getCreateInfo();
-            if(ci.editorTypeDescription == EditorType::Viewport3D) { // TODO make it the last active viewport instead
-                auto viewport = dynamic_cast<Editor3DViewport*>(editor.get());
-                auto camera = viewport->getCamera();
-                return camera;
-            };
+            editor->loadScene(m_activeScene);
         }
-        return nullptr;
     }
 
     Editor3DViewport* Application::getViewport() {
@@ -264,9 +251,6 @@ namespace VkRender {
             otherIO.MouseDown[1] = mouse.right;
         }
 
-        for (auto& editor : m_sceneRenderers) {
-            editor.second->update();
-        }
         updateEditors();
         m_mainEditor->update();
 
@@ -334,6 +318,9 @@ namespace VkRender {
                 auto& ci = editor->getCreateInfo();
                 ci.editorTypeDescription = editor->ui()->selectedType;
                 recreateEditor(editor, ci);
+                editor->loadScene(m_activeScene);
+
+                continue;
             }
 
             editor->update();
@@ -342,10 +329,13 @@ namespace VkRender {
     }
 
     void Application::onRender() {
+
         /** Generate Draw Commands **/
+        // Render sceneRenderer outside of other editors to avoid calling new render passes inside active render passes.
         for (auto& editor : m_sceneRenderers) {
             editor.second->render(drawCmdBuffers);
         }
+
         for (auto& editor : m_editors) {
             editor->render(drawCmdBuffers);
         }
@@ -381,6 +371,7 @@ namespace VkRender {
         ApplicationConfig::getInstance().saveSettings();
         m_activeScene->deleteAllEntities();
         m_sceneRenderers.clear();
+        m_editors.clear();
     }
 
     void Application::handleEditorResize() {

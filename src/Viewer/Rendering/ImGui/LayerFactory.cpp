@@ -20,6 +20,7 @@
 #include "Viewer/Rendering/Editors/Properties/PropertiesLayer.h"
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewerLayer.h"
 #include "Viewer/Rendering/Editors/ImageEditor/EditorImageLayer.h"
+#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.h"
 
 namespace VkRender {
 
@@ -41,6 +42,7 @@ namespace VkRender {
         if (layerName == "PropertiesLayer") return std::make_shared<PropertiesLayer>();
         if (layerName == "EditorGaussianViewerLayer") return std::make_shared<EditorGaussianViewerLayer>();
         if (layerName == "EditorImageLayer") return std::make_shared<EditorImageLayer>();
+        if (layerName == "EditorPathTracerLayer") return std::make_shared<EditorPathTracerLayer>();
 
         throw std::runtime_error("Tried to push layer: " + layerName + " Which doesn't exists");
     }

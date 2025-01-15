@@ -13,7 +13,8 @@
 #include "Viewer/Tools/SyclDeviceSelector.h"
 #endif
 
-#include "Viewer/Rendering/Editors/ImageEditor/EditorImageUI.h"
+#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
+#include "Viewer/Rendering/Editors/ArcballCamera.h"
 
 namespace VkRender::RT {
 #ifdef SYCL_ENABLED
@@ -21,10 +22,10 @@ namespace VkRender::RT {
     class RayTracer {
     public:
         RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
-        void uploadGaussianData(std::shared_ptr<Scene>& scene);
-        void uploadVertexData(std::shared_ptr<Scene>& scene);
+        void uploadGaussianData(std::weak_ptr<Scene>& scene);
+        void uploadVertexData(std::weak_ptr<Scene>& scene);
 
-        void update(EditorImageUI& editorImageUI, std::shared_ptr<Scene> scene);
+        void update(EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene);
 
 
         float* getImage() {return m_imageMemory;}
@@ -32,14 +33,18 @@ namespace VkRender::RT {
         ~RayTracer();
 
 
-        void upload(std::shared_ptr<Scene> ptr);
+        void upload(std::weak_ptr<Scene> ptr);
+
+        void setActiveCamera(const TransformComponent &transformComponent, float w, float h);
+        void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform);
 
     private:
-        BaseCamera m_camera;
-        Application* m_context;
-        SyclDeviceSelector m_selector;
+        PinholeCamera m_camera{};
+        TransformComponent m_cameraTransform{};
 
-        std::shared_ptr<Scene> m_scene;
+        Application* m_context;
+        SyclDeviceSelector m_selector{};
+
         float* m_imageMemory = nullptr;
 
         uint32_t m_width = 0, m_height = 0;
@@ -58,6 +63,7 @@ namespace VkRender::RT {
         void freeResources();
 
         void resetState();
+
     };
 
 #else
@@ -67,10 +73,12 @@ namespace VkRender::RT {
         RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
-        void update(const EditorImageUI& editorImageUI, std::shared_ptr<Scene> &scene) {}
+        void update(const EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene) {}
         float* getImage() {return nullptr;}
         ~RayTracer() {}
         void upload(std::shared_ptr<Scene> ptr) {}
+        void setActiveCamera(const TransformComponent &transformComponent, float w, float h){}
+        void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform){}
     };
 #endif
 

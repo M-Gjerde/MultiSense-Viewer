@@ -47,14 +47,7 @@ set(PYTORCH_AVAILABLE FALSE)
 set(USE_CUDA FALSE)
 set(USE_ROCM FALSE)
 
-# Include the OIDN headers
-include_directories("${OIDN_DIR}/include")
-# Link the OIDN library
-target_link_libraries(${PROJECT_NAME} PRIVATE
-        "${OIDN_DIR}/lib/libOpenImageDenoise.so"
-)
-message(STATUS "[VkRenderINFO]: OIDN Include Dir: ${OIDN_DIR}/include")
-message(STATUS "[VkRenderINFO]: OIDN Lib Dir: ${OIDN_DIR}/lib")
+
 #if (ENABLE_PYTORCH)
 #    # Find PyTorch
 #
@@ -165,6 +158,15 @@ if (ENABLE_SYCL)
     target_compile_definitions(${PROJECT_NAME} PRIVATE SYCL_ENABLED)
     message(STATUS "[VkRenderINFO] Added definition: SYCL_ENABLED")
 
+    # Include the OIDN headers
+    include_directories("${OIDN_DIR}/include")
+    # Link the OIDN library
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            "${OIDN_DIR}/lib/libOpenImageDenoise.so"
+    )
+    message(STATUS "[VkRenderINFO]: OIDN Include Dir: ${OIDN_DIR}/include")
+    message(STATUS "[VkRenderINFO]: OIDN Lib Dir: ${OIDN_DIR}/lib")
+
 else ()
     message(STATUS "[VkRenderINFO]: SYCL support not enabled.")
 endif ()
@@ -249,6 +251,9 @@ set(SOURCE_FILES
         src/Viewer/Rendering/Editors/Video/VideoPlaybackSystem.cpp
         src/Viewer/Rendering/Editors/SceneRenderer.cpp
         src/Viewer/Rendering/Editors/SceneHierarchy/SceneHierarchyLayer.cpp
+
+        src/Viewer/Rendering/Editors/PathTracer/EditorPathTracer.cpp
+
         src/Viewer/Rendering/Core/PipelineKey.cpp
         src/Viewer/Rendering/Editors/Properties/PropertiesLayer.cpp
         src/Viewer/Rendering/Core/PipelineManager.cpp
