@@ -150,7 +150,7 @@ namespace VkRender::RT {
                                                 hitNormalWorld);
 
                 // Check direct illumination
-                // (A) Check if the ray passes "through" the pinhole
+                // (A) Check if the ray passes directly "through" the pinhole from the emissive patch
                 bool pinholeHit = false;
                 float tPinhole = 0.0f;
                 glm::vec3 closePt(0.f);
@@ -198,22 +198,8 @@ namespace VkRender::RT {
                 }
 
 
-                // If no hit or geometry hit first, proceed
+                // If we hit some geometry then calculate the bounce
                 if (hit) {
-                    /*
-                    const MaterialComponent &mat = m_gpuData.materials[hitEntity];
-                    float albedo = mat.albedo.x; // mat.albedo.x; // Assuming monochrome; replace with mat.albedo.x if applicable
-                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
-                    if (cosTheta <= 0.01f) cosTheta = 0.0f;
-
-                    float pdf = 1 / M_PIf;
-                    //photonFlux *= diffuseFlux;
-                    if (bounce == 0)
-                        photonFlux *= albedo * cosTheta / (M_PIf * 2);
-                    else
-                        photonFlux *= albedo * cosTheta / M_PIf;
-
-                    */
 
                     // Fetch material parameters
                     const MaterialComponent &mat = m_gpuData.materials[hitEntity];
@@ -222,9 +208,6 @@ namespace VkRender::RT {
                     float shininess = mat.phongExponent;
                     float diffusion = mat.diffuse; // Diffuse coefficient
 
-                    // Compute cosTheta for the diffuse term
-                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
-                    cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
 
                     // We'll accumulate our contribution here
                     float totalContribution = 0.0f;
@@ -234,7 +217,6 @@ namespace VkRender::RT {
                         // METALLIC branch (diffuse == 0)
                         // ----------------------------------
                         // For a purely metallic surface, ignore diffuse lighting altogether.
-                        // Optionally tint the specular by albedo if you want colored metals.
 
                         // Compute reflection direction
                         glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
@@ -243,7 +225,7 @@ namespace VkRender::RT {
                         float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
                         cosAlpha = glm::max(0.0f, cosAlpha);
 
-                        // You can multiply by albedo if metals have tinted reflection
+                        // Multiply by albedo if metals have tinted reflection
                         // e.g. specularContribution = specular * albedo * ...
                         float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
 
@@ -255,6 +237,9 @@ namespace VkRender::RT {
                         // ----------------------------------
 
                         // 1) Diffuse contribution
+                        // Compute cosTheta for the diffuse term
+                        float cosTheta = glm::dot(hitNormalWorld, -rayDir);
+                        cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
                         float diffuseContribution = diffusion * albedo * cosTheta / M_PIf;
 
                         // 2) Specular contribution
@@ -267,9 +252,8 @@ namespace VkRender::RT {
                         float sumUnweighted = diffuseContribution + specularContribution;
 
                         // 4) Energy conservation / normalization:
-                        //    If you want to ensure that the total reflection doesn't exceed 1,
-                        //    you can weight diffuse vs. specular so that sum of their "weights" is 1.
-                        //    Example: weight them according to albedo vs. specular, or any other scheme.
+                        //    We want to ensure that the total reflection doesn't exceed 1,
+                        //    weight diffuse vs. specular so that sum of their "weights" is 1.
                         float sumForWeights = albedo + specular;
                         if (sumForWeights > 0.0f) {
                             float diffuseWeight = albedo / sumForWeights;
@@ -286,17 +270,16 @@ namespace VkRender::RT {
 
                     // Finally, scale the photonFlux (or outgoing radiance) by total contribution
                     photonFlux *= totalContribution;
-                    // Combine diffuse and specular contributions
+
                     // Russian Roulette termination
-                    float rrProb = photonFlux * 0.9f;
-                    //float minProbability = 0.2f; // 20%
-                    //float maxProbability = 0.9f; // 90%
-                    //rrProb = glm::clamp(rrProb, minProbability, maxProbability);
+                    float rrProb = photonFlux;
+                    float minProbability = 0.2f; // 20%
+                    float maxProbability = 0.9f; // 90%
+                    rrProb = glm::clamp(rrProb, minProbability, maxProbability);
                     float rnd = m_rng[photonID].nextFloat();
                     if (rnd > rrProb) {
                         return; // Photon terminated i.e. absorbed by the last surface
                     }
-
                     photonFlux = photonFlux / rrProb;
 
                     // Sample new direction (Lambertian reflection)
@@ -317,7 +300,6 @@ namespace VkRender::RT {
                     );
                     // Check if contribution ray intersects geometry
                     glm::vec3 contributionRayOrigin = rayOrigin;
-
 
                     // Create contribution Rays and trace towards the camera
                     if (glm::length(contributionRayDir) > 0.1) {
@@ -461,11 +443,11 @@ namespace VkRender::RT {
         }
 
         bool checkCameraPlaneIntersection(
-                const glm::vec3 &rayOriginWorld,
-                const glm::vec3 &rayDirWorld,
-                glm::vec3 &hitPointCam, // out: intersection in camera space
-                float &tIntersect, // out: parameter t
-                float &contributionScore // out: parameter contributionScore
+            const glm::vec3& rayOriginWorld,
+            const glm::vec3& rayDirWorld,
+            glm::vec3& hitPointCam, // out: intersection in camera space
+            float& tIntersect, // out: parameter t
+            float& contributionScore // out: parameter contributionScore
         ) const {
             // 1) Transform to camera space
 
