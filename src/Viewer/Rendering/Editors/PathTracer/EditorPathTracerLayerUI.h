@@ -21,8 +21,8 @@ namespace VkRender {
 
         bool clearImageMemory = false;
 
-        std::string kernel = "Path Tracer: Mesh";
-        std::string kernelDevice = "GPU";
+        std::string kernel = " ";
+        std::string kernelDevice = "CPU";
         bool switchKernelDevice = false;
 
         int photonCount = 1e6;

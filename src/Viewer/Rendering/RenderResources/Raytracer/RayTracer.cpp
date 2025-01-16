@@ -84,9 +84,8 @@ namespace VkRender::RT {
                 sycl::range<1> globalRange(simulatePhotonCount);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed
-                    RenderKernelLightTracing kernel(m_gpu, simulatePhotonCount, m_width, m_height,
-                                                    m_width * m_height * 4,
-                                                    m_cameraTransform, cameraGPU, 1);
+                        LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                                     uiLayer.numBounces, rngGPU);
                     cgh.parallel_for(globalRange, kernel);
                 });
             } else if (uiLayer.kernel == "Path Tracer: Mesh") {
@@ -213,6 +212,7 @@ namespace VkRender::RT {
             sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
             m_gpu.gaussianInputAssembly = nullptr;
         }
+
         m_selector.getQueue().wait();
     }
 
@@ -220,6 +220,7 @@ namespace VkRender::RT {
         auto scenePtr = scene.lock();
         auto &queue = m_selector.getQueue();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
+        std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
         auto &registry = scenePtr->getRegistry();
         // Find all entities with GaussianComponent
         auto view = scenePtr->getRegistry().view<GaussianComponent2DGS>();
@@ -237,13 +238,20 @@ namespace VkRender::RT {
                 point.phongExponent = component.phongExponents[i];
                 gaussianInputAssembly.push_back(point);
             }
+            auto &transform = Entity(e, scenePtr.get()).getComponent<TransformComponent>();
+            transformMatrices.emplace_back(transform);
         }
 
         m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(gaussianInputAssembly.size(), queue);
         queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(),
-                     gaussianInputAssembly.size() * sizeof(uint32_t));
+                     gaussianInputAssembly.size() * sizeof(GaussianInputAssembly));
+
+        m_gpu.transforms = sycl::malloc_device<TransformComponent>(transformMatrices.size(), queue);
+        queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(TransformComponent));
+
         queue.wait();
 
+        m_gpu.numEntities = static_cast<uint32_t>(transformMatrices.size()); // Number of entities for rendering
         m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
     }
 

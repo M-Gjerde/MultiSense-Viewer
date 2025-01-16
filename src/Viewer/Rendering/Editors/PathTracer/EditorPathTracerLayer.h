@@ -67,19 +67,22 @@ namespace VkRender {
 
             // Dropdown for selecting render kernel
             const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
-            static int selectedKernelIndex = 1; // Default selection
+            static int selectedKernelIndex = 2; // Default selection
             ImGui::SetNextItemWidth(100.0f);
             if (ImGui::Combo("##Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
-                imageUI->kernel = kernels[selectedKernelIndex];
             }
+
+            imageUI->kernel = kernels[selectedKernelIndex];
+
             ImGui::SameLine();            // Dropdown for selecting render kernel
             const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
-            static int selectedDevieType = 1; // Default selection
+            static int selectedDevieType = 0; // Default selection
             ImGui::SetNextItemWidth(100.0f);
             if (ImGui::Combo("##Select Device Type", &selectedDevieType, selections, IM_ARRAYSIZE(selections))) {
-                imageUI->kernelDevice = selections[selectedDevieType];
                 imageUI->switchKernelDevice = true;
             }
+            imageUI->kernelDevice = selections[selectedDevieType];
+
             ImGui::SameLine();
 
             imageUI->clearImageMemory = ImGui::Button("Clear image memory");

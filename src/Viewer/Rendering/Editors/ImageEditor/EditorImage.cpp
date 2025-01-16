@@ -39,6 +39,7 @@ namespace VkRender {
         m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
     }
 
+
     void EditorImage::onFileDrop(const std::filesystem::path& path) {
         std::string extension = path.extension().string();
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
