@@ -118,7 +118,7 @@ namespace VkRender::RT {
                         glm::vec3 cameraHitPointWorld = directLightingOrigin + directLightingDir * tCam;
 
                         float d = glm::length(cameraHitPointWorld) - 1.0f;
-                        float cosTheta = glm::dot(directLightingDir, glm::vec3(1.0f, 0.0f, 0.0f));
+                        float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
                         float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
                         if (cosTheta > 0.1f) {
                             if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
@@ -284,7 +284,7 @@ namespace VkRender::RT {
 
                     // Sample new direction (Lambertian reflection)
                     glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
-                    rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
+                    rayOrigin = hitPointWorld + hitNormalWorld * 1e-3f; // Offset to prevent self-intersection
                     rayDir = glm::normalize(newDir);
 
                     glm::mat4 entityTransform = m_cameraTransform.getTransform();
@@ -322,7 +322,7 @@ namespace VkRender::RT {
                             if (tCam < tGeom) {
                                 glm::vec3 cameraHitPointWorld = contributionRayOrigin + contributionRayDir * tCam;
                                 float d = glm::length(cameraHitPointWorld) - 1.0f;
-                                float cosTheta = glm::dot(contributionRayDir, glm::vec3(1.0f, 0.0f, 0.0f));
+                                float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
                                 float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
                                 if (cosTheta > 0.1f) {
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
@@ -393,7 +393,7 @@ namespace VkRender::RT {
                     if (rayTriangleIntersect(localRayOrigin, localRayDir, aLocal, bLocal, cLocal, localHit)) {
                         glm::vec3 worldHit = glm::vec3(entityTransform * glm::vec4(localHit, 1.0f));
                         float dist = glm::distance(rayOrigin, worldHit);
-                        if (dist < closest_t && dist > 1e-3f) {
+                        if (dist < closest_t && dist > 1e-4f) {
                             closest_t = dist;
                             hitEntity = entityIdx;
                             hitPointWorld = worldHit;

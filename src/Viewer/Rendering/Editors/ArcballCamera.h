@@ -9,6 +9,7 @@ namespace VkRender {
     public:
         glm::vec2 m_rotation = glm::vec2(0.0f, 0.0f);
         float m_rotationSpeed = 0.20f;
+        float m_translationSpeed = 0.005f;
         float m_zoomValue = 1.0f;
         glm::vec3 m_positionOffset = glm::vec3(0.0f);
         explicit ArcballCamera(float aspect)
@@ -20,6 +21,7 @@ namespace VkRender {
         void setDefaultPosition(glm::vec2 defaultRotation, float zoomValue = 1.0f){
             m_rotation = defaultRotation;
             m_zoomValue = zoomValue;
+            m_positionOffset = glm::vec3(0.0f);
             rotate(0, 0);
         }
 
@@ -47,10 +49,9 @@ namespace VkRender {
             BaseCamera::updateViewMatrix(trans);
         }
 
-        void translate(float dx, float dy){
-            float rotationsSpeed = 0.01f;
-            dx *= rotationsSpeed;
-            dy *= rotationsSpeed;
+        void translate(float dx, float dy){;
+            dx *= m_translationSpeed;
+            dy *= m_translationSpeed;
             glm::mat4 view = matrices.view;
             glm::vec3 right = glm::vec3(view[0][0], view[1][0], view[2][0]);   // First column
             glm::vec3 up = glm::vec3(view[0][1], view[1][1], view[2][1]);      // Second column

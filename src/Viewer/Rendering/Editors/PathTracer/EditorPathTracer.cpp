@@ -313,8 +313,6 @@ namespace VkRender {
             m_movedCamera = true;
         }
 
-
-
     }
 
     void EditorPathTracer::onMouseScroll(float change) {
@@ -322,6 +320,12 @@ namespace VkRender {
             m_editorCamera->zoom((change > 0.0f) ? 0.95f : 1.05f);
             m_movedCamera = true;
         }
+    }
+    void EditorPathTracer::onKeyCallback(const Input &input) {
+        if (input.lastKeyPress == GLFW_KEY_SPACE) {
+            m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
+        };
+
     }
 
     void EditorPathTracer::onRender(CommandBuffer& commandBuffer) {

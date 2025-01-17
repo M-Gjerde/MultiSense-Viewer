@@ -179,7 +179,7 @@ public:
 
         static bool pOpen = true;
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_AlwaysAutoResize;
-        ImGui::SetNextWindowSize(ImVec2(1280.0f, 500.0f), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(1280.0f, 500.0f), ImGuiCond_Once);
         ImGui::Begin("Debugger Window", &pOpen, window_flags);
 
         // Make window close on X click. But also close/open on button press

@@ -52,6 +52,7 @@ namespace VkRender::RT {
 
         // GS
         GaussianInputAssembly *gaussianInputAssembly = nullptr;
+
         size_t numGaussians;
 
         float *imageMemory;

@@ -548,7 +548,7 @@ namespace VkRender {
             }
             auto tDiff = std::chrono::duration<double, std::milli>(
                 std::chrono::high_resolution_clock::now() - tStart).count();
-            frameTimer = static_cast<float>(tDiff) / 1000.0f;
+            frameTimer = static_cast<float>(tDiff);
 
             if (static_cast<float>(tDiff) > 33){
                 Log::Logger::getInstance()->trace("Warning: Exceeding 33ms for render time");

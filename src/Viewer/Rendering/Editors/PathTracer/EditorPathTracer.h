@@ -43,6 +43,7 @@ namespace VkRender {
         void onFileDrop(const std::filesystem::path &path) override;
 
         void onMouseScroll(float change) override;
+        void onKeyCallback(const Input& input) override;
 
         void onEditorResize() override;
 

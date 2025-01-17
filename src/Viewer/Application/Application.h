@@ -98,6 +98,7 @@ namespace VkRender {
 
         // TODO we should collect per frame info like this somewhere
         float deltaTime() { return frameTimer; }
+        const Input& getKeyInput(){return input;}
 
         SceneRenderer *getSceneRendererByUUID(const UUID &uuid);
         SceneRenderer* getOrAddSceneRendererByUUID(const UUID &uuid,const EditorCreateInfo& ownerCreateInfo);

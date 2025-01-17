@@ -16,8 +16,8 @@ namespace VkRender {
         float fy = 720.0f; // Default vertical focal length (pixels)
         float cx = 640.0f; // Default principal point x-coordinate (pixels)
         float cy = 360.0f; // Default principal point y-coordinate (pixels)
-        float focalLength = 4; // focal length in mm
-        float fNumber = 1.0f / 2.8f; // focal length in mm
+        float focalLength = 10.0f; // focal length in mm
+        float fNumber = 4.0f; // focal length in mm
         float near = 0.01f;
         float far = 100.0f;
         // Overload equality operator

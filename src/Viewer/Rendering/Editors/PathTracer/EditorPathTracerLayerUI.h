@@ -25,7 +25,7 @@ namespace VkRender {
         std::string kernelDevice = "CPU";
         bool switchKernelDevice = false;
 
-        int photonCount = 1e6;
+        int photonCount = 1e4;
         int numBounces = 32;
 
         struct ShaderSelection {

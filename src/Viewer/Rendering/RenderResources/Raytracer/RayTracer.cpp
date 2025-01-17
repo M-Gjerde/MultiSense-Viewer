@@ -44,7 +44,7 @@ namespace VkRender::RT {
             } else if (uiLayer.kernelDevice == "GPU") {
                 m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
             }
-            upload(std::move(scene));
+            upload(scene);
             resetState();
             uiLayer.switchKernelDevice = false;
         }
@@ -122,12 +122,13 @@ namespace VkRender::RT {
         if (uiLayer.saveImage)
             saveAsPFM("cornell.pfm");
 
-        Log::Logger::getInstance()->info(
+        Log::Logger::getInstance()->trace(
                 "simulated {:.3f} Billion photons. About {}k Photons hit the sensor, of which {}k hit directly",
                 m_renderInformation->totalPhotons / 1e9 * m_renderInformation->frameID,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
                                     m_renderInformation->photonsAccumulated)) / 1000,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
+
     }
 
     void RayTracer::resetState() {
@@ -167,6 +168,7 @@ namespace VkRender::RT {
         Log::Logger::getInstance()->info("Creating Ray Tracer. Image dimensions are: {}x{}", m_width, m_height);
 
         uploadVertexData(scene);
+
         uploadGaussianData(scene);
     }
 
@@ -231,6 +233,7 @@ namespace VkRender::RT {
                 point.position = component.positions[i];
                 point.scale = component.scales[i];
                 point.normal = component.normals[i];
+
                 point.emission = component.emissions[i];
                 point.color = component.colors[i];
                 point.diffuse = component.diffuse[i];
@@ -243,16 +246,12 @@ namespace VkRender::RT {
         }
 
         m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(gaussianInputAssembly.size(), queue);
-        queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(),
-                     gaussianInputAssembly.size() * sizeof(GaussianInputAssembly));
+        queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(), gaussianInputAssembly.size() * sizeof(GaussianInputAssembly));
+        m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
 
-        m_gpu.transforms = sycl::malloc_device<TransformComponent>(transformMatrices.size(), queue);
-        queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(TransformComponent));
-
+        Log::Logger::getInstance()->info("Uploaded  {} Gaussians to renderkernel", m_gpu.numGaussians);
         queue.wait();
 
-        m_gpu.numEntities = static_cast<uint32_t>(transformMatrices.size()); // Number of entities for rendering
-        m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
     }
 
     void RayTracer::uploadVertexData(std::weak_ptr<Scene> &scene) {
