@@ -346,6 +346,7 @@ namespace VkRender {
             };
 
             serializeFloatArray(component.emissions, "Emissions");
+            serializeFloatArray(component.opacities, "Opacities");
             serializeFloatArray(component.colors, "Colors");
             serializeFloatArray(component.diffuse, "Diffuse");
             serializeFloatArray(component.specular, "Specular");
@@ -709,19 +710,28 @@ namespace VkRender {
                             component.scales.push_back(scale);
                         }
                     }
-                    // Deserialize float properties
-                    auto deserializeFloatArray = [&](std::vector<float>& values, const std::string& key) {
+
+
+                    // Deserialize float properties with default values
+                    auto deserializeFloatArray = [&](std::vector<float>& values, const std::string& key, size_t defaultSize = 0, float defaultValue = 0.0f) {
                         if (node[key]) {
+                            // Populate values from the node
                             for (const auto& valueNode : node[key]) {
                                 values.push_back(valueNode.as<float>());
                             }
+                        } else {
+                            // Populate default values if the key doesn't exist
+                            values.resize(defaultSize, defaultValue);
                         }
                     };
-                    deserializeFloatArray(component.emissions, "Emissions");
-                    deserializeFloatArray(component.colors, "Colors");
-                    deserializeFloatArray(component.diffuse, "Diffuse");
-                    deserializeFloatArray(component.specular, "Specular");
-                    deserializeFloatArray(component.phongExponents, "PhongExponents");
+                    size_t expectedSize = component.positions.size();
+                    deserializeFloatArray(component.emissions, "Emissions", expectedSize, 0.0f);
+                    deserializeFloatArray(component.opacities, "Opacities", expectedSize, 1.0f);
+                    deserializeFloatArray(component.colors, "Colors", expectedSize, 0.5f);
+                    deserializeFloatArray(component.diffuse, "Diffuse", expectedSize, 0.5f);
+                    deserializeFloatArray(component.specular, "Specular", expectedSize, 0.5f);
+                    deserializeFloatArray(component.phongExponents, "PhongExponents", expectedSize, 32.0f);
+
                 }
             }
 

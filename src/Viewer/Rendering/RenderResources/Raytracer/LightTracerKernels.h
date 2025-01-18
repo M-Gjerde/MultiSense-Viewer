@@ -61,8 +61,8 @@ namespace VkRender::RT {
             //glm::vec3 emitNormalWorld = glm::normalize(normalMatrix * emitNormalLocal);
 
             // 2) Sample emission direction
-            glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalLocal, photonID);
-            //glm::vec3 rayDir = sampleRandomDirection(photonID);
+            //glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalLocal, photonID);
+            glm::vec3 rayDir = sampleRandomDirection(photonID);
 
             // The photon throughput tracks how much flux remains after each bounce
             float photonFlux = emissionPower; // or you can store a color as a vec3 if needed
@@ -226,8 +226,9 @@ namespace VkRender::RT {
                     photonFlux = photonFlux / rrProb;
 
                     // Sample new direction (Lambertian reflection)
-                    glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
-                    rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
+                    //glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
+                    glm::vec3 newDir = sampleRandomDirection(photonID);
+                    rayOrigin = hitPointWorld + hitNormalWorld * 1e-6f; // Offset to prevent self-intersection
                     rayDir = glm::normalize(newDir);
 
                     glm::mat4 entityTransform = m_cameraTransform.getTransform();
@@ -294,15 +295,15 @@ namespace VkRender::RT {
 
 
         bool geometryIntersection2DGS(
-            size_t gaussianID,
-            const glm::vec3& rayOrigin,
-            const glm::vec3& rayDir,
-            size_t& hitPointIdx, // Instead of “hitEntity”, this can store which point we hit
-            float& closest_t,
-            glm::vec3& hitPointWorld,
-            glm::vec3& hitNormalWorld
+                size_t           gaussianID,
+                const glm::vec3& rayOrigin,
+                const glm::vec3& rayDir,
+                size_t&          hitPointIdx,
+                float&           closest_t,
+                glm::vec3&       hitPointWorld,
+                glm::vec3&       hitNormalWorld
         ) const {
-            bool hit = false;
+            bool  hit    = false;
             float epsilon = 1e-6f;
 
             for (uint32_t i = 0; i < m_gpuData.numGaussians; ++i) {
@@ -310,55 +311,55 @@ namespace VkRender::RT {
                     continue;
 
                 const GaussianInputAssembly& gp = m_gpuData.gaussianInputAssembly[i];
-                glm::vec3 N = gp.normal; // plane normal
-                float denom = glm::dot(N, rayDir);
+                glm::vec3 N     = gp.normal; // plane normal
+                float     denom = glm::dot(N, rayDir);
 
                 if (fabs(denom) < epsilon) {
-                    continue; // nearly parallel
+                    continue; // nearly parallel => no valid intersection
                 }
 
                 float t = glm::dot((gp.position - rayOrigin), N) / denom;
                 if (t < epsilon) {
-                    continue; // behind the origin
+                    continue; // intersection behind the origin
                 }
 
                 glm::vec3 p = rayOrigin + t * rayDir;
-                float dist = glm::distance(rayOrigin, p);
+                float dist  = glm::distance(rayOrigin, p);
                 if (dist >= closest_t) {
-                    continue; // not closer
+                    continue; // not closer than current intersection
                 }
 
-                // Build local tangent basis on the fly:
+                // Build local tangent basis for the plane
                 glm::vec3 tAxis, bAxis;
                 buildTangentBasis(N, tAxis, bAxis);
-                glm::vec3 vPlane = p - gp.position;
 
-                // local coordinates (u,v)
+                // Vector in plane coords
+                glm::vec3 vPlane = p - gp.position;
                 float u = glm::dot(vPlane, tAxis);
                 float v = glm::dot(vPlane, bAxis);
 
-                // Evaluate 2D Gaussian in local space
+                // Check elliptical boundary:
                 float sigmaU = gp.scale.x;
                 float sigmaV = gp.scale.y;
-                float exponent =
-                    -0.5f * ((u * u) / (sigmaU * sigmaU) + (v * v) / (sigmaV * sigmaV));
-                float gaussVal = sycl::exp(exponent);
+                float ellipseParam = (u * u) / (sigmaU * sigmaU)
+                                     + (v * v) / (sigmaV * sigmaV);
 
-                // simple cutoff
-                if (gaussVal < 0.5f) {
+                if (ellipseParam > 1.0f) {
+                    // Outside the ellipse => ignore this intersection
                     continue;
                 }
-                // else it's a valid intersection
 
-                closest_t = dist;
-                hitPointIdx = i;
-                hitPointWorld = p;
+                // If we get here, we have a valid intersection
+                closest_t      = dist;
+                hitPointIdx    = i;
+                hitPointWorld  = p;
                 hitNormalWorld = N;
                 hit = true;
             }
 
             return hit;
         }
+
 
 
         bool geometryIntersection(size_t lightEntityIdx, const glm::vec3& rayOrigin, const glm::vec3& rayDir,
@@ -651,24 +652,38 @@ namespace VkRender::RT {
             glm::vec3 t1;
             glm::vec3 t2;
             buildTangentBasis(n, t1, t2);
-            // ------------------------------------------------------------------
-            // 2. Sample (x, y) from a 2D Gaussian using Box-Muller transform.
-            //    scale = (sigma_x, sigma_y).
-            // ------------------------------------------------------------------
-            float u1 = m_rng[photonID].nextFloat(); // in [0,1)
-            float u2 = m_rng[photonID].nextFloat(); // in [0,1)
+            // 2. Repeatedly draw samples from a standard normal, then scale
+//    them by (sigma_x, sigma_y), until they fall inside the ellipse.
 
-            // Box-Muller for standard normal:
-            float r = sqrt(-2.0f * logf(u1));
-            float theta = 2.0f * M_PIf * u2;
-            // (z0, z1) is standard normal ~ N(0, 1) in 2D
-            float z0 = r * cosf(theta);
-            float z1 = r * sinf(theta);
+            float x, y;  // final offsets in local 2D coords
+            while (true)
+            {
+                // (a) Generate two uniform randoms in [0,1)
+                float u1 = m_rng[photonID].nextFloat();
+                float u2 = m_rng[photonID].nextFloat();
 
-            // Then scale them for anisotropic std dev
-            float x = z0 * gaussian.scale.x; // e.g. sigma_x
-            float y = z1 * gaussian.scale.y; // e.g. sigma_y
+                // (b) Box-Muller transform for standard normal
+                float r     = sqrtf(-2.0f * logf(u1));
+                float theta = 2.0f * M_PIf * u2;
+                float z0    = r * cosf(theta); // ~ N(0,1)
+                float z1    = r * sinf(theta); // ~ N(0,1)
 
+                // (c) Scale by anisotropic stddev (sigma_x, sigma_y)
+                x = z0 * gaussian.scale.x;
+                y = z1 * gaussian.scale.y;
+
+                // (d) Check elliptical boundary
+                //     If scale.x=1 => maximum distance is 1 meter in X
+                //     If scale.y=1 => maximum distance is 1 meter in Y
+                //     For ellipse: (x/σx)^2 + (y/σy)^2 <= 1
+                float ellipseParam = (x * x) / (gaussian.scale.x * gaussian.scale.x)
+                                     + (y * y) / (gaussian.scale.y * gaussian.scale.y);
+                if (ellipseParam <= 1.0f)
+                {
+                    // Valid truncated sample; break out
+                    break;
+                }
+            }
             // ------------------------------------------------------------------
             // 3. Offset the center by (x, y) in the plane spanned by (t1, t2).
             // ------------------------------------------------------------------

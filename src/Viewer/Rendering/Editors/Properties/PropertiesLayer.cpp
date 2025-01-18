@@ -288,10 +288,10 @@ namespace VkRender {
         });
         drawComponent<CameraComponent>("Camera", entity, [this](CameraComponent &component) {
             //drawFloatControl("Field of View", component.camera->fov(), 1.0f);
-
-            ImGui::Checkbox("Render scene from viewpoint", &component.renderFromViewpoint());
-
             bool paramsChanged = false;
+
+            paramsChanged |= ImGui::Checkbox("Render scene from viewpoint", &component.renderFromViewpoint());
+
             paramsChanged |= ImGui::Checkbox("Flip Y", &component.cameraSettings.flipY);
             ImGui::SameLine();
             paramsChanged |= ImGui::Checkbox("Flip X", &component.cameraSettings.flipX);
@@ -321,6 +321,7 @@ namespace VkRender {
                     if (ImGui::Selectable(cameraTypeStrings[i].c_str(), isSelected)) {
                         currentIndex = i;
                         component.cameraType = allCameraTypes[i];
+                        paramsChanged |= true;
                     }
 
                     if (isSelected) {
@@ -346,13 +347,15 @@ namespace VkRender {
                     break;
                 case CameraComponent::PINHOLE:
                     paramsChanged |= ImGui::SliderFloat("Width", &component.pinholeParameters.width, 1.0, 4096, "%.0f");
-                    paramsChanged |= ImGui::SliderFloat("Height", &component.pinholeParameters.height, 1.0f, 4096.0f, "%.0f");
+                    paramsChanged |= ImGui::SliderFloat("Height", &component.pinholeParameters.height, 1.0f, 4096.0f,
+                                                        "%.0f");
 
                     paramsChanged |= ImGui::SliderFloat("Fx", &component.pinholeParameters.fx, 1.0f, 4096.0f);
                     paramsChanged |= ImGui::SliderFloat("Fy", &component.pinholeParameters.fy, 1.0f, 4096.0f);
                     paramsChanged |= ImGui::SliderFloat("Cx", &component.pinholeParameters.cx, 1.0f, 4096.0f);
                     paramsChanged |= ImGui::SliderFloat("Cy", &component.pinholeParameters.cy, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Focal Length", &component.pinholeParameters.focalLength, 1.0f, 100.0f);
+                    paramsChanged |= ImGui::SliderFloat("Focal Length", &component.pinholeParameters.focalLength, 1.0f,
+                                                        100.0f);
                     paramsChanged |= ImGui::SliderFloat("Aperture", &component.pinholeParameters.fNumber, 0.0f, 32.0f);
 
                     if (ImGui::Button("Set from viewport")) {
@@ -368,7 +371,7 @@ namespace VkRender {
                     break;
             }
 
-            component.resetUpdateState();
+            component.resetUpdateState(); // TODO not a nice way of ensuring single frame updates from camera properties. Can we make this less error-prone? Relying on paramsChanged variable and  m_updateTrigger in cameraComponent struct
             if (paramsChanged) {
                 component.updateParametersChanged();
             }
@@ -554,10 +557,10 @@ namespace VkRender {
 
             ImGui::Text("Appearance Properties");
             bool update = false;
-            update |= drawFloatControl("Emission",  component.emission, 0.0f, 0.1f);
-            update |= drawFloatControl("Diffuse",  component.diffuse, 0.5f, 0.1f);
-            update |= drawFloatControl("Specular",  component.specular, 0.5f, 0.1f);
-            update |= drawFloatControl("PhongExponents",  component.phongExponent, 32.0f, 1.0f);
+            update |= drawFloatControl("Emission", component.emission, 0.0f, 0.1f);
+            update |= drawFloatControl("Diffuse", component.diffuse, 0.5f, 0.1f);
+            update |= drawFloatControl("Specular", component.specular, 0.5f, 0.1f);
+            update |= drawFloatControl("PhongExponents", component.phongExponent, 32.0f, 1.0f);
 
             /*
             // Emissive Factor Control
@@ -605,7 +608,8 @@ namespace VkRender {
             ImGui::Text("Gaussian Model Properties");
 
             // Display the number of Gaussians
-            ImGui::Text("Number of Gaussians: %zu", component.size());
+            size_t gaussianCount = component.size();
+            ImGui::Text("Number of Gaussians: %zu", gaussianCount);
 
             ImGui::Separator();
 
@@ -618,7 +622,19 @@ namespace VkRender {
                 component.addGaussian(defaultMean, defaultNormal, defaultScale);
             }
 
+            ImGui::SameLine();
+
+            if (ImGui::Button("Load from file")) {
+                std::vector<std::string> types{".ply"};
+                EditorUtils::openImportFileDialog("Load 3DGS .ply file", types, LayerUtils::PLY_3DGS,
+                                                  &m_loadFileFuture);
+            }
+
+            if (ImGui::Button("Remove All")) {
+                component.removeAllGaussians();
+            }
             ImGui::Spacing();
+
 
             // Iterate over each Gaussian and provide controls to modify them
             if (component.size() < 10) {
@@ -633,11 +649,12 @@ namespace VkRender {
                         update |= drawVec2Control("Scale", component.scales[i], 0.0f, 0.1f);
                         // Amplitude Control
                         ImGui::Text("Appearance Properties");
-                        update |= drawFloatControl("Emission",  component.emissions[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("Colors",  component.colors[i], 1.0f, 0.1f);
-                        update |= drawFloatControl("Diffuse",  component.diffuse[i], 0.5f, 0.1f);
-                        update |= drawFloatControl("Specular",  component.specular[i], 0.5f, 0.1f);
-                        update |= drawFloatControl("PhongExponents",  component.phongExponents[i], 32.0f, 1.0f);
+                        update |= drawFloatControl("Opacity", component.opacities[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Emission", component.emissions[i], 0.0f, 0.1f);
+                        update |= drawFloatControl("Colors", component.colors[i], 1.0f, 0.1f);
+                        update |= drawFloatControl("Diffuse", component.diffuse[i], 0.5f, 0.1f);
+                        update |= drawFloatControl("Specular", component.specular[i], 0.5f, 0.1f);
+                        update |= drawFloatControl("PhongExponents", component.phongExponents[i], 32.0f, 1.0f);
 
 
                         // Button to remove this Gaussian
@@ -647,6 +664,7 @@ namespace VkRender {
                             component.scales.erase(component.scales.begin() + i);
                             component.normals.erase(component.normals.begin() + i);
                             component.emissions.erase(component.emissions.begin() + i);
+                            component.opacities.erase(component.opacities.begin() + i);
                             component.colors.erase(component.colors.begin() + i);
                             component.diffuse.erase(component.diffuse.begin() + i);
                             component.specular.erase(component.specular.begin() + i);
@@ -657,7 +675,86 @@ namespace VkRender {
 
                     ImGui::PopID(); // Pop ID for this Gaussian
                 }
+                return;
             }
+            // For large numbers of Gaussians, show a single "selected" Gaussian
+            // ----------------------------------------------------------------
+
+            static int selectedGaussianIndex = 0;  // or persist somewhere, e.g. as a class member
+
+            // Ensure valid range
+            if (selectedGaussianIndex < 0) selectedGaussianIndex = 0;
+            if (selectedGaussianIndex >= (int)gaussianCount) {
+                selectedGaussianIndex = (int)gaussianCount - 1;
+            }
+
+            // UI to pick which Gaussian to inspect
+            ImGui::Text("Edit a Single Gaussian (Large Set)");
+            ImGui::PushItemWidth(120.0f);
+            ImGui::InputInt("Gaussian Index", &selectedGaussianIndex);
+            ImGui::PopItemWidth();
+
+            // Clamp again after user input
+            if (selectedGaussianIndex < 0) selectedGaussianIndex = 0;
+            if (selectedGaussianIndex >= (int)gaussianCount) {
+                selectedGaussianIndex = (int)gaussianCount - 1;
+            }
+
+            // Navigation buttons to move up/down
+            ImGui::SameLine();
+            if (ImGui::ArrowButton("PrevGaussian", ImGuiDir_Left)) {
+                selectedGaussianIndex--;
+                if (selectedGaussianIndex < 0) selectedGaussianIndex = 0;
+            }
+            ImGui::SameLine();
+            if (ImGui::ArrowButton("NextGaussian", ImGuiDir_Right)) {
+                selectedGaussianIndex++;
+                if (selectedGaussianIndex >= (int)gaussianCount) {
+                    selectedGaussianIndex = (int)gaussianCount - 1;
+                }
+            }
+
+            ImGui::Separator();
+
+            // Now display and edit ONLY the selected Gaussian
+            {
+                size_t i = (size_t)selectedGaussianIndex;
+
+                ImGui::Text("Selected Gaussian %d", selectedGaussianIndex + 1);
+
+                bool update = false;
+                update |= drawVec3Control("Position", component.positions[i], 0.0f);
+                update |= drawVec3Control("Normal", component.normals[i], 0.0f, 0.1f);
+                update |= drawVec2Control("Scale", component.scales[i], 0.0f, 0.1f);
+
+                ImGui::Text("Appearance Properties");
+                update |= drawFloatControl("Opacity", component.opacities[i], 0.0f, 0.1f);
+                update |= drawFloatControl("Emission", component.emissions[i], 0.0f, 0.1f);
+                update |= drawFloatControl("Colors",   component.colors[i],    1.0f, 0.1f);
+                update |= drawFloatControl("Diffuse",  component.diffuse[i],   0.5f, 0.1f);
+                update |= drawFloatControl("Specular", component.specular[i],  0.5f, 0.1f);
+                update |= drawFloatControl("PhongExp", component.phongExponents[i], 32.0f, 1.0f);
+
+                ImGui::Spacing();
+
+                if (ImGui::Button("Remove This Gaussian")) {
+                    component.positions.erase(component.positions.begin() + i);
+                    component.normals.erase(component.normals.begin() + i);
+                    component.scales.erase(component.scales.begin() + i);
+                    component.emissions.erase(component.emissions.begin() + i);
+                    component.colors.erase(component.colors.begin() + i);
+                    component.diffuse.erase(component.diffuse.begin() + i);
+                    component.specular.erase(component.specular.begin() + i);
+                    component.phongExponents.erase(component.phongExponents.begin() + i);
+
+                    // Adjust if we removed the last one
+                    if (i >= component.size()) {
+                        i = component.size() - 1;
+                    }
+                    selectedGaussianIndex = (int)i;
+                }
+            }
+
         });
 
         drawComponent<GaussianComponent>("Gaussian Model", entity, [this](auto &component) {
@@ -721,7 +818,6 @@ namespace VkRender {
                 }
             }
         });
-
 
 
         drawComponent<GroupComponent>("Group", entity, [this](auto &component) {
@@ -797,11 +893,10 @@ namespace VkRender {
 
                     break;
                 case LayerUtils::PLY_3DGS: {
-                    if (m_selectionContext.hasComponent<GaussianComponent>())
-                        m_selectionContext.removeComponent<GaussianComponent>();
-
-                    auto &comp = m_selectionContext.addComponent<GaussianComponent>(loadFileInfo.path);
-                    comp.addToRenderer = true;
+                    if (m_selectionContext.hasComponent<GaussianComponent2DGS>()) {
+                        auto &comp = m_selectionContext.getComponent<GaussianComponent2DGS>();
+                        comp.addGaussiansFromFile(loadFileInfo.path);
+                    }
                 }
                     break;
                 case LayerUtils::PLY_MESH:

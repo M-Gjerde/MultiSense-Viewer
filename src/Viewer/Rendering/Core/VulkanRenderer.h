@@ -113,7 +113,7 @@ namespace VkRender {
         std::unique_ptr<VulkanImage> m_colorImage;
         std::unique_ptr<VulkanImage> m_depthStencil;
 
-        /** @brief Last frame time measured using a high performance timer (if available) in ms */
+        /** @brief Last frame time measured using a high performance timer (if available) in seconds */
         float frameTimer = 1.0f;
         std::chrono::system_clock::time_point rendererStartTime;
         float runTime = 0.0f;

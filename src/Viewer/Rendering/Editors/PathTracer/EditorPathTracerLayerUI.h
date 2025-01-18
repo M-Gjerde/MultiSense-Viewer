@@ -23,6 +23,7 @@ namespace VkRender {
 
         std::string kernel = " ";
         std::string kernelDevice = "CPU";
+        int selectedKernelIndex = 2;
         bool switchKernelDevice = false;
 
         int photonCount = 1e4;

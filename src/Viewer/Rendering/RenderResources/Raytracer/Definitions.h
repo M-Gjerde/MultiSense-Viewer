@@ -47,13 +47,13 @@ namespace VkRender::RT {
         TagComponent *tagComponents = nullptr;
         uint32_t numEntities = 0;
 
-        uint32_t totalVertices;
-        uint32_t totalIndices;
+        uint32_t totalVertices = 0;
+        uint32_t totalIndices = 0;
 
         // GS
         GaussianInputAssembly *gaussianInputAssembly = nullptr;
 
-        size_t numGaussians;
+        size_t numGaussians = 0;
 
         float *imageMemory;
         float *contribution;

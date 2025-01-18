@@ -235,6 +235,7 @@ set(SOURCE_FILES
 
         src/Viewer/Rendering/Components/ImageComponent.cpp
         src/Viewer/Rendering/Components/PointCloudComponent.h
+        src/Viewer/Rendering/Components/GaussianComponent.cpp
 
         src/Viewer/Rendering/ImGui/Widgets.cpp
         src/Viewer/Rendering/ImGui/GuiManager.cpp

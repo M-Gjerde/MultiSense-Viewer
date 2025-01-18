@@ -80,7 +80,7 @@ namespace VkRender::RT {
 
             queue.wait();
 
-            if (uiLayer.kernel == "Path Tracer: 2DGS") {
+            if (uiLayer.kernel == "Path Tracer: 2DGS" && m_gpu.numGaussians > 0) {
                 sycl::range<1> globalRange(simulatePhotonCount);
                 queue.submit([&](sycl::handler &cgh) {
                     // Capture GPUData, etc. by value or reference as needed

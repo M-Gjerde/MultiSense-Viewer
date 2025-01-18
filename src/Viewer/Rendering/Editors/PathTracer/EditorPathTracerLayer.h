@@ -67,12 +67,12 @@ namespace VkRender {
 
             // Dropdown for selecting render kernel
             const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
-            static int selectedKernelIndex = 2; // Default selection
+
             ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Render Kernel", &selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
+            if (ImGui::Combo("##Render Kernel", &imageUI->selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
             }
 
-            imageUI->kernel = kernels[selectedKernelIndex];
+            imageUI->kernel = kernels[imageUI->selectedKernelIndex];
 
             ImGui::SameLine();            // Dropdown for selecting render kernel
             const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
