@@ -452,7 +452,7 @@ namespace VkRender {
             positionData = file.request_properties_from_element("vertex", {"x", "y", "z"});
         }
         catch (const std::exception& e) {
-            throw std::runtime_error("tinyply exception: " + std::string(e.what()));
+            Log::Logger::getInstance()->warning("Failed to Vertex information from {}", parameters.path.string());
         }
 
         try {
@@ -460,14 +460,21 @@ namespace VkRender {
             colorData = file.request_properties_from_element("vertex", {"red", "green", "blue"});
         }
         catch (const std::exception& e) {
-            throw std::runtime_error("tinyply exception: " + std::string(e.what()));
+            Log::Logger::getInstance()->warning("Failed to Vertex color information from {}", parameters.path.string());
         }
 
         try {
             facesData = file.request_properties_from_element("face", {"vertex_indices"});
+
+            facesData = file.request_properties_from_element(
+                "face",
+                { "vertex_indices" },
+                3
+                );
+
         }
         catch (const std::exception& e) {
-            throw std::runtime_error("tinyply exception: " + std::string(e.what()));
+            Log::Logger::getInstance()->warning("Failed to face/vertex_indices information from {}", parameters.path.string());
         }
 
         file.read(ss);
@@ -480,11 +487,14 @@ namespace VkRender {
         std::memcpy(positions.data(), positionData->buffer.get(), positionData->buffer.size_bytes());
 
         // Load color data (unsigned char precision)
-        std::vector<uint8_t> colors(numVertices * 3);
-        std::memcpy(colors.data(), colorData->buffer.get(), colorData->buffer.size_bytes());
-
+        std::vector<uint8_t> colors(numVertices * 3, 1);
+        if (colorData) {
+            std::memcpy(colors.data(), colorData->buffer.get(), colorData->buffer.size_bytes());
+        }
         std::vector<uint32_t> faces(numFaces * 3);
-        std::memcpy(faces.data(), facesData->buffer.get(), facesData->buffer.size_bytes());
+        if (facesData) {
+            std::memcpy(faces.data(), facesData->buffer.get(), facesData->buffer.size_bytes());
+        }
 
         // Populate vertices
         for (size_t i = 0; i < numVertices; ++i) {
