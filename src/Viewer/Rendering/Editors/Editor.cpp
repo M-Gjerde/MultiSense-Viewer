@@ -72,7 +72,6 @@ namespace VkRender {
 
         createOffscreenFramebuffer();
 
-        onEditorResize();
     }
 
     void Editor::loadScene(std::shared_ptr<Scene> scene) {

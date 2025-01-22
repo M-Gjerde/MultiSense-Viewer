@@ -322,8 +322,8 @@ namespace VkRender {
 
                 continue;
             }
-
-            editor->update();
+            if (!editor->ui()->resizeActive)
+                editor->update();
         }
         handleEditorResize();
     }
@@ -419,6 +419,11 @@ namespace VkRender {
                     editor->ui()->active = false;
                     editor->ui()->indirectlyActivated = false;
                 }
+                if (editor->ui()->resizeActive){
+                    // Trigger update for editors since we transitioned from resizing to no resize
+                    editor->onEditorResize(); // TODO it is nice to also resize the editos during resize, look into debouncing techniques to check how we can resize editors meanwhile the viewport is also being resized
+                }
+
                 editor->ui()->resizeActive = false;
                 editor->ui()->cornerBottomLeftClicked = false;
                 editor->ui()->dragHorizontal = false;

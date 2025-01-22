@@ -134,8 +134,6 @@ namespace VkRender {
         int32_t width = 0;
         int32_t height = 0;
         bool resizeActive = false;
-        bool prevResize = false;
-        bool borderClicked = false;
         bool resizeHovered = false;
         bool cornerBottomLeftHovered = false; // Hover state
         bool cornerBottomLeftClicked = false; // Single push down event
@@ -143,7 +141,6 @@ namespace VkRender {
         bool dragHorizontal = false;  // Holding after click event
         bool dragVertical = false;  // Holding after click event
         bool dragActive = false;  // Holding after click event
-        bool createNewEditorByCopy = false;
         bool splitting = false;
         bool shouldMerge = false;
         EditorBorderState lastClickedBorderType = EditorBorderState::None;
