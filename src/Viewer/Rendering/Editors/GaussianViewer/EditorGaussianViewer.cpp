@@ -65,7 +65,6 @@ namespace VkRender {
     void EditorGaussianViewer::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorGaussianViewerUI>(m_ui);
         if (imageUI->useImageFrom3DViewport) {
-            diffRenderEntry->update();
 
         }
 

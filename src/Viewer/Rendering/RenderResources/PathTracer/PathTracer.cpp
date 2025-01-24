@@ -2,20 +2,18 @@
 // Created by magnus on 11/27/24.
 //
 
-#include "Viewer/Scenes/Entity.h"
-#include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
-
 #include <utility>
 
-#include "LightTracerKernels.h"
-#include "Viewer/Rendering/RenderResources/Raytracer/PathTracerMeshKernels.h"
-
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
+#include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/Components/GaussianComponent.h"
 #include "Viewer/Tools/SyclDeviceSelector.h"
-#include "RayTracerKernels.h"
 
-namespace VkRender::RT {
-    RayTracer::RayTracer(Application *ctx, std::shared_ptr<Scene> &scene, uint32_t width, uint32_t height) : m_context(
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracerMeshKernels.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernel.h"
+
+namespace VkRender::PathTracer {
+    PhotonRebuild::PhotonRebuild(Application *ctx, std::shared_ptr<Scene> &scene, uint32_t width, uint32_t height) : m_context(
             ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU)) {
         ;
 
@@ -30,7 +28,7 @@ namespace VkRender::RT {
     }
 
 
-    void RayTracer::update(EditorPathTracerLayerUI &uiLayer, std::shared_ptr<Scene> scene) {
+    void PhotonRebuild::update(EditorPathTracerLayerUI &uiLayer, std::shared_ptr<Scene> scene) {
 
 
         if (m_cameraTransform.moved())
@@ -96,19 +94,6 @@ namespace VkRender::RT {
                                                  uiLayer.numBounces, rngGPU);
                     cgh.parallel_for(globalRange, kernel);
                 });
-            } else if (uiLayer.kernel == "Hit-Test") {
-                uint32_t tileWidth = 16;
-                uint32_t tileHeight = 16;
-                sycl::range localWorkSize(tileHeight, tileWidth);
-                sycl::range globalWorkSize(m_height, m_width);
-
-                queue.submit([&](sycl::handler &h) {
-                    // Create a kernel instance with the required parameters
-                    Kernels::RenderKernel kernel(m_gpu, m_width, m_height, m_width * m_height * 4, m_cameraTransform,
-                                                 cameraGPU);
-                    h.parallel_for<class RenderKernel>(
-                            sycl::nd_range<2>(globalWorkSize, localWorkSize), kernel);
-                });
             }
             queue.wait();
 
@@ -131,14 +116,14 @@ namespace VkRender::RT {
 
     }
 
-    void RayTracer::resetState() {
+    void PhotonRebuild::resetState() {
         m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
         m_frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
     }
 
-    void RayTracer::upload(std::weak_ptr<Scene> scene) {
+    void PhotonRebuild::upload(std::weak_ptr<Scene> scene) {
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
@@ -172,7 +157,7 @@ namespace VkRender::RT {
         uploadGaussianData(scene);
     }
 
-    void RayTracer::freeResources() {
+    void PhotonRebuild::freeResources() {
         m_selector.getQueue().wait();
         if (m_gpu.imageMemory) {
             sycl::free(m_gpu.imageMemory, m_selector.getQueue());
@@ -218,7 +203,7 @@ namespace VkRender::RT {
         m_selector.getQueue().wait();
     }
 
-    void RayTracer::uploadGaussianData(std::weak_ptr<Scene> &scene) {
+    void PhotonRebuild::uploadGaussianData(std::weak_ptr<Scene> &scene) {
         auto scenePtr = scene.lock();
         auto &queue = m_selector.getQueue();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
@@ -254,7 +239,7 @@ namespace VkRender::RT {
 
     }
 
-    void RayTracer::uploadVertexData(std::weak_ptr<Scene> &scene) {
+    void PhotonRebuild::uploadVertexData(std::weak_ptr<Scene> &scene) {
 
         auto scenePtr = scene.lock();
         std::vector<InputAssembly> vertexData;
@@ -364,7 +349,7 @@ namespace VkRender::RT {
     }
 
 
-    RayTracer::~RayTracer() {
+    PhotonRebuild::~PhotonRebuild() {
         if (m_imageMemory) {
             delete[] m_imageMemory;
         }
@@ -372,7 +357,7 @@ namespace VkRender::RT {
         freeResources();
     }
 
-    void RayTracer::saveAsPPM(const std::filesystem::path &filename) const {
+    void PhotonRebuild::saveAsPPM(const std::filesystem::path &filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -397,7 +382,7 @@ namespace VkRender::RT {
         file.close();
     }
 
-    void RayTracer::saveAsPFM(const std::filesystem::path &filename) const {
+    void PhotonRebuild::saveAsPFM(const std::filesystem::path &filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -435,7 +420,7 @@ namespace VkRender::RT {
         file.close();
     }
     // For editorCamera
-    void RayTracer::setActiveCamera(const TransformComponent &transformComponent,float width, float height) {
+    void PhotonRebuild::setActiveCamera(const TransformComponent &transformComponent,float width, float height) {
             PinholeParameters pinholeParameters;
             SharedCameraSettings cameraSettings;
             pinholeParameters.width = width;
@@ -449,7 +434,7 @@ namespace VkRender::RT {
             m_cameraTransform = transformComponent;
     }
     // For pinhole scene camera
-    void RayTracer::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent* cameraTransform) {
+    void PhotonRebuild::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent* cameraTransform) {
             m_camera = *camera;
             m_cameraTransform = *cameraTransform;
     }

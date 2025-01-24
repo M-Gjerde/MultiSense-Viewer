@@ -14,7 +14,6 @@
 
 #include "Viewer/Rendering/RenderResources/2DGS/SYCLGaussian2D.h"
 #include "Viewer/Rendering/RenderResources/3DGS/SYCLGaussian3D.h"
-#include "Viewer/Rendering/RenderResources/DifferentiableRenderer/DiffRenderEntry.h"
 #include "Viewer/Rendering/Editors/RenderCommand.h"
 
 namespace VkRender {
@@ -51,7 +50,6 @@ namespace VkRender {
         SyclDeviceSelector m_deviceSelector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
         SYCLGaussian2D gaussianRenderer2D;
         SYCLGaussian3D gaussianRenderer3D;
-        std::unique_ptr<DR::DiffRenderEntry> diffRenderEntry;
 
         std::vector<std::unique_ptr<Buffer>> m_shaderSelectionBuffer;
 

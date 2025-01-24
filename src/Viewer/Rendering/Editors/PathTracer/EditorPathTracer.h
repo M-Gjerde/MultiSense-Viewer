@@ -13,8 +13,7 @@
 #include "Viewer/Rendering/Core/VulkanTexture.h"
 #include "Viewer/Rendering/RenderResources/GraphicsPipeline2D.h"
 
-#include "Viewer/Rendering/RenderResources/DifferentiableRenderer/DiffRenderEntry.h"
-#include "Viewer/Rendering/RenderResources/Raytracer/RayTracer.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
 #include "Viewer/Rendering/Editors/RenderCommand.h"
 #include "Viewer/Rendering/Editors/ArcballCamera.h"
 
@@ -54,7 +53,7 @@ namespace VkRender {
         std::shared_ptr<MeshInstance> m_meshInstances;
         std::shared_ptr<VulkanTexture2D> m_colorTexture;
 
-        std::unique_ptr<RT::RayTracer> m_rayTracer;
+        std::unique_ptr<PathTracer::PhotonRebuild> m_pathTracer;
 
         std::shared_ptr<ArcballCamera> m_editorCamera;
         CameraComponent* m_lastActiveCamera = nullptr;

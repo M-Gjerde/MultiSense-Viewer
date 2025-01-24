@@ -6,22 +6,23 @@
 #define MULTISENSE_VIEWER_RAYTRACER_H
 
 #include "Viewer/Scenes/Scene.h"
-#include "Viewer/Rendering/RenderResources/Raytracer/Definitions.h"
 #include "Viewer/Rendering/MeshManager.h"
 
 #ifdef SYCL_ENABLED
 #include "Viewer/Tools/SyclDeviceSelector.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/Definitions.h"
+
 #endif
 
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
 #include "Viewer/Rendering/Editors/ArcballCamera.h"
 
-namespace VkRender::RT {
+namespace VkRender::PathTracer {
 #ifdef SYCL_ENABLED
 
-    class RayTracer {
+    class PhotonRebuild {
     public:
-        RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
+        PhotonRebuild(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
         void uploadGaussianData(std::weak_ptr<Scene>& scene);
         void uploadVertexData(std::weak_ptr<Scene>& scene);
 
@@ -30,7 +31,7 @@ namespace VkRender::RT {
 
         float* getImage() {return m_imageMemory;}
 
-        ~RayTracer();
+        ~PhotonRebuild();
 
 
         void upload(std::weak_ptr<Scene> ptr);
@@ -68,14 +69,14 @@ namespace VkRender::RT {
 
 #else
 
-    class RayTracer {
+    class PathTracer {
     public:
-        RayTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
+        PathTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
         void update(const EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene) {}
         float* getImage() {return nullptr;}
-        ~RayTracer() {}
+        ~PathTracer() {}
         void upload(std::shared_ptr<Scene> ptr) {}
         void setActiveCamera(const TransformComponent &transformComponent, float w, float h){}
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform){}

@@ -78,12 +78,12 @@ namespace Log {
         m_logLevel = LOG_LEVEL_TRACE;
         m_logType = FILE_LOG;
 
-        this->info("<=============================== START OF PROGRAM ===============================>");
+        info("<=============================== START OF PROGRAM ===============================>");
 
         if (resetLogFile)
-            this->info("Log file was larger than 10MB. Deleted: {} and created new empty", logFileName);
+            info("Log file was larger than 10MB. Deleted: {} and created new empty", logFileName);
         else {
-            this->info("Log file size is currently: {}MB", fileSizeMB);
+            info("Log file size is currently: {}MB", fileSizeMB);
         }
     }
 

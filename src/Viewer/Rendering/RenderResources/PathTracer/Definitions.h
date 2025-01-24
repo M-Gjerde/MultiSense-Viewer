@@ -10,7 +10,7 @@
 #include "Viewer/Rendering/Components/MaterialComponent.h"
 #include "Viewer/Rendering/Components/Components.h"
 
-namespace VkRender::RT {
+namespace VkRender::PathTracer {
     struct InputAssembly {
         glm::vec3 position;
         glm::vec3 color;

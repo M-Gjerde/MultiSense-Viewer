@@ -38,78 +38,6 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif ()
 
-# Include common CMake modules
-include(cmake/Common.cmake)
-include(cmake/CompilerWarnings.cmake)
-
-# Check if PyTorch is available with ROCm or CUDA
-set(PYTORCH_AVAILABLE FALSE)
-set(USE_CUDA FALSE)
-set(USE_ROCM FALSE)
-
-
-#if (ENABLE_PYTORCH)
-#    # Find PyTorch
-#
-#    set(CMAKE_CUDA_STANDARD 20)
-#    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-#    set(CMAKE_CUDA_EXTENSIONS OFF)
-#
-#    find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
-#            /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
-#    )
-#
-#
-#    if (Torch_FOUND)
-#        message(STATUS "[VkRenderINFO]: PyTorch found at ${TORCH_INSTALL_PREFIX}")
-#        # Check if PyTorch is built for CUDA
-#        if (DEFINED TORCH_CUDA_LIBRARIES)
-#            set(PYTORCH_AVAILABLE TRUE)
-#            set(USE_CUDA TRUE)
-#            message(STATUS "[VkRenderINFO]: PyTorch is configured with CUDA.")
-#        endif ()
-#
-#        # Check if PyTorch is built for ROCm
-#        if (DEFINED TORCH_HIP_VERSION)
-#            set(PYTORCH_AVAILABLE TRUE)
-#            set(USE_ROCM TRUE)
-#            message(STATUS "[VkRenderINFO]: PyTorch is configured with ROCm.")
-#        endif ()
-#
-#        if (NOT USE_CUDA AND NOT USE_ROCM)
-#            message(FATAL_ERROR "PyTorch is not configured with CUDA or ROCm. Skipping PyTorch integration.")
-#        endif ()
-#    else ()
-#        message(FATAL_ERROR "PyTorch not found. Skipping PyTorch integration.")
-#    endif ()
-#endif ()
-
-#if (PYTORCH_AVAILABLE)
-#    if (USE_CUDA)
-#        set(CMAKE_CUDA_STANDARD 20)
-#        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-#        set(CMAKE_CUDA_EXTENSIONS OFF)
-#        message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
-#        target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
-#
-#    elseif (USE_ROCM)
-#        enable_language(HIP)
-#        message(STATUS "[VkRenderINFO]: HIP language support enabled.")
-#        set(CMAKE_HIP_STANDARD 20)
-#        set(CMAKE_HIP_STANDARD_REQUIRED ON)
-#        set(CMAKE_HIP_EXTENSIONS OFF)
-#        # Add any ROCm-specific setup if necessary (e.g., include ROCm libraries or headers)
-#        message(STATUS "[VkRenderINFO]: ROCm-specific setup would go here if needed.")
-#    endif ()
-#    target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})
-#    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
-#    message(STATUS "[VkRenderINFO]: PyTorch libraries successfully linked.")
-#    target_compile_definitions(${PROJECT_NAME} PRIVATE PYTORCH_ENABLED)
-#
-#else ()
-#    message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
-#endif ()
-
 # SYCL Backend selectionDefault
 if (ENABLE_SYCL)
     message(STATUS "SYCL backend: ${SYCL_IMPLEMENTATION}")
@@ -126,7 +54,7 @@ if (ENABLE_SYCL)
     endif()
 
     if (SYCL_IMPLEMENTATION STREQUAL "dpcpp")
-        set(CMAKE_CXX_COMPILER "clang++")
+        set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
 
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
@@ -172,6 +100,79 @@ else ()
 endif ()
 
 
+
+# Include common CMake modules
+include(cmake/Common.cmake)
+include(cmake/CompilerWarnings.cmake)
+
+# Check if PyTorch is available with ROCm or CUDA
+set(PYTORCH_AVAILABLE FALSE)
+set(USE_CUDA FALSE)
+set(USE_ROCM FALSE)
+
+
+if (ENABLE_PYTORCH)
+    # Find PyTorch
+
+    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_EXTENSIONS OFF)
+
+    find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
+            /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
+    )
+
+
+    if (Torch_FOUND)
+        message(STATUS "[VkRenderINFO]: PyTorch found at ${TORCH_INSTALL_PREFIX}")
+        # Check if PyTorch is built for CUDA
+        if (DEFINED TORCH_CUDA_LIBRARIES)
+            set(PYTORCH_AVAILABLE TRUE)
+            set(USE_CUDA TRUE)
+            message(STATUS "[VkRenderINFO]: PyTorch is configured with CUDA.")
+        endif ()
+
+        # Check if PyTorch is built for ROCm
+        if (DEFINED TORCH_HIP_VERSION)
+            set(PYTORCH_AVAILABLE TRUE)
+            set(USE_ROCM TRUE)
+            message(STATUS "[VkRenderINFO]: PyTorch is configured with ROCm.")
+        endif ()
+
+        if (NOT USE_CUDA AND NOT USE_ROCM)
+            message(FATAL_ERROR "PyTorch is not configured with CUDA or ROCm. Skipping PyTorch integration.")
+        endif ()
+    else ()
+        message(FATAL_ERROR "PyTorch not found. Skipping PyTorch integration.")
+    endif ()
+endif ()
+
+if (PYTORCH_AVAILABLE)
+    if (USE_CUDA)
+        set(CMAKE_CUDA_STANDARD 20)
+        set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+        set(CMAKE_CUDA_EXTENSIONS OFF)
+        message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
+        target_link_directories(${PROJECT_NAME} PRIVATE /usr/local/cuda/lib64)
+
+    elseif (USE_ROCM)
+        enable_language(HIP)
+        message(STATUS "[VkRenderINFO]: HIP language support enabled.")
+        set(CMAKE_HIP_STANDARD 20)
+        set(CMAKE_HIP_STANDARD_REQUIRED ON)
+        set(CMAKE_HIP_EXTENSIONS OFF)
+        # Add any ROCm-specific setup if necessary (e.g., include ROCm libraries or headers)
+        message(STATUS "[VkRenderINFO]: ROCm-specific setup would go here if needed.")
+    endif ()
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
+    message(STATUS "[VkRenderINFO]: PyTorch libraries successfully linked.")
+    target_compile_definitions(${PROJECT_NAME} PRIVATE PYTORCH_ENABLED)
+
+else ()
+    message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
+endif ()
 
 # Add version file generation
 GenerateVersionFile()
@@ -295,8 +296,7 @@ if (ENABLE_SYCL)
             #src/Viewer/Rendering/RenderResources/2DGS/SYCLGaussian2D.cpp
             #src/Viewer/Rendering/RenderResources/3DGS/SYCLGaussian3D.cpp
             src/Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.cpp
-            src/Viewer/Rendering/RenderResources/Raytracer/RayTracer.cpp
-            src/Viewer/Rendering/RenderResources/Raytracer/RayTracerKernels.cpp
+            src/Viewer/Rendering/RenderResources/PathTracer/PathTracer.cpp
             src/Viewer/Tools/SyclDeviceSelector.h
     )
     list(APPEND SOURCE_FILES ${SYCL_SOURCES})
@@ -307,9 +307,7 @@ endif ()# Add SYCL-specific files
 
 if (${ENABLE_PYTORCH})
     set (DIFF_RENDER_SOURCES
-            src/Viewer/Rendering/RenderResources/DifferentiableRenderer/RenderGaussianFunction.cpp
-            src/Viewer/Rendering/RenderResources/DifferentiableRenderer/RenderGaussian.cpp
-            src/Viewer/Rendering/RenderResources/DifferentiableRenderer/DiffRenderEntry.cpp
+            src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PathTracerModule.cpp
     )
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})
 

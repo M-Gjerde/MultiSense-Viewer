@@ -21,7 +21,6 @@ namespace VkRender {
 
         m_descriptorRegistry.createManager(DescriptorManagerType::Viewport3DTexture, m_context->vkDevice());
 
-
         m_shaderSelectionBuffer.resize(m_context->swapChainBuffers().size());
         for (auto& frameIndex : m_shaderSelectionBuffer) {
             m_context->vkDevice().createBuffer(
@@ -69,7 +68,7 @@ namespace VkRender {
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             float width = camera->parameters().width;
             float height = camera->parameters().height;
-            m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, width, height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
             m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
         } else {
@@ -81,9 +80,9 @@ namespace VkRender {
             transformComponent.setPosition(m_editorCamera->matrices.position);
             transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
             transformComponent.setMoving(true);
-            m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
             m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
-            m_rayTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
+            m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
 
         }
     }
@@ -120,7 +119,7 @@ namespace VkRender {
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             float width = camera->parameters().width;
             float height = camera->parameters().height;
-            m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, width, height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
             m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
         } else {
             m_meshInstances.reset();
@@ -130,9 +129,9 @@ namespace VkRender {
             transformComponent.setPosition(m_editorCamera->matrices.position);
             transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
             transformComponent.setMoving(true);
-            m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
             m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
-            m_rayTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
+            m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
             m_lastActiveCamera = nullptr;
         }
     }
@@ -224,12 +223,12 @@ namespace VkRender {
         vkUnmapMemory(m_context->vkDevice().m_LogicalDevice, m_shaderSelectionBuffer[frameIndex]->m_memory);
 
         if (imageUI->uploadScene) {
-            m_rayTracer->upload(m_context->activeScene());
+            m_pathTracer->upload(m_context->activeScene());
         }
 
         if (imageUI->render || imageUI->toggleRendering) {
-            m_rayTracer->update(*imageUI, m_context->activeScene());
-            float* image = m_rayTracer->getImage();
+            m_pathTracer->update(*imageUI, m_context->activeScene());
+            float* image = m_pathTracer->getImage();
             if (image) {
                 uint32_t width = m_colorTexture->width();
                 uint32_t height = m_colorTexture->height();
@@ -264,7 +263,7 @@ namespace VkRender {
         if (imageUI->saveImage) {
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
-            float* image = m_rayTracer->getImage();
+            float* image = m_pathTracer->getImage();
             std::filesystem::path filename = "cornell.pfm";
             std::ofstream file(filename, std::ios::binary);
 
@@ -518,7 +517,7 @@ namespace VkRender {
                 m_meshInstances.reset();
                 m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
 
-                m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, width, height);
+                m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             }
             m_lastActiveCamera = sceneCameraToUse;
@@ -528,7 +527,7 @@ namespace VkRender {
             float width = pinholeCamera->parameters().width;
             float height = pinholeCamera->parameters().height;
 
-            m_rayTracer->setActiveCamera(pinholeCamera, tfComponentPtr);
+            m_pathTracer->setActiveCamera(pinholeCamera, tfComponentPtr);
 
         } else {
             // No valid scene camera — revert to editor camera
@@ -550,7 +549,7 @@ namespace VkRender {
                 onRenderSettingsChanged();
                 */
 
-                m_rayTracer = std::make_unique<VkRender::RT::RayTracer>(m_context, m_activeScene, width, height);
+                m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             }
 
@@ -561,7 +560,7 @@ namespace VkRender {
             transformComponent.setPosition(m_editorCamera->matrices.position);
             transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
             transformComponent.setMoving(m_movedCamera);
-            m_rayTracer->setActiveCamera(transformComponent, width, height);
+            m_pathTracer->setActiveCamera(transformComponent, width, height);
             m_movedCamera = false;
             m_lastActiveCamera = nullptr;
         }
