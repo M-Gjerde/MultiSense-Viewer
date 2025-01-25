@@ -55,10 +55,10 @@ namespace VkRender::PathTracer {
 
         size_t numGaussians = 0;
 
-        float *imageMemory;
-        float *contribution;
+        float *imageMemory = nullptr;
+        float *contribution = nullptr;
 
-        RenderInformation *renderInformation;
+        RenderInformation *renderInformation = nullptr;
     };
 
     struct PCG32 {

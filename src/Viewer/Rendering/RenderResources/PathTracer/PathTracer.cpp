@@ -13,8 +13,9 @@
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernel.h"
 
 namespace VkRender::PathTracer {
-    PhotonRebuild::PhotonRebuild(Application *ctx, std::shared_ptr<Scene> &scene, uint32_t width, uint32_t height) : m_context(
-            ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU)) {
+    PhotonRebuild::PhotonRebuild(Application* ctx, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) :
+        m_context(
+            ctx) {
         ;
 
         m_width = width;
@@ -24,96 +25,99 @@ namespace VkRender::PathTracer {
         // Allocate host memory for RGBA image (4 floats per pixel)
         m_imageMemory = new float[width * height * 4];
         m_renderInformation = std::make_unique<RenderInformation>();
-        upload(scene);
     }
 
 
-    void PhotonRebuild::update(EditorPathTracerLayerUI &uiLayer, std::shared_ptr<Scene> scene) {
+    void PhotonRebuild::update(EditorPathTracerLayerUI& uiLayer, std::shared_ptr<Scene> scene) {
+        try {
+            if (m_cameraTransform.moved())
+                resetState();
 
 
-        if (m_cameraTransform.moved())
-            resetState();
-
-
-        if (uiLayer.switchKernelDevice) {
-            freeResources();
-            if (uiLayer.kernelDevice == "CPU") {
-                m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
-            } else if (uiLayer.kernelDevice == "GPU") {
-                m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
+            if (uiLayer.switchKernelDevice) {
+                freeResources();
+                if (uiLayer.kernelDevice == "CPU") {
+                    m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
+                }
+                else if (uiLayer.kernelDevice == "GPU") {
+                    m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
+                }
+                upload(scene);
+                resetState();
+                uiLayer.switchKernelDevice = false;
             }
-            upload(scene);
-            resetState();
-            uiLayer.switchKernelDevice = false;
-        }
 
-        auto &queue = m_selector.getQueue();
+            auto& queue = m_selector.getQueue();
 
-        m_renderInformation->frameID++;
-        int simulatePhotonCount = uiLayer.photonCount;
+            m_renderInformation->frameID++;
+            int simulatePhotonCount = uiLayer.photonCount;
 
-        std::vector<PCG32> rng(simulatePhotonCount);
-        for (int i = 0; i < simulatePhotonCount; ++i)
-            rng[i].init(m_frameID, i * m_frameID);
+            std::vector<PCG32> rng(simulatePhotonCount);
+            for (int i = 0; i < simulatePhotonCount; ++i)
+                rng[i].init(m_frameID, i * m_frameID);
 
-        auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
-        queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
+            auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
+            queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
 
 
-        if (uiLayer.clearImageMemory) {
-            resetState();
-        }
-        m_renderInformation->totalPhotons += simulatePhotonCount;
-        m_renderInformation->gamma = uiLayer.shaderSelection.gammaCorrection;
-        /** Any shared GPU/CPU debug information must be stored before here**/
-        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+            if (uiLayer.clearImageMemory) {
+                resetState();
+            }
+            m_renderInformation->totalPhotons += simulatePhotonCount;
+            m_renderInformation->gamma = uiLayer.shaderSelection.gammaCorrection;
+            /** Any shared GPU/CPU debug information must be stored before here**/
+            queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
-        //auto cameraEntity = m_scene->getEntityByName("Camera");
-        if (!uiLayer.clearImageMemory) {
-            //auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
-            //auto transform = cameraEntity.getComponent<TransformComponent>();
+            //auto cameraEntity = m_scene->getEntityByName("Camera");
+            if (!uiLayer.clearImageMemory) {
+                //auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
+                //auto transform = cameraEntity.getComponent<TransformComponent>();
 
-            auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
-            queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
+                auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
+                queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
 
-            queue.wait();
+                queue.wait();
 
-            if (uiLayer.kernel == "Path Tracer: 2DGS" && m_gpu.numGaussians > 0) {
-                sycl::range<1> globalRange(simulatePhotonCount);
-                queue.submit([&](sycl::handler &cgh) {
-                    // Capture GPUData, etc. by value or reference as needed
+                if (uiLayer.kernel == "Path Tracer: 2DGS" && m_gpu.numGaussians > 0) {
+                    sycl::range<1> globalRange(simulatePhotonCount);
+                    queue.submit([&](sycl::handler& cgh) {
+                        // Capture GPUData, etc. by value or reference as needed
                         LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                                     uiLayer.numBounces, rngGPU);
-                    cgh.parallel_for(globalRange, kernel);
-                });
-            } else if (uiLayer.kernel == "Path Tracer: Mesh") {
-                sycl::range<1> globalRange(simulatePhotonCount);
-                queue.submit([&](sycl::handler &cgh) {
-                    // Capture GPUData, etc. by value or reference as needed
-                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
                                                  uiLayer.numBounces, rngGPU);
-                    cgh.parallel_for(globalRange, kernel);
-                });
+                        cgh.parallel_for(globalRange, kernel);
+                    });
+                }
+                else if (uiLayer.kernel == "Path Tracer: Mesh") {
+                    sycl::range<1> globalRange(simulatePhotonCount);
+                    queue.submit([&](sycl::handler& cgh) {
+                        // Capture GPUData, etc. by value or reference as needed
+                        PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                                     uiLayer.numBounces, rngGPU);
+                        cgh.parallel_for(globalRange, kernel);
+                    });
+                }
+                queue.wait();
+
+                sycl::free(cameraGPU, queue);
+                sycl::free(rngGPU, queue);
+                m_frameID++;
             }
-            queue.wait();
+            /** Any shared GPU/CPU debug information must be stored after here**/
+            queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
+            queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
+            if (uiLayer.saveImage)
+                saveAsPFM("cornell.pfm");
 
-            sycl::free(cameraGPU, queue);
-            sycl::free(rngGPU, queue);
-            m_frameID++;
-        }
-        /** Any shared GPU/CPU debug information must be stored after here**/
-        queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
-        queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
-        if (uiLayer.saveImage)
-            saveAsPFM("cornell.pfm");
-
-        Log::Logger::getInstance()->trace(
+            Log::Logger::getInstance()->trace(
                 "simulated {:.3f} Billion photons. About {}k Photons hit the sensor, of which {}k hit directly",
                 m_renderInformation->totalPhotons / 1e9 * m_renderInformation->frameID,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
-                                    m_renderInformation->photonsAccumulated)) / 1000,
+                    m_renderInformation->photonsAccumulated)) / 1000,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
-
+        }
+        catch (const sycl::exception& e) {
+            Log::Logger::getInstance()->error("Caught SYCL exception {}", e.what());
+        }
     }
 
     void PhotonRebuild::resetState() {
@@ -129,11 +133,7 @@ namespace VkRender::PathTracer {
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-        // Allocate device memory for RGBA image (4 floats per pixel)
-        m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
-        if (!m_gpu.imageMemory) {
-            throw std::runtime_error("Device memory allocation failed.");
-        }        // Allocate device memory for RGBA image (4 floats per pixel)
+
         m_gpu.contribution = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.contribution) {
             throw std::runtime_error("Device memory allocation failed.");
@@ -203,16 +203,16 @@ namespace VkRender::PathTracer {
         m_selector.getQueue().wait();
     }
 
-    void PhotonRebuild::uploadGaussianData(std::weak_ptr<Scene> &scene) {
+    void PhotonRebuild::uploadGaussianData(std::weak_ptr<Scene>& scene) {
         auto scenePtr = scene.lock();
-        auto &queue = m_selector.getQueue();
+        auto& queue = m_selector.getQueue();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
-        auto &registry = scenePtr->getRegistry();
+        auto& registry = scenePtr->getRegistry();
         // Find all entities with GaussianComponent
         auto view = scenePtr->getRegistry().view<GaussianComponent2DGS>();
-        for (auto e: view) {
-            auto &component = Entity(e, scenePtr.get()).getComponent<GaussianComponent2DGS>();
+        for (auto e : view) {
+            auto& component = Entity(e, scenePtr.get()).getComponent<GaussianComponent2DGS>();
             for (size_t i = 0; i < component.size(); ++i) {
                 GaussianInputAssembly point{};
                 point.position = component.positions[i];
@@ -226,26 +226,25 @@ namespace VkRender::PathTracer {
                 point.phongExponent = component.phongExponents[i];
                 gaussianInputAssembly.push_back(point);
             }
-            auto &transform = Entity(e, scenePtr.get()).getComponent<TransformComponent>();
+            auto& transform = Entity(e, scenePtr.get()).getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
         }
 
         m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(gaussianInputAssembly.size(), queue);
-        queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(), gaussianInputAssembly.size() * sizeof(GaussianInputAssembly));
+        queue.memcpy(m_gpu.gaussianInputAssembly, gaussianInputAssembly.data(),
+                     gaussianInputAssembly.size() * sizeof(GaussianInputAssembly));
         m_gpu.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
 
         Log::Logger::getInstance()->info("Uploaded  {} Gaussians to renderkernel", m_gpu.numGaussians);
         queue.wait();
-
     }
 
-    void PhotonRebuild::uploadVertexData(std::weak_ptr<Scene> &scene) {
-
+    void PhotonRebuild::uploadVertexData(std::weak_ptr<Scene>& scene) {
         auto scenePtr = scene.lock();
         std::vector<InputAssembly> vertexData;
         std::vector<uint32_t> indices;
-        std::vector<uint32_t> indexOffsets;       // Offset for each entity's indices
-        std::vector<uint32_t> vertexOffsets;     // Offset for each entity's vertices
+        std::vector<uint32_t> indexOffsets; // Offset for each entity's indices
+        std::vector<uint32_t> vertexOffsets; // Offset for each entity's vertices
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
         std::vector<MaterialComponent> materials; // Transformation matrices for entities
         std::vector<TagComponent> tagComponents; // Transformation matrices for entities
@@ -253,7 +252,7 @@ namespace VkRender::PathTracer {
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
 
-        for (auto e: view) {
+        for (auto e : view) {
             Entity entity(e, scenePtr.get());
             std::string tag = entity.getName();
             // Initialize a flag to determine if we should skip this entity
@@ -267,7 +266,7 @@ namespace VkRender::PathTracer {
                 // Check if the parent has both GroupComponent and VisibilityComponent
                 if (current.hasComponent<GroupComponent>() && current.hasComponent<VisibleComponent>()) {
                     // Retrieve the VisibilityComponent
-                    auto &visibility = current.getComponent<VisibleComponent>();
+                    auto& visibility = current.getComponent<VisibleComponent>();
                     // If visibility is set to false, mark to skip this entity
                     if (!visibility.visible) {
                         skipEntity = true;
@@ -278,7 +277,7 @@ namespace VkRender::PathTracer {
             if (entity.hasComponent<CameraComponent>())
                 skipEntity = true;
 
-            auto &meshComponent = entity.getComponent<MeshComponent>();
+            auto& meshComponent = entity.getComponent<MeshComponent>();
             if (meshComponent.meshDataType() != OBJ_FILE)
                 skipEntity = true;
 
@@ -288,14 +287,14 @@ namespace VkRender::PathTracer {
             }
 
 
-            auto &transform = entity.getComponent<TransformComponent>();
+            auto& transform = entity.getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
 
             auto tagComponent = entity.getComponent<TagComponent>();
             tagComponents.emplace_back(tagComponent);
 
             if (entity.hasComponent<MaterialComponent>()) {
-                auto &material = entity.getComponent<MaterialComponent>();
+                auto& material = entity.getComponent<MaterialComponent>();
                 float diff = material.diffuse;
                 float specular = material.specular;
                 materials.emplace_back(material);
@@ -306,7 +305,7 @@ namespace VkRender::PathTracer {
             // Store vertex offset
             vertexOffsets.push_back(currentVertexOffset);
             // Add vertex data
-            for (auto &vert: meshData->vertices) {
+            for (auto& vert : meshData->vertices) {
                 InputAssembly input{};
                 input.position = vert.pos;
                 input.color = vert.color;
@@ -317,13 +316,13 @@ namespace VkRender::PathTracer {
             // Store index offset
             indexOffsets.push_back(currentIndexOffset);
             // Add index data
-            for (auto idx: meshData->indices) {
+            for (auto idx : meshData->indices) {
                 indices.push_back(idx + vertexOffsets.back()); // Adjust indices by vertex offset
             }
             currentIndexOffset += meshData->indices.size();
         }
         // Upload vertex data to GPU
-        auto &queue = m_selector.getQueue();
+        auto& queue = m_selector.getQueue();
         m_gpu.vertices = sycl::malloc_device<InputAssembly>(vertexData.size(), queue);
         queue.memcpy(m_gpu.vertices, vertexData.data(), vertexData.size() * sizeof(InputAssembly));
         // Upload index data to GPU
@@ -357,7 +356,7 @@ namespace VkRender::PathTracer {
         freeResources();
     }
 
-    void PhotonRebuild::saveAsPPM(const std::filesystem::path &filename) const {
+    void PhotonRebuild::saveAsPPM(const std::filesystem::path& filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -382,7 +381,7 @@ namespace VkRender::PathTracer {
         file.close();
     }
 
-    void PhotonRebuild::saveAsPFM(const std::filesystem::path &filename) const {
+    void PhotonRebuild::saveAsPFM(const std::filesystem::path& filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -411,7 +410,7 @@ namespace VkRender::PathTracer {
         }
 
         // Write the RGB float data
-        file.write(reinterpret_cast<const char *>(rgbData.data()), rgbData.size() * sizeof(float));
+        file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
 
         if (!file) {
             throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
@@ -419,24 +418,27 @@ namespace VkRender::PathTracer {
 
         file.close();
     }
+
     // For editorCamera
-    void PhotonRebuild::setActiveCamera(const TransformComponent &transformComponent,float width, float height) {
-            PinholeParameters pinholeParameters;
-            SharedCameraSettings cameraSettings;
-            pinholeParameters.width = width;
-            pinholeParameters.height = height;
-            pinholeParameters.cx = width / 2;
-            pinholeParameters.cy = height / 2;
-            pinholeParameters.fx = 600.0f;
-            pinholeParameters.fy = 600.0f;
-            PinholeCamera camera = PinholeCamera(cameraSettings, pinholeParameters);
-            m_camera = std::move(camera);
-            m_cameraTransform = transformComponent;
+    void PhotonRebuild::setActiveCamera(const TransformComponent& transformComponent, float width, float height) {
+        PinholeParameters pinholeParameters;
+        SharedCameraSettings cameraSettings;
+        pinholeParameters.width = width;
+        pinholeParameters.height = height;
+        pinholeParameters.cx = width / 2;
+        pinholeParameters.cy = height / 2;
+        pinholeParameters.fx = 600.0f;
+        pinholeParameters.fy = 600.0f;
+        PinholeCamera camera = PinholeCamera(cameraSettings, pinholeParameters);
+        m_camera = std::move(camera);
+        m_cameraTransform = transformComponent;
     }
+
     // For pinhole scene camera
-    void PhotonRebuild::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent* cameraTransform) {
-            m_camera = *camera;
-            m_cameraTransform = *cameraTransform;
+    void PhotonRebuild::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera,
+                                        const TransformComponent* cameraTransform) {
+        m_camera = *camera;
+        m_cameraTransform = *cameraTransform;
     }
 
     /* Draw rays

@@ -8,6 +8,7 @@
 #include <torch/torch.h>
 
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildFunction.h"
 // Wrap your raytracer in a Torch module
 namespace VkRender {
     class PhotonRebuildModuleImpl : public torch::nn::Module {

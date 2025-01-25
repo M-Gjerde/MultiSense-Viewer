@@ -10,16 +10,18 @@
 #include "Viewer/Rendering/Editors/Editor.h"
 #include "Viewer/Rendering/Editors/3DViewport/Editor3DViewport.h"
 #include "Viewer/Rendering/Editors/SceneHierarchy/EditorSceneHierarchy.h"
-#include "Viewer/Rendering/Editors/MultiSenseViewer/SidebarEditor/SideBarEditor.h"
-#include "Viewer/Rendering/Editors/MultiSenseViewer/ConfigurationEditor/ConfigurationEditor.h"
 #include "Viewer/Rendering/Editors/Test/EditorTest.h"
 #include "Viewer/Rendering/Editors/Properties/EditorProperties.h"
 #include "Viewer/Rendering/Editors/ImageEditor/EditorImage.h"
-#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracer.h"
 #include "SceneRenderer.h"
 #ifdef SYCL_ENABLED
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.h"
+#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracer.h"
+#ifdef PYTORCH_ENABLED
+#include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.h"
 #endif
+#endif
+
 namespace VkRender {
 
     // Define the factory class
@@ -51,6 +53,13 @@ namespace VkRender {
             registerEditor(EditorType::PathTracer, [](EditorCreateInfo &ci, UUID uuid) {
                 return std::make_unique<EditorPathTracer>(ci, uuid);
             });
+
+#ifdef PYTORCH_ENABLED
+            registerEditor(EditorType::PathTracer, [](EditorCreateInfo &ci, UUID uuid) {
+                return std::make_unique<EditorPathTracer>(ci, uuid);
+            });
+#endif
+
 #endif
         }
 

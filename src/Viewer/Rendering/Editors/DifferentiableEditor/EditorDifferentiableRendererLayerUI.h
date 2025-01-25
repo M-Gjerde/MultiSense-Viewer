@@ -2,14 +2,14 @@
 // Created by magnus on 1/2/25.
 //
 
-#ifndef MULTISENSE_VIEWER_PATHTRACERLAYERUI_H
-#define MULTISENSE_VIEWER_PATHTRACERLAYERUI_H
+#ifndef MULTISENSE_VIEWER_DIFFRENTIABLE_RENDERER_LAYER_UI
+#define MULTISENSE_VIEWER_DIFFRENTIABLE_RENDERER_LAYER_UI
 
 #include "Viewer/Rendering/ImGui/Layer.h"
 
 namespace VkRender {
 
-    struct EditorPathTracerLayerUI : EditorUI {
+    struct EditorDifferentiableRendererLayerUI : public EditorUI {
 
         bool renderFromViewpoint = false;
 
@@ -22,9 +22,9 @@ namespace VkRender {
         bool clearImageMemory = false;
 
         std::string kernel = " ";
-        std::string kernelDevice = "GPU";
+        std::string kernelDevice = "CPU";
         int selectedKernelIndex = 2;
-        bool switchKernelDevice = true;
+        bool switchKernelDevice = false;
 
         int photonCount = 1e4;
         int numBounces = 32;
@@ -35,8 +35,8 @@ namespace VkRender {
 
         }shaderSelection;
         // Constructor that copies everything from base EditorUI
-        EditorPathTracerLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
+        EditorDifferentiableRendererLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };
 
 }
-#endif //MULTISENSE_VIEWER_PATHTRACERLAYERUI_H
+#endif //MULTISENSE_VIEWER_DIFFRENTIABLE_RENDERER_LAYER_UI

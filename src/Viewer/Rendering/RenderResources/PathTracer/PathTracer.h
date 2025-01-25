@@ -11,11 +11,9 @@
 #ifdef SYCL_ENABLED
 #include "Viewer/Tools/SyclDeviceSelector.h"
 #include "Viewer/Rendering/RenderResources/PathTracer/Definitions.h"
-
 #endif
 
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
-#include "Viewer/Rendering/Editors/ArcballCamera.h"
 
 namespace VkRender::PathTracer {
 #ifdef SYCL_ENABLED
@@ -69,14 +67,14 @@ namespace VkRender::PathTracer {
 
 #else
 
-    class PathTracer {
+    class PhotonRebuild {
     public:
-        PathTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
+        PhotonRebuild(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) {}
         void uploadGaussianData(std::shared_ptr<Scene>& scene) {}
         void uploadVertexData(std::shared_ptr<Scene>& scene) {}
         void update(const EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene) {}
         float* getImage() {return nullptr;}
-        ~PathTracer() {}
+        ~PhotonRebuild() {}
         void upload(std::shared_ptr<Scene> ptr) {}
         void setActiveCamera(const TransformComponent &transformComponent, float w, float h){}
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform){}

@@ -15,6 +15,7 @@ namespace VkRender {
         SceneRenderer,
         Viewport3D,
         PathTracer,
+        DifferentiableRenderer,
         ImageEditor,
         Properties,
         GaussianViewer,
@@ -27,6 +28,7 @@ namespace VkRender {
                 EditorType::SceneRenderer,
                 EditorType::Viewport3D,
                 EditorType::PathTracer,
+                EditorType::DifferentiableRenderer,
                 EditorType::ImageEditor,
                 EditorType::Properties,
                 EditorType::GaussianViewer,
@@ -37,6 +39,7 @@ namespace VkRender {
         return {
                 EditorType::Viewport3D,
                 EditorType::PathTracer,
+                EditorType::DifferentiableRenderer,
                 EditorType::ImageEditor,
                 EditorType::GaussianViewer,
                 EditorType::Properties,
@@ -52,6 +55,7 @@ namespace VkRender {
             case EditorType::TestWindow: return "Test Window";
             case EditorType::Viewport3D: return "3D Viewport";
             case EditorType::PathTracer: return "Path Tracer";
+            case EditorType::DifferentiableRenderer: return "LibTorch View";
             case EditorType::Properties: return "Properties";
             case EditorType::GaussianViewer: return "Gaussian Viewer";
             case EditorType::ImageEditor: return "Image Editor";
@@ -66,6 +70,7 @@ namespace VkRender {
         if (str == "Test Window") return EditorType::TestWindow;
         if (str == "3D Viewport") return EditorType::Viewport3D;
         if (str == "Path Tracer") return EditorType::PathTracer;
+        if (str == "LibTorch View") return EditorType::DifferentiableRenderer;
         if (str == "Properties") return EditorType::Properties;
         if (str == "Gaussian Viewer") return EditorType::GaussianViewer;
         if (str == "Image Editor") return EditorType::ImageEditor;
