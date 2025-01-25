@@ -2,7 +2,7 @@
 #define DIFFRENDERENTRY_H
 #include <memory>
 
-#ifdef PYTORCH_ENABLED
+#ifdef DIFF_RENDERER_ENABLED
 
 #include <torch/torch.h>
 #include "Viewer/Rendering/RenderResources/DifferentiableRenderer/RenderGaussian.h"
@@ -11,7 +11,7 @@
 
 namespace VkRender::DR {
 
-#ifdef PYTORCH_ENABLED
+#ifdef DIFF_RENDERER_ENABLED
 
     class DiffRenderEntry {
     public:
@@ -83,7 +83,7 @@ namespace VkRender::DR {
 
         std::unique_ptr<OptimizerPackage> m_package;
     };
-#else // PYTORCH_ENABLED
+#else // DIFF_RENDERER_ENABLED
     /**@brief Empty class in case we are not enabling differentiable renderer **/
   class DiffRenderEntry {
     public:
@@ -116,7 +116,7 @@ namespace VkRender::DR {
         uint32_t m_iteration = 0;
 
     };
-#endif // PYTORCH_ENABLED
+#endif // DIFF_RENDERER_ENABLED
 } // namespace VkRender::DR
 
 #endif // DIFFRENDERENTRY_H

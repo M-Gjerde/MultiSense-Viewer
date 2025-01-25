@@ -18,24 +18,40 @@
 namespace VkRender::PathTracer {
 #ifdef SYCL_ENABLED
 
-    class PhotonRebuild {
+    class PhotonTracer {
     public:
-        PhotonRebuild(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
-        void uploadGaussianData(std::weak_ptr<Scene>& scene);
-        void uploadVertexData(std::weak_ptr<Scene>& scene);
+        PhotonTracer(Application* context, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height);
 
-        void update(EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene);
+        struct Settings
+        {
+            // Device and execution settings
+            bool clearImageMemory = false;
+            std::string kernelDevice = "GPU";
 
+            // Execution Flow:
+            KernelType kernelType = KERNEL_PATH_TRACER_2DGS;
+
+            // Render settings
+            int photonCount = 1e4;
+            int numBounces = 32;
+            float gammaCorrection = 2.2f;
+
+        };
+
+        void setExecutionDevice(PhotonTracer::Settings& settings);
+
+        void update(Settings& editorImageUI, std::shared_ptr<Scene> scene);
 
         float* getImage() {return m_imageMemory;}
-
-        ~PhotonRebuild();
-
-
         void upload(std::weak_ptr<Scene> ptr);
+
+        ~PhotonTracer();
 
         void setActiveCamera(const TransformComponent &transformComponent, float w, float h);
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform);
+
+
+        uint32_t m_width = 0, m_height = 0;
 
     private:
         PinholeCamera m_camera{};
@@ -46,7 +62,6 @@ namespace VkRender::PathTracer {
 
         float* m_imageMemory = nullptr;
 
-        uint32_t m_width = 0, m_height = 0;
 
         GPUData m_gpu;
         std::unique_ptr<RenderInformation> m_renderInformation;
@@ -62,6 +77,8 @@ namespace VkRender::PathTracer {
         void freeResources();
 
         void resetState();
+        void uploadGaussianData(std::weak_ptr<Scene>& scene);
+        void uploadVertexData(std::weak_ptr<Scene>& scene);
 
     };
 

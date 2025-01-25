@@ -11,6 +11,31 @@
 #include "Viewer/Rendering/Components/Components.h"
 
 namespace VkRender::PathTracer {
+
+    // Enum for kernel types
+    typedef enum KernelType {
+        KERNEL_PATH_TRACER_MESH,
+        KERNEL_PATH_TRACER_2DGS,
+        KERNEL_TYPE_COUNT // To count the number of kernels
+    } KernelType;
+
+    // Function to map KernelType to a string
+    static const char* KernelTypeToString(KernelType kernel) {
+        switch (kernel) {
+        case KERNEL_PATH_TRACER_MESH: return "Path Tracer: Mesh";
+        case KERNEL_PATH_TRACER_2DGS: return "Path Tracer: 2DGS";
+        default: return "Unknown";
+        }
+    }
+
+    // Function to map string to KernelType
+    static KernelType StringToKernelType(const char* str) {
+        if (strcmp(str, "Path Tracer: Mesh") == 0) return KERNEL_PATH_TRACER_MESH;
+        if (strcmp(str, "Path Tracer: 2DGS") == 0) return KERNEL_PATH_TRACER_2DGS;
+        return KERNEL_TYPE_COUNT; // Invalid
+    }
+
+
     struct InputAssembly {
         glm::vec3 position;
         glm::vec3 color;

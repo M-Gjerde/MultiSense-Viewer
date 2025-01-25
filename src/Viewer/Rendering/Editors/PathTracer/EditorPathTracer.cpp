@@ -68,7 +68,7 @@ namespace VkRender {
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             float width = camera->parameters().width;
             float height = camera->parameters().height;
-            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
             m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
         } else {
@@ -80,7 +80,7 @@ namespace VkRender {
             transformComponent.setPosition(m_editorCamera->matrices.position);
             transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
             transformComponent.setMoving(true);
-            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
             m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
 
@@ -119,7 +119,7 @@ namespace VkRender {
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
             float width = camera->parameters().width;
             float height = camera->parameters().height;
-            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
             m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
         } else {
             m_meshInstances.reset();
@@ -129,7 +129,7 @@ namespace VkRender {
             transformComponent.setPosition(m_editorCamera->matrices.position);
             transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
             transformComponent.setMoving(true);
-            m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, m_createInfo.width, m_createInfo.height);
             m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
             m_lastActiveCamera = nullptr;
@@ -226,8 +226,23 @@ namespace VkRender {
             m_pathTracer->upload(m_context->activeScene());
         }
 
+        if (imageUI->switchKernelDevice) {
+            PathTracer::PhotonTracer::Settings settings;
+            settings.kernelDevice = imageUI->kernelDevice;
+            m_pathTracer->setExecutionDevice(settings);
+            m_pathTracer->upload(m_context->activeScene());
+        }
+
         if (imageUI->render || imageUI->toggleRendering) {
-            m_pathTracer->update(*imageUI, m_context->activeScene());
+            PathTracer::PhotonTracer::Settings settings;
+            settings.clearImageMemory = imageUI->clearImageMemory;
+            settings.kernelType = imageUI->kernel;
+            settings.kernelDevice = imageUI->kernelDevice;
+            settings.photonCount = imageUI->photonCount;
+            settings.numBounces = imageUI->numBounces;
+            settings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
+
+            m_pathTracer->update(settings, m_context->activeScene());
             float* image = m_pathTracer->getImage();
             if (image) {
                 uint32_t width = m_colorTexture->width();
@@ -354,9 +369,6 @@ namespace VkRender {
         key.setLayouts.resize(1);
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
 
-        if (imageUI->uploadScene) {
-            m_descriptorRegistry.getManager(DescriptorManagerType::Viewport3DTexture).freeDescriptorSets();
-        }
         // Prepare descriptor writes based on your texture or other resources
         std::array<VkWriteDescriptorSet, 2> writeDescriptors{};
         writeDescriptors[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -475,7 +487,7 @@ namespace VkRender {
             bool isNewCameraSelected = (!m_wasSceneCameraActive ||
                                         (m_lastActiveCamera != sceneCameraToUse));
 
-            if (isNewCameraSelected || sceneCameraToUse->updateTrigger()) {
+            if (isNewCameraSelected && sceneCameraToUse->updateTrigger()) {
                 // Recompute mesh scaling for the new camera
                 float sceneCameraAspect = 1.0f;
                 float width;
@@ -517,7 +529,7 @@ namespace VkRender {
                 m_meshInstances.reset();
                 m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
 
-                m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
+                m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             }
             m_lastActiveCamera = sceneCameraToUse;
@@ -549,7 +561,7 @@ namespace VkRender {
                 onRenderSettingsChanged();
                 */
 
-                m_pathTracer = std::make_unique<PathTracer::PhotonRebuild>(m_context, m_activeScene, width, height);
+                m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
             }
 

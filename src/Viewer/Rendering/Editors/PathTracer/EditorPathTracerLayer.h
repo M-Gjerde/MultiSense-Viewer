@@ -6,6 +6,8 @@
 #define MULTISENSE_VIEWER_EDITORPATHTRACERLAYER_H
 
 
+#include <Viewer/Rendering/RenderResources/PathTracer/Definitions.h>
+
 #include "Viewer/Rendering/ImGui/Layer.h"
 #include "Viewer/Rendering/ImGui/IconsFontAwesome6.h"
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
@@ -65,23 +67,29 @@ namespace VkRender {
 
             ImGui::SameLine();
 
-            // Dropdown for selecting render kernel
-            const char* kernels[] = { "Hit-Test", "Path Tracer: Mesh" , "Path Tracer: 2DGS" };
 
-            ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Render Kernel", &imageUI->selectedKernelIndex, kernels, IM_ARRAYSIZE(kernels))) {
+            // Prepare dropdown items
+            const char* kernels[PathTracer::KERNEL_TYPE_COUNT];
+
+            for (int i = 0; i < PathTracer::KERNEL_TYPE_COUNT; ++i) {
+                kernels[i] = PathTracer::KernelTypeToString(static_cast<PathTracer::KernelType>(i));
             }
+            // Render ImGui combo box
+            ImGui::SetNextItemWidth(100.0f);
+            if (ImGui::Combo("##Render Kernel", &imageUI->selectedKernelIndex, kernels, PathTracer::KERNEL_TYPE_COUNT)) {
+                // Update the kernel based on selection
+            }
+            imageUI->kernel = static_cast<PathTracer::KernelType>(imageUI->selectedKernelIndex);
 
-            imageUI->kernel = kernels[imageUI->selectedKernelIndex];
 
             ImGui::SameLine();            // Dropdown for selecting render kernel
             const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
-            static int selectedDevieType = 1; // Default selection
+            imageUI->switchKernelDevice = false;
             ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Select Device Type", &selectedDevieType, selections, IM_ARRAYSIZE(selections))) {
+            if (ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections, IM_ARRAYSIZE(selections))) {
                 imageUI->switchKernelDevice = true;
             }
-            imageUI->kernelDevice = selections[selectedDevieType];
+            imageUI->kernelDevice = selections[imageUI->selectedDeviceIndex];
 
             ImGui::SameLine();
 

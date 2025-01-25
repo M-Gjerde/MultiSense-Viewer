@@ -105,7 +105,7 @@ if (PYTORCH_AVAILABLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})
     target_include_directories(${PROJECT_NAME} SYSTEM PRIVATE ${TORCH_INCLUDE_DIRS})
     message(STATUS "[VkRenderINFO]: PyTorch libraries successfully linked.")
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PYTORCH_ENABLED)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE DIFF_RENDERER_ENABLED)
 
 else ()
     message(STATUS "[VkRenderINFO]: Skipping PyTorch setup as it is not available.")
@@ -128,7 +128,7 @@ if (ENABLE_SYCL)
     endif()
 
     if (SYCL_IMPLEMENTATION STREQUAL "dpcpp")
-        set(CMAKE_CXX_COMPILER "/home/magnus-desktop/sycl/llvm/build/bin/clang++")
+        set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
 
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
@@ -307,7 +307,7 @@ endif ()# Add SYCL-specific files
 
 if (${ENABLE_PYTORCH})
     set (DIFF_RENDER_SOURCES
-            src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PathTracerModule.cpp
+            src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildModule.cpp
             src/Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.cpp
     )
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})

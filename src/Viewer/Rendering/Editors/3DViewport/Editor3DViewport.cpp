@@ -340,7 +340,7 @@ namespace VkRender {
             bool isNewCameraSelected = (!m_wasSceneCameraActive ||
                                         (m_lastActiveCamera != sceneCameraToUse));
 
-            if (isNewCameraSelected || sceneCameraToUse->updateTrigger()) {
+            if (isNewCameraSelected && sceneCameraToUse->updateTrigger()) {
                 // Recompute mesh scaling for the new camera
                 float sceneCameraAspect = 1.0f;
                 float width;

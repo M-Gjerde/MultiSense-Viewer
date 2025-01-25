@@ -13,11 +13,8 @@
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernel.h"
 
 namespace VkRender::PathTracer {
-    PhotonRebuild::PhotonRebuild(Application* ctx, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) :
-        m_context(
-            ctx) {
-        ;
-
+    PhotonTracer::PhotonTracer(Application* ctx, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) :
+        m_context(ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU)) {
         m_width = width;
         m_height = height;
         // Load the scene into gpu memory
@@ -27,30 +24,28 @@ namespace VkRender::PathTracer {
         m_renderInformation = std::make_unique<RenderInformation>();
     }
 
+    void PhotonTracer::setExecutionDevice(Settings& settings) {
+        freeResources();
+        if (settings.kernelDevice == "CPU") {
+            m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
+        }
+        else if (settings.kernelDevice == "GPU") {
+            m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
+        }
+        m_selector.getQueue().wait();
+    }
 
-    void PhotonRebuild::update(EditorPathTracerLayerUI& uiLayer, std::shared_ptr<Scene> scene) {
-        try {
+    void PhotonTracer::update(Settings& settings, std::shared_ptr<Scene> scene) {
             if (m_cameraTransform.moved())
                 resetState();
-
-
-            if (uiLayer.switchKernelDevice) {
-                freeResources();
-                if (uiLayer.kernelDevice == "CPU") {
-                    m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
-                }
-                else if (uiLayer.kernelDevice == "GPU") {
-                    m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
-                }
-                upload(scene);
+            if (settings.clearImageMemory) {
                 resetState();
-                uiLayer.switchKernelDevice = false;
             }
 
             auto& queue = m_selector.getQueue();
 
             m_renderInformation->frameID++;
-            int simulatePhotonCount = uiLayer.photonCount;
+            int simulatePhotonCount = settings.photonCount;
 
             std::vector<PCG32> rng(simulatePhotonCount);
             for (int i = 0; i < simulatePhotonCount; ++i)
@@ -59,54 +54,42 @@ namespace VkRender::PathTracer {
             auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
             queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
 
-
-            if (uiLayer.clearImageMemory) {
-                resetState();
-            }
             m_renderInformation->totalPhotons += simulatePhotonCount;
-            m_renderInformation->gamma = uiLayer.shaderSelection.gammaCorrection;
+            m_renderInformation->gamma = settings.gammaCorrection;
             /** Any shared GPU/CPU debug information must be stored before here**/
             queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
-            //auto cameraEntity = m_scene->getEntityByName("Camera");
-            if (!uiLayer.clearImageMemory) {
-                //auto camera = cameraEntity.getComponent<CameraComponent>().getPinholeCamera();
-                //auto transform = cameraEntity.getComponent<TransformComponent>();
+            auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
+            queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
 
-                auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
-                queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
-
-                queue.wait();
-
-                if (uiLayer.kernel == "Path Tracer: 2DGS" && m_gpu.numGaussians > 0) {
-                    sycl::range<1> globalRange(simulatePhotonCount);
-                    queue.submit([&](sycl::handler& cgh) {
-                        // Capture GPUData, etc. by value or reference as needed
-                        LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                                 uiLayer.numBounces, rngGPU);
-                        cgh.parallel_for(globalRange, kernel);
-                    });
-                }
-                else if (uiLayer.kernel == "Path Tracer: Mesh") {
-                    sycl::range<1> globalRange(simulatePhotonCount);
-                    queue.submit([&](sycl::handler& cgh) {
-                        // Capture GPUData, etc. by value or reference as needed
-                        PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                                     uiLayer.numBounces, rngGPU);
-                        cgh.parallel_for(globalRange, kernel);
-                    });
-                }
-                queue.wait();
-
-                sycl::free(cameraGPU, queue);
-                sycl::free(rngGPU, queue);
-                m_frameID++;
+            queue.wait();
+            if (settings.kernelType == KERNEL_PATH_TRACER_2DGS && m_gpu.numGaussians > 0) {
+                sycl::range<1> globalRange(simulatePhotonCount);
+                queue.submit([&](sycl::handler& cgh) {
+                    // Capture GPUData, etc. by value or reference as needed
+                    LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                             settings.numBounces, rngGPU);
+                    cgh.parallel_for(globalRange, kernel);
+                });
             }
+            else if (settings.kernelType == KERNEL_PATH_TRACER_MESH) {
+                sycl::range<1> globalRange(simulatePhotonCount);
+                queue.submit([&](sycl::handler& cgh) {
+                    // Capture GPUData, etc. by value or reference as needed
+                    PathTracerMeshKernels kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                                 settings.numBounces, rngGPU);
+                    cgh.parallel_for(globalRange, kernel);
+                });
+            }
+            queue.wait();
+
+            sycl::free(cameraGPU, queue);
+            sycl::free(rngGPU, queue);
+            m_frameID++;
+
             /** Any shared GPU/CPU debug information must be stored after here**/
             queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
             queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
-            if (uiLayer.saveImage)
-                saveAsPFM("cornell.pfm");
 
             Log::Logger::getInstance()->trace(
                 "simulated {:.3f} Billion photons. About {}k Photons hit the sensor, of which {}k hit directly",
@@ -114,20 +97,16 @@ namespace VkRender::PathTracer {
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
                     m_renderInformation->photonsAccumulated)) / 1000,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
-        }
-        catch (const sycl::exception& e) {
-            Log::Logger::getInstance()->error("Caught SYCL exception {}", e.what());
-        }
     }
 
-    void PhotonRebuild::resetState() {
+    void PhotonTracer::resetState() {
         m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
         m_frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
     }
 
-    void PhotonRebuild::upload(std::weak_ptr<Scene> scene) {
+    void PhotonTracer::upload(std::weak_ptr<Scene> scene) {
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
@@ -157,7 +136,7 @@ namespace VkRender::PathTracer {
         uploadGaussianData(scene);
     }
 
-    void PhotonRebuild::freeResources() {
+    void PhotonTracer::freeResources() {
         m_selector.getQueue().wait();
         if (m_gpu.imageMemory) {
             sycl::free(m_gpu.imageMemory, m_selector.getQueue());
@@ -203,7 +182,7 @@ namespace VkRender::PathTracer {
         m_selector.getQueue().wait();
     }
 
-    void PhotonRebuild::uploadGaussianData(std::weak_ptr<Scene>& scene) {
+    void PhotonTracer::uploadGaussianData(std::weak_ptr<Scene>& scene) {
         auto scenePtr = scene.lock();
         auto& queue = m_selector.getQueue();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
@@ -239,7 +218,7 @@ namespace VkRender::PathTracer {
         queue.wait();
     }
 
-    void PhotonRebuild::uploadVertexData(std::weak_ptr<Scene>& scene) {
+    void PhotonTracer::uploadVertexData(std::weak_ptr<Scene>& scene) {
         auto scenePtr = scene.lock();
         std::vector<InputAssembly> vertexData;
         std::vector<uint32_t> indices;
@@ -348,7 +327,7 @@ namespace VkRender::PathTracer {
     }
 
 
-    PhotonRebuild::~PhotonRebuild() {
+    PhotonTracer::~PhotonTracer() {
         if (m_imageMemory) {
             delete[] m_imageMemory;
         }
@@ -356,7 +335,7 @@ namespace VkRender::PathTracer {
         freeResources();
     }
 
-    void PhotonRebuild::saveAsPPM(const std::filesystem::path& filename) const {
+    void PhotonTracer::saveAsPPM(const std::filesystem::path& filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -381,7 +360,7 @@ namespace VkRender::PathTracer {
         file.close();
     }
 
-    void PhotonRebuild::saveAsPFM(const std::filesystem::path& filename) const {
+    void PhotonTracer::saveAsPFM(const std::filesystem::path& filename) const {
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {
@@ -420,7 +399,7 @@ namespace VkRender::PathTracer {
     }
 
     // For editorCamera
-    void PhotonRebuild::setActiveCamera(const TransformComponent& transformComponent, float width, float height) {
+    void PhotonTracer::setActiveCamera(const TransformComponent& transformComponent, float width, float height) {
         PinholeParameters pinholeParameters;
         SharedCameraSettings cameraSettings;
         pinholeParameters.width = width;
@@ -435,7 +414,7 @@ namespace VkRender::PathTracer {
     }
 
     // For pinhole scene camera
-    void PhotonRebuild::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera,
+    void PhotonTracer::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera,
                                         const TransformComponent* cameraTransform) {
         m_camera = *camera;
         m_cameraTransform = *cameraTransform;

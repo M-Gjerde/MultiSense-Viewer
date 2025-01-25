@@ -53,7 +53,7 @@ namespace VkRender {
         std::shared_ptr<MeshInstance> m_meshInstances;
         std::shared_ptr<VulkanTexture2D> m_colorTexture;
 
-        std::unique_ptr<PathTracer::PhotonRebuild> m_pathTracer;
+        std::unique_ptr<PathTracer::PhotonTracer> m_pathTracer;
 
         std::shared_ptr<ArcballCamera> m_editorCamera;
         CameraComponent* m_lastActiveCamera = nullptr;

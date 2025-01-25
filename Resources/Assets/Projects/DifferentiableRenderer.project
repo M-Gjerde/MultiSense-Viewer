@@ -9,7 +9,7 @@ editors:
     x: 0
     y: 0
   - borderSize: 5
-    editorTypeDescription: "3D Viewport"
+    editorTypeDescription: "Differentiable Renderer"
     width: 40
     height: 50
     x: 0

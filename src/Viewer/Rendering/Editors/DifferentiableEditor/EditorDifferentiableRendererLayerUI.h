@@ -10,30 +10,25 @@
 namespace VkRender {
 
     struct EditorDifferentiableRendererLayerUI : public EditorUI {
-
-        bool renderFromViewpoint = false;
-
+        bool reloadRenderer = false;
+        bool step = false;
+        bool toggleStep = false;
         bool uploadScene = false;
-        bool render = false;
-        bool toggleRendering = false;
+
+        std::string kernelDevice = "";
+        int selectedDeviceIndex = 0;
+        bool switchKernelDevice = false;
+
+        // Old
+        bool renderFromViewpoint = false;
         bool saveImage = false;
         bool denoise = false;
 
-        bool clearImageMemory = false;
-
-        std::string kernel = " ";
-        std::string kernelDevice = "CPU";
-        int selectedKernelIndex = 2;
-        bool switchKernelDevice = false;
-
+        // Render settings
         int photonCount = 1e4;
         int numBounces = 32;
+        float gammaCorrection = 7.2f;
 
-        struct ShaderSelection {
-            int someVariable = 0;
-            float gammaCorrection = 2.2f;
-
-        }shaderSelection;
         // Constructor that copies everything from base EditorUI
         EditorDifferentiableRendererLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };

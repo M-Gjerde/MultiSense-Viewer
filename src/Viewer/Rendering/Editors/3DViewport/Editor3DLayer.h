@@ -26,8 +26,8 @@ namespace VkRender {
         ViridisColormap
     };
 
-    struct Editor3DViewportUI : public EditorUI {
-        bool renderFromViewpoint = true;
+    struct Editor3DViewportUI : EditorUI {
+        bool renderFromViewpoint = false;
         bool saveNextFrame = false;
         // Image type selection
         OutputTextureImageType selectedImageType = OutputTextureImageType::Color;

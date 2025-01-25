@@ -8,7 +8,6 @@ namespace VkRender {
 
     // TODO rename
     struct SharedCameraSettings {
-        bool render = false;
         bool flipY = false;
         bool flipX = false;
     };

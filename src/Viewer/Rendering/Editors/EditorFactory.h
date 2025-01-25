@@ -17,7 +17,7 @@
 #ifdef SYCL_ENABLED
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.h"
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracer.h"
-#ifdef PYTORCH_ENABLED
+#ifdef DIFF_RENDERER_ENABLED
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.h"
 #endif
 #endif
@@ -54,9 +54,9 @@ namespace VkRender {
                 return std::make_unique<EditorPathTracer>(ci, uuid);
             });
 
-#ifdef PYTORCH_ENABLED
-            registerEditor(EditorType::PathTracer, [](EditorCreateInfo &ci, UUID uuid) {
-                return std::make_unique<EditorPathTracer>(ci, uuid);
+#ifdef DIFF_RENDERER_ENABLED
+            registerEditor(EditorType::DifferentiableRenderer, [](EditorCreateInfo &ci, UUID uuid) {
+                return std::make_unique<EditorDifferentiableRenderer>(ci, uuid);
             });
 #endif
 

@@ -183,22 +183,20 @@ namespace VkRender {
             out << YAML::BeginMap;
             auto& mesh = entity.getComponent<MeshComponent>();
             switch (mesh.meshDataType()) {
-            case OBJ_FILE:
-                {
-                    auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(mesh.meshParameters);
-                    out << YAML::Key << "ModelPath";
-                    out << YAML::Value << params->path.string();
-                    out << YAML::Key << "RelativeModelPath";
-                    out << YAML::Value << params->relativeAssetPath.string();
-                }
-                break;
-            case PLY_FILE:
-                {
-                    auto params = std::dynamic_pointer_cast<PLYFileMeshParameters>(mesh.meshParameters);
-                    out << YAML::Key << "ModelPath";
-                    out << YAML::Value << params->path.string();
-                }
-                break;
+            case OBJ_FILE: {
+                auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(mesh.meshParameters);
+                out << YAML::Key << "ModelPath";
+                out << YAML::Value << params->path.string();
+                out << YAML::Key << "RelativeModelPath";
+                out << YAML::Value << params->relativeAssetPath.string();
+            }
+            break;
+            case PLY_FILE: {
+                auto params = std::dynamic_pointer_cast<PLYFileMeshParameters>(mesh.meshParameters);
+                out << YAML::Key << "ModelPath";
+                out << YAML::Value << params->path.string();
+            }
+            break;
             default:
                 break;
             }
@@ -213,48 +211,53 @@ namespace VkRender {
         if (entity.hasComponent<CameraComponent>()) {
             out << YAML::Key << "CameraComponent";
             out << YAML::BeginMap;
-            auto &camera = entity.getComponent<CameraComponent>();
+            auto& camera = entity.getComponent<CameraComponent>();
             auto type = camera.cameraType;
             // Serialize CameraType
             out << YAML::Key << "CameraType";
             out << YAML::Value << CameraComponent::cameraTypeToString(camera.cameraType);
+            out << YAML::Key << "RenderFromViewpoint";
+            out << YAML::Value << camera.renderFromViewpoint();
+            out << YAML::Key << "FlipX";
+            out << YAML::Value << camera.cameraSettings.flipX;
+            out << YAML::Key << "FlipY";
+            out << YAML::Value << camera.cameraSettings.flipY;
 
             // Serialize based on CameraType
             switch (camera.cameraType) {
-                case CameraComponent::ARCBALL:
-                    // ARCBALL-specific serialization (if any) can be added here
-                    break;
-                case CameraComponent::PERSPECTIVE: {
-                    auto &params = camera.baseCameraParameters;
-                    out << YAML::Key << "ProjectionParameters";
-                    out << YAML::BeginMap;
-                    out << YAML::Key << "Near" << YAML::Value << params.near;
-                    out << YAML::Key << "Far" << YAML::Value << params.far;
-                    out << YAML::Key << "Aspect" << YAML::Value << params.aspect;
-                    out << YAML::Key << "FOV" << YAML::Value << params.fov;
-                    out << YAML::EndMap;
-                    break;
-                }
-                case CameraComponent::PINHOLE: {
-                    auto &params = camera.pinholeParameters;
-                    out << YAML::Key << "PinHoleParameters";
-                    out << YAML::BeginMap;
-                    out << YAML::Key << "Height" << YAML::Value << params.height;
-                    out << YAML::Key << "Width" << YAML::Value << params.width;
-                    out << YAML::Key << "Fx" << YAML::Value << params.fx;
-                    out << YAML::Key << "Fy" << YAML::Value << params.fy;
-                    out << YAML::Key << "Cx" << YAML::Value << params.cx;
-                    out << YAML::Key << "Cy" << YAML::Value << params.cy;
-                    out << YAML::Key << "Focal Length" << YAML::Value << params.focalLength;
-                    out << YAML::Key << "Aperture" << YAML::Value << params.fNumber;
-                    out << YAML::EndMap;
-                    break;
-                }
-                default:
-                    Log::Logger::getInstance()->warning("Fallback: Cannot serialize camera type");
+            case CameraComponent::ARCBALL:
+                // ARCBALL-specific serialization (if any) can be added here
+                break;
+            case CameraComponent::PERSPECTIVE: {
+                auto& params = camera.baseCameraParameters;
+                out << YAML::Key << "ProjectionParameters";
+                out << YAML::BeginMap;
+                out << YAML::Key << "Near" << YAML::Value << params.near;
+                out << YAML::Key << "Far" << YAML::Value << params.far;
+                out << YAML::Key << "Aspect" << YAML::Value << params.aspect;
+                out << YAML::Key << "FOV" << YAML::Value << params.fov;
+                out << YAML::EndMap;
+                break;
+            }
+            case CameraComponent::PINHOLE: {
+                auto& params = camera.pinholeParameters;
+                out << YAML::Key << "PinHoleParameters";
+                out << YAML::BeginMap;
+                out << YAML::Key << "Height" << YAML::Value << params.height;
+                out << YAML::Key << "Width" << YAML::Value << params.width;
+                out << YAML::Key << "Fx" << YAML::Value << params.fx;
+                out << YAML::Key << "Fy" << YAML::Value << params.fy;
+                out << YAML::Key << "Cx" << YAML::Value << params.cx;
+                out << YAML::Key << "Cy" << YAML::Value << params.cy;
+                out << YAML::Key << "Focal Length" << YAML::Value << params.focalLength;
+                out << YAML::Key << "Aperture" << YAML::Value << params.fNumber;
+                out << YAML::EndMap;
+                break;
+            }
+            default:
+                Log::Logger::getInstance()->warning("Fallback: Cannot serialize camera type");
             }
             out << YAML::EndMap;
-
         }
 
         if (entity.hasComponent<MaterialComponent>()) {
@@ -498,47 +501,57 @@ namespace VkRender {
                         std::string cameraTypeStr = cameraComponent["CameraType"].as<std::string>();
                         camera.cameraType = CameraComponent::stringToCameraType(cameraTypeStr);
                     }
+                    // Deserialize CameraType
+                    if (cameraComponent["RenderFromViewpoint"]) {
+                        camera.render = cameraComponent["RenderFromViewpoint"].as<bool>();
+                    }
+                    // Deserialize CameraType
+                    if (cameraComponent["FlipX"]) {
+                        camera.cameraSettings.flipX = cameraComponent["FlipX"].as<bool>();
+                    }
+                    // Deserialize CameraType
+                    if (cameraComponent["FlipY"]) {
+                        camera.cameraSettings.flipY = cameraComponent["FlipY"].as<bool>();
+                    }
 
                     // Deserialize based on CameraType
                     switch (camera.cameraType) {
-                        case CameraComponent::ARCBALL:
-                            // ARCBALL-specific deserialization (if any) can be added here
-                            break;
+                    case CameraComponent::ARCBALL:
+                        // ARCBALL-specific deserialization (if any) can be added here
+                        break;
 
-                        case CameraComponent::PERSPECTIVE:
-                        {
-                            auto projectionParams = cameraComponent["ProjectionParameters"];
-                            if (projectionParams) {
-                                camera.baseCameraParameters.near = projectionParams["Near"].as<float>(0.1f);
-                                camera.baseCameraParameters.far = projectionParams["Far"].as<float>(100.0f);
-                                camera.baseCameraParameters.aspect = projectionParams["Aspect"].as<float>(1.6f);
-                                camera.baseCameraParameters.fov = projectionParams["FOV"].as<float>(60.0f);
-                                camera.updateParametersChanged();
-                            }
-                            break;
+                    case CameraComponent::PERSPECTIVE: {
+                        auto projectionParams = cameraComponent["ProjectionParameters"];
+                        if (projectionParams) {
+                            camera.baseCameraParameters.near = projectionParams["Near"].as<float>(0.1f);
+                            camera.baseCameraParameters.far = projectionParams["Far"].as<float>(100.0f);
+                            camera.baseCameraParameters.aspect = projectionParams["Aspect"].as<float>(1.6f);
+                            camera.baseCameraParameters.fov = projectionParams["FOV"].as<float>(60.0f);
+                            camera.updateParametersChanged();
                         }
+                        break;
+                    }
 
-                        case CameraComponent::PINHOLE:
-                        {
-                            auto pinholeParams = cameraComponent["PinHoleParameters"];
-                            if (pinholeParams) {
-                                camera.pinholeParameters.height = pinholeParams["Height"].as<int>(720);
-                                camera.pinholeParameters.width = pinholeParams["Width"].as<int>(1280);
-                                camera.pinholeParameters.fx = pinholeParams["Fx"].as<float>(1280.0f);
-                                camera.pinholeParameters.fy = pinholeParams["Fy"].as<float>(720.0f);
-                                camera.pinholeParameters.cx = pinholeParams["Cx"].as<float>(640.0f);
-                                camera.pinholeParameters.cy = pinholeParams["Cy"].as<float>(360.0f);
-                                if (pinholeParams["Focal Length"])
-                                    camera.pinholeParameters.focalLength = pinholeParams["Focal Length"].as<float>(100.0f);
-                                if (pinholeParams["Aperture"])
-                                    camera.pinholeParameters.fNumber = pinholeParams["Aperture"].as<float>(4.0f);
-
-                            }
-                            break;
+                    case CameraComponent::PINHOLE: {
+                        auto pinholeParams = cameraComponent["PinHoleParameters"];
+                        if (pinholeParams) {
+                            camera.pinholeParameters.height = pinholeParams["Height"].as<int>(720);
+                            camera.pinholeParameters.width = pinholeParams["Width"].as<int>(1280);
+                            camera.pinholeParameters.fx = pinholeParams["Fx"].as<float>(1280.0f);
+                            camera.pinholeParameters.fy = pinholeParams["Fy"].as<float>(720.0f);
+                            camera.pinholeParameters.cx = pinholeParams["Cx"].as<float>(640.0f);
+                            camera.pinholeParameters.cy = pinholeParams["Cy"].as<float>(360.0f);
+                            if (pinholeParams["Focal Length"])
+                                camera.pinholeParameters.focalLength = pinholeParams["Focal Length"].as<float>(
+                                    100.0f);
+                            if (pinholeParams["Aperture"])
+                                camera.pinholeParameters.fNumber = pinholeParams["Aperture"].as<float>(4.0f);
                         }
+                        break;
+                    }
 
-                        default:
-                            Log::Logger::getInstance()->warning("Fallback: Cannot deserialize camera type");
+                    default:
+                        Log::Logger::getInstance()->warning("Fallback: Cannot deserialize camera type");
                     }
                     camera.updateParametersChanged();
                 }
@@ -550,7 +563,8 @@ namespace VkRender {
                         path = meshComponent["ModelPath"].as<std::string>();
                     }
                     if (meshComponent["RelativeModelPath"]) {
-                        path = std::filesystem::path(assetsPath) / std::filesystem::path(meshComponent["RelativeModelPath"].as<std::string>());
+                        path = std::filesystem::path(assetsPath) / std::filesystem::path(
+                            meshComponent["RelativeModelPath"].as<std::string>());
                     }
 
                     auto meshDataTypeStr = meshComponent["MeshDataType"].as<std::string>();
@@ -579,22 +593,26 @@ namespace VkRender {
                     }
                     if (materialComponent["Emission"]) {
                         material.emission = materialComponent["Emission"].as<float>();
-                    } else {
+                    }
+                    else {
                         material.emission = 0.0f; // Default value or handle as needed
                     }
                     if (materialComponent["Diffuse"]) {
                         material.diffuse = materialComponent["Diffuse"].as<float>();
-                    } else {
+                    }
+                    else {
                         material.diffuse = 0.0f; // Default value or handle as needed
                     }
                     if (materialComponent["Specular"]) {
                         material.specular = materialComponent["Specular"].as<float>();
-                    } else {
+                    }
+                    else {
                         material.specular = 0.0f; // Default value or handle as needed
                     }
                     if (materialComponent["PhongExponent"]) {
                         material.phongExponent = materialComponent["PhongExponent"].as<float>();
-                    } else {
+                    }
+                    else {
                         material.phongExponent = 32.0f; // Default value or handle as needed
                     }
                     // Deserialize uses texture flag
@@ -680,9 +698,9 @@ namespace VkRender {
                     if (node["Positions"]) {
                         for (const auto& positionNode : node["Positions"]) {
                             glm::vec3 position(
-                                    positionNode[0].as<float>(),
-                                    positionNode[1].as<float>(),
-                                    positionNode[2].as<float>()
+                                positionNode[0].as<float>(),
+                                positionNode[1].as<float>(),
+                                positionNode[2].as<float>()
                             );
                             component.positions.push_back(position);
                         }
@@ -692,9 +710,9 @@ namespace VkRender {
                     if (node["Normals"]) {
                         for (const auto& normalNode : node["Normals"]) {
                             glm::vec3 normal(
-                                    normalNode[0].as<float>(),
-                                    normalNode[1].as<float>(),
-                                    normalNode[2].as<float>()
+                                normalNode[0].as<float>(),
+                                normalNode[1].as<float>(),
+                                normalNode[2].as<float>()
                             );
                             component.normals.push_back(normal);
                         }
@@ -704,8 +722,8 @@ namespace VkRender {
                     if (node["Scales"]) {
                         for (const auto& scaleNode : node["Scales"]) {
                             glm::vec2 scale(
-                                    scaleNode[0].as<float>(),
-                                    scaleNode[1].as<float>()
+                                scaleNode[0].as<float>(),
+                                scaleNode[1].as<float>()
                             );
                             component.scales.push_back(scale);
                         }
@@ -713,13 +731,15 @@ namespace VkRender {
 
 
                     // Deserialize float properties with default values
-                    auto deserializeFloatArray = [&](std::vector<float>& values, const std::string& key, size_t defaultSize = 0, float defaultValue = 0.0f) {
+                    auto deserializeFloatArray = [&](std::vector<float>& values, const std::string& key,
+                                                     size_t defaultSize = 0, float defaultValue = 0.0f) {
                         if (node[key]) {
                             // Populate values from the node
                             for (const auto& valueNode : node[key]) {
                                 values.push_back(valueNode.as<float>());
                             }
-                        } else {
+                        }
+                        else {
                             // Populate default values if the key doesn't exist
                             values.resize(defaultSize, defaultValue);
                         }
@@ -731,7 +751,6 @@ namespace VkRender {
                     deserializeFloatArray(component.diffuse, "Diffuse", expectedSize, 0.5f);
                     deserializeFloatArray(component.specular, "Specular", expectedSize, 0.5f);
                     deserializeFloatArray(component.phongExponents, "PhongExponents", expectedSize, 32.0f);
-
                 }
             }
 

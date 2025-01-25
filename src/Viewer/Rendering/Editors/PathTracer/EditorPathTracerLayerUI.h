@@ -21,10 +21,11 @@ namespace VkRender {
 
         bool clearImageMemory = false;
 
-        std::string kernel = " ";
-        std::string kernelDevice = "GPU";
-        int selectedKernelIndex = 2;
-        bool switchKernelDevice = true;
+        PathTracer::KernelType kernel = PathTracer::KERNEL_PATH_TRACER_2DGS;
+        std::string kernelDevice = "";
+        int selectedKernelIndex = PathTracer::KERNEL_PATH_TRACER_2DGS;
+        int selectedDeviceIndex = 0;
+        bool switchKernelDevice = false;
 
         int photonCount = 1e4;
         int numBounces = 32;
