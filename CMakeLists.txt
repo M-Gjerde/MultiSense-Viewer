@@ -7,11 +7,6 @@ project(MultiSense-Viewer
         LANGUAGES C CXX
 )
 
-
-# Load Dependencies
-include(cmake/Common.cmake)
-include(cmake/CompilerWarnings.cmake)
-
 # Options
 option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" FALSE)
 option(ENABLE_PYTORCH "Compile with PyTorch" FALSE)
@@ -41,7 +36,15 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "[VkRenderINFO]: Setting build type to 'Release' as none was specified.")
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+else()
+    message(STATUS "[VkRenderINFO]: Build type is ${CMAKE_BUILD_TYPE}")
+
 endif ()
+
+# Load Dependencies
+include(cmake/Common.cmake)
+include(cmake/CompilerWarnings.cmake)
+
 
 # Check if PyTorch is available with ROCm or CUDA
 set(PYTORCH_AVAILABLE FALSE)
@@ -54,6 +57,7 @@ if (ENABLE_PYTORCH)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_EXTENSIONS OFF)
 
+    set(hipblas-common_DIR /opt/rocm-6.3.1/lib/cmake/hipblas-common)
     find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
             /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
     )
@@ -92,14 +96,13 @@ if (PYTORCH_AVAILABLE)
         target_link_directories(${PROJECT_NAME} PRIVATE /usr/local/cuda/lib64)
 
     elseif (USE_ROCM)
-        enable_language(HIP)
         message(STATUS "[VkRenderINFO]: HIP language support enabled.")
         set(CMAKE_HIP_STANDARD 20)
         set(CMAKE_HIP_STANDARD_REQUIRED ON)
         set(CMAKE_HIP_EXTENSIONS OFF)
         # Add any ROCm-specific setup if necessary (e.g., include ROCm libraries or headers)
         message(STATUS "[VkRenderINFO]: ROCm-specific setup would go here if needed.")
-        target_link_directories(${PROJECT_NAME} PRIVATE /opt/amdgpu/lib/x86_64-linux-gnu/)
+        #target_link_directories(${PROJECT_NAME} PRIVATE /opt/amdgpu/lib/x86_64-linux-gnu/)
 
     endif ()
     target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES})

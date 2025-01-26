@@ -44,12 +44,7 @@ namespace VkRender {
         m_activeScene = scene;
         initializeDifferentiableRenderer();
 
-        m_optimizer = std::make_unique<torch::optim::Adam>(
-            // We pass in the parameters of our module (or custom parameter list)
-            m_photonRebuildModule->parameters(),
-            // Then define the Adam options, e.g. learning rate = 1e-3
-            torch::optim::AdamOptions(1e-3)
-        );
+
     }
 
 
@@ -58,6 +53,9 @@ namespace VkRender {
         if (imageUI->reloadRenderer) {
             initializeDifferentiableRenderer();
         }
+
+        if (!m_photonRebuildModule)
+            return;
 
         if (imageUI->uploadScene) {
             m_pathTracer->upload(m_context->activeScene());
@@ -305,6 +303,13 @@ namespace VkRender {
                                               &entity.getComponent<TransformComponent>());
                 m_pathTracer->upload(m_activeScene);
                 m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(m_pathTracer.get());
+
+                m_optimizer = std::make_unique<torch::optim::Adam>(
+                    // We pass in the parameters of our module (or custom parameter list)
+                    m_photonRebuildModule->parameters(),
+                    // Then define the Adam options, e.g. learning rate = 1e-3
+                    torch::optim::AdamOptions(1e-3)
+                );
 
                 break;
             }
