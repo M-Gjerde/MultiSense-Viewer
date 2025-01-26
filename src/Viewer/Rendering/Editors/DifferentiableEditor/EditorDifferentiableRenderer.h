@@ -37,6 +37,7 @@ namespace VkRender {
                 uint32_t frameIndex);
         void bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command);
         void initializeDifferentiableRenderer();
+        torch::Tensor loadPFM(const std::string& filename, int expectedWidth, int expectedHeight);
 
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
 
@@ -57,7 +58,8 @@ namespace VkRender {
         // Diff Renderer stuff
         std::unique_ptr<PathTracer::PhotonRebuildModule> m_photonRebuildModule = nullptr;
         std::unique_ptr<torch::optim::Adam> m_optimizer;  // Or any other optimizer in <torch/optim.h>
-
+        torch::Tensor m_accumulatedTensor = torch::Tensor();
+        uint32_t m_numAccumulated = 0;
     };
 }
 #endif //MULTISENSE_VIEWER_EDITOR_DIFFRENTIABLE_RENDERER

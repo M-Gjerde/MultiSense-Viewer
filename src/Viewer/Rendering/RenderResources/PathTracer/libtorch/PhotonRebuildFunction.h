@@ -12,14 +12,12 @@
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
 #include "Viewer/Scenes/Scene.h"
 
-namespace VkRender::PathTracer
-{
+namespace VkRender::PathTracer {
     /**
      * A custom autograd Function that calls your path tracer in forward(),
      * and defines a custom backward() pass.
      */
-    class PhotonRebuildFunction : public torch::autograd::Function<PhotonRebuildFunction>
-    {
+    class PhotonRebuildFunction : public torch::autograd::Function<PhotonRebuildFunction> {
     public:
         /**
          * forward()
@@ -33,18 +31,17 @@ namespace VkRender::PathTracer
          */
         static torch::Tensor forward(
             torch::autograd::AutogradContext* ctx,
-            // You can pass any Torch Tensors or scalars you want:
-            torch::Tensor someTensorParam,
             // Non-tensor arguments can also be captured by custom means:
             PhotonTracer::Settings& settings,
-            std::shared_ptr<Scene> scenePtr,
-            PhotonTracer* pathTracer
-        )
-        {
+            PhotonTracer* pathTracer,
+            torch::Tensor positions,
+            torch::Tensor scales,
+            torch::Tensor normals
+        ) {
             // =================
             // 1) Save for backward any Tensors or scalar values you need
             //    to compute derivatives later. For example:
-            ctx->save_for_backward({someTensorParam});
+            ctx->save_for_backward({positions, scales, normals});
             // If you have non-tensor data you want in backward(), you can store
             // them as attributes:
             ctx->saved_data["someScalar"] = 42.0; // example
@@ -55,7 +52,8 @@ namespace VkRender::PathTracer
             // 2) Run your path tracer code that renders an image.
 
             // Example pseudo-code:
-            pathTracer->update(settings, scenePtr);
+
+            pathTracer->update(settings);
 
             // Suppose the path tracer writes out to pathTracer->m_imageMemory,
             // with shape [height * width] or [height * width * channels].
@@ -63,7 +61,7 @@ namespace VkRender::PathTracer
 
             // For illustration:
             int64_t height = pathTracer->m_height;
-            int64_t width =  pathTracer->m_width;
+            int64_t width = pathTracer->m_width;
             float* rawImage = pathTracer->getImage();
             // e.g. a float[height * width]  (gray) or float[height * width * 3]
 
@@ -85,41 +83,30 @@ namespace VkRender::PathTracer
          */
         static torch::autograd::tensor_list backward(
             torch::autograd::AutogradContext* ctx,
-            torch::autograd::tensor_list grad_outputs)
-        {
+            torch::autograd::tensor_list grad_outputs) {
             // Usually, the forward returned 1 tensor => grad_outputs.size() == 1
             // grad_outputs[0] is d(L)/d(output).
 
             auto dLoss_dRenderedImage = grad_outputs[0];
+            auto saved = ctx->get_saved_variables();
+            auto positions = saved[0];
+            auto scales = saved[1];
+            auto normals = saved[2];
 
-            // 1) Recover the stuff we saved in forward():
-            auto savedVars = ctx->get_saved_variables();
-            // e.g. if forward saved 1 tensor in save_for_backward():
-            torch::Tensor someTensorParam = savedVars[0];
-            // If we stored a scalar in saved_data:
-            double someScalar = ctx->saved_data["someScalar"].toDouble();
+            // We'll do a trivial zero gradient for demonstration
+            auto grad_positions = torch::zeros_like(positions);
+            auto grad_scales = torch::zeros_like(scales);
+            auto grad_normals = torch::zeros_like(normals);
+            //grad_positions.index_put_({at::indexing::Slice(), 1}, 1.0);
 
-            // 2) YOUR custom gradient logic
-            // For instance, you might want to compute dLoss/d(someTensorParam).
-            // If that parameter influences the path tracer, you can define how.
 
-            // For demonstration: we create a dummy gradient for someTensorParam
-            // with the same shape as someTensorParam, filled with zeros:
-            auto grad_someTensorParam = torch::zeros_like(someTensorParam);
-
-            // Possibly do real math here: e.g.
-            // grad_someTensorParam = ...
-            // based on dLoss_dRenderedImage and how your tracer depends on someTensorParam.
-
-            // 3) Return as many gradient Tensors as there were Tensors in forward's signature.
-            // In our forward, we had 1 Tensor param: (someTensorParam).
-            // The other arguments (uiLayer, scenePtr, pathTracer) are not Tensors, so we return
-            // a placeholder (torch::Tensor()) for each of those if they appear in the signature.
+            // Return them in the same order as forward inputs
             return {
-                grad_someTensorParam, // gradient wrt someTensorParam
-                torch::Tensor(), // gradient wrt uiLayer (not a Tensor)
-                torch::Tensor(), // gradient wrt scenePtr (not a Tensor)
-                torch::Tensor() // gradient wrt pathTracer (not a Tensor)
+                torch::Tensor(), // wrt settings (not a Tensor)
+                torch::Tensor(), // wrt pathTracer (not a Tensor)
+                grad_positions, // wrt positions
+                grad_scales, // wrt scales
+                grad_normals // wrt normals
             };
         }
     };

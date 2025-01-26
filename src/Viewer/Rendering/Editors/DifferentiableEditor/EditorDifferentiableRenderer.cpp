@@ -43,8 +43,6 @@ namespace VkRender {
     void EditorDifferentiableRenderer::onSceneLoad(std::shared_ptr<Scene> scene) {
         m_activeScene = scene;
         initializeDifferentiableRenderer();
-
-
     }
 
 
@@ -58,7 +56,7 @@ namespace VkRender {
             return;
 
         if (imageUI->uploadScene) {
-            m_pathTracer->upload(m_context->activeScene());
+            m_photonRebuildModule->uploadPathTracerFromTensor();
         }
 
         if (imageUI->switchKernelDevice) {
@@ -69,88 +67,121 @@ namespace VkRender {
         }
 
         // ----------------------------------------------------------
-        // Typical training (or single step) section
+        // 1. Possibly accumulate forward passes
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
-            // Example: Set up your path tracer’s forward settings
+            // Prepare path tracer forward settings
             PathTracer::PhotonTracer::Settings settings;
             settings.photonCount = imageUI->photonCount;
             settings.numBounces = imageUI->numBounces;
             settings.gammaCorrection = imageUI->gammaCorrection;
             settings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
 
-            // 1. ZERO OUT PREVIOUS GRADIENTS
-            //    (Assuming m_photonRebuildModule is a torch::nn::Module
-            //     with parameters and m_optimizer is e.g. torch::optim::Adam)
-            m_optimizer->zero_grad();
+            // Forward pass (autograd-compatible)
+            m_accumulatedTensor = m_photonRebuildModule->forward(settings);
+            m_numAccumulated++;
 
-            // 2. FORWARD PASS
-            //    - If your forward method itself returns a torch::Tensor, you can skip
-            //      the from_blob step below. If it doesn't, you need to create a tensor
-            //      from the float* image data. Below is a typical pattern if you only
-            //      have float* data from getRenderedImage().
-            //    - Let's assume your forward method can also produce an Autograd-compatible tensor.
-            //
-            //    e.g.:
-            //    torch::Tensor renderedTensor = m_photonRebuildModule->forward(settings, m_activeScene);
-            //
-            //    If it doesn't return a tensor directly, do:
-            auto renderedTensor = m_photonRebuildModule->forward(settings, m_activeScene);
-
+            // Optionally retrieve the float* for real-time display
             float* img = m_photonRebuildModule->getRenderedImage();
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
-
-            // Safety check
             if (!img) {
-                std::cerr << "No rendered image returned; skipping training step.\n";
+                std::cerr << "No rendered image returned; skipping display step.\n";
                 return;
             }
 
-            // If your renderer returns values in [0,1], you might not need further scaling.
-            // If your renderer returns e.g. 0..255, scale it:
-            //   renderedTensor /= 255.0f;
-
-            // 3. CREATE OR GET TARGET TENSOR
-            //    - In a real application, you presumably have a "reference" or "ground truth"
-            //      you are trying to match. For demonstration, let's assume there's a
-            //      pre-loaded target (the same shape) stored in m_targetImage.
-            //    - Or you can construct a synthetic target.
-            torch::Tensor targetTensor;
-            {
-                // ... Load or create your target here.
-                // This must be the same shape as renderedTensor if you use MSE loss.
-                // For demonstration, let's do a zero tensor as a placeholder:
-                targetTensor = torch::zeros_like(renderedTensor);
-            }
-
-            // 4. COMPUTE THE LOSS
-            //    - For instance, MSE:
-            auto loss = torch::mse_loss(renderedTensor, targetTensor);
-
-            // 5. BACKWARD PASS
-            loss.backward();
-
-            // 6. OPTIMIZER STEP (updates parameters of your differentiable module)
-            m_optimizer->step();
-
-            // Optionally, print or log the loss:
-            std::cout << "Loss = " << loss.item<float>() << std::endl;
-
-            // ----------------------------------------------------------
-            // (Optional) Convert the rendered image for the UI
-            // ----------------------------------------------------------
+            // Convert to RGBA for UI
             std::vector<uint8_t> convertedImage(width * height * 4); // RGBA
             for (uint32_t i = 0; i < width * height; ++i) {
-                float r = img[i]; // If single channel, store in R/G/B equally
+                float r = img[i]; // If single channel, replicate to R/G/B
                 convertedImage[i * 4 + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f);
                 convertedImage[i * 4 + 1] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f);
                 convertedImage[i * 4 + 2] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f);
                 convertedImage[i * 4 + 3] = 255;
             }
-
-            // Finally, upload the texture for display:
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
+        }
+
+        // ----------------------------------------------------------
+        // 2. Backprop only once after enough forwards
+        // ----------------------------------------------------------
+        // e.g. if the user toggled a "finalize accumulation & train" button
+        // or you simply want to backprop once after some number of passes
+        if (imageUI->backprop && m_accumulatedTensor.defined() && m_numAccumulated > 0) {
+            // If you want the average instead of the sum, do so here:
+            // Create or load your target tensor (matching shape)
+            // For demonstration, just zero:
+            int width = m_accumulatedTensor.size(1);
+            int height = m_accumulatedTensor.size(0);
+            // Load the target tensor
+            torch::Tensor targetTensor = loadPFM("target.pfm", width, height);
+
+            std::cout << "m_accumulatedTensor contains NaN: " << m_accumulatedTensor.isnan().any().item<bool>() <<
+                std::endl;
+            std::cout << "m_accumulatedTensor contains Inf: " << m_accumulatedTensor.isinf().any().item<bool>() <<
+                std::endl;
+
+            std::cout << "targetTensor contains NaN: " << targetTensor.isnan().any().item<bool>() << std::endl;
+            std::cout << "targetTensor contains Inf: " << targetTensor.isinf().any().item<bool>() << std::endl;
+
+            // Compute loss
+            auto loss = torch::mse_loss(m_accumulatedTensor, targetTensor);
+
+            // Backward
+            loss.backward();
+
+            // Example debug prints
+            std::cout << "Loss: " << loss.item<float>() << std::endl;
+
+            // Gradient checks: positions, scales, normals
+            // (Make sure you've actually registered these as parameters in your module!)
+            auto gradPositions = m_photonRebuildModule->m_tensorData.positions.grad();
+            auto gradScales = m_photonRebuildModule->m_tensorData.scales.grad();
+            auto gradNormals = m_photonRebuildModule->m_tensorData.normals.grad();
+
+            if (gradPositions.defined()) {
+                // Check for NaNs or Infs
+                if (gradPositions.isnan().any().item<bool>()) {
+                    std::cout << "gradPositions contain NaNs!\n";
+                }
+                if (gradPositions.isinf().any().item<bool>()) {
+                    std::cout << "gradPositions contain Infs!\n";
+                }
+                // Print first 5
+                std::cout << "Gradients for positions (first 5 elements):\n"
+                    << gradPositions.slice(/*dim=*/0, /*start=*/0, /*end=*/5) << "\n";
+                // Print min/max
+                auto minVal = gradPositions.min().item<float>();
+                auto maxVal = gradPositions.max().item<float>();
+                std::cout << "Positions grad min: " << minVal << ", max: " << maxVal << std::endl;
+            }
+            else {
+                std::cout << "gradPositions is undefined.\n";
+            }
+
+            // Similarly for gradScales, gradNormals, etc...
+            if (gradScales.defined()) {
+                if (gradScales.isnan().any().item<bool>()) {
+                    std::cout << "gradScales contain NaNs!\n";
+                }
+                // ...
+            }
+
+            if (gradNormals.defined()) {
+                if (gradNormals.isnan().any().item<bool>()) {
+                    std::cout << "gradNormals contain NaNs!\n";
+                }
+                // ...
+            }
+
+            // Optimizer step
+            m_optimizer->step();
+
+            // Reset the accumulation if you only wanted to do a single backprop per accumulation
+            m_accumulatedTensor = torch::Tensor();
+            m_numAccumulated = 0;
+            m_optimizer->zero_grad(); // Clear old gradients
+            m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
         }
     }
 
@@ -302,17 +333,94 @@ namespace VkRender {
                 m_pathTracer->setActiveCamera(cameraComponent.getPinholeCamera(),
                                               &entity.getComponent<TransformComponent>());
                 m_pathTracer->upload(m_activeScene);
-                m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(m_pathTracer.get());
+                m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
+                    m_pathTracer.get(), m_context->activeScene());
 
                 m_optimizer = std::make_unique<torch::optim::Adam>(
                     // We pass in the parameters of our module (or custom parameter list)
                     m_photonRebuildModule->parameters(),
                     // Then define the Adam options, e.g. learning rate = 1e-3
-                    torch::optim::AdamOptions(1e-3)
+                    torch::optim::AdamOptions(1)
                 );
 
                 break;
             }
         }
+    }
+
+    torch::Tensor EditorDifferentiableRenderer::loadPFM(const std::string& filename, int expectedWidth,
+                                                        int expectedHeight) {
+        std::ifstream file(filename, std::ios::binary);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open PFM file: " + filename);
+        }
+
+        // Read header: "PF", width, height, scale
+        std::string header;
+        file >> header;
+        if (header != "PF") {
+            throw std::runtime_error("Unsupported PFM format (only RGB 'PF' supported). Got: " + header);
+        }
+
+        int width, height;
+        float scale;
+        file >> width >> height >> scale;
+        file.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // skip rest of line
+
+        if (width != expectedWidth || height != expectedHeight) {
+            throw std::runtime_error("PFM dimensions don't match the expected size.");
+        }
+
+        // Determine file endianness from sign of 'scale'
+        bool fileIsLittleEndian = (scale < 0.f);
+        float absScale = std::fabs(scale);
+
+        // For x86, the machine is little-endian
+        bool machineIsLittleEndian = true;
+        bool needByteSwap = (fileIsLittleEndian != machineIsLittleEndian);
+
+        // Allocate space (RGB => 3 channels)
+        std::vector<float> data(width * height * 3);
+
+        // Read raw bytes
+        file.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float));
+        if (!file) {
+            throw std::runtime_error("Failed to read PFM pixel data.");
+        }
+
+        // Byte-swap if needed
+        if (needByteSwap) {
+            for (auto& px : data) {
+                uint8_t* b = reinterpret_cast<uint8_t*>(&px);
+                std::swap(b[0], b[3]);
+                std::swap(b[1], b[2]);
+            }
+        }
+
+        // Scale pixels by absScale
+        for (auto& px : data) {
+            px *= absScale;
+        }
+
+        // Create Torch tensor of shape [height, width, 3]
+        torch::Tensor tensor3D = torch::from_blob(data.data(), {height, width, 3}, torch::kFloat).clone();
+
+        // If truly grayscale repeated in R/G/B, average them to get [height, width]
+        torch::Tensor tensor2D = tensor3D.mean(2);
+
+        // Debug checks
+        auto minVal = tensor2D.min().item<float>();
+        auto maxVal = tensor2D.max().item<float>();
+        std::cout << "Loaded " << filename << " -> shape: " << tensor2D.sizes()
+            << ", min=" << minVal << ", max=" << maxVal << std::endl;
+
+        if (tensor2D.isnan().any().item<bool>()) {
+            throw std::runtime_error("PFM data contains NaN after load!");
+        }
+        if (tensor2D.isinf().any().item<bool>()) {
+            throw std::runtime_error("PFM data contains Inf after load!");
+        }
+
+        return tensor2D;
     }
 }

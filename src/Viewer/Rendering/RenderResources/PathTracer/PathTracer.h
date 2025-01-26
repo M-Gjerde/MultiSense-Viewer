@@ -38,9 +38,9 @@ namespace VkRender::PathTracer {
 
         };
 
-        void setExecutionDevice(PhotonTracer::Settings& settings);
+        void setExecutionDevice(Settings& settings);
 
-        void update(Settings& editorImageUI, std::shared_ptr<Scene> scene);
+        void update(Settings& editorImageUI);
 
         float* getImage() {return m_imageMemory;}
         void upload(std::weak_ptr<Scene> ptr);
@@ -49,6 +49,7 @@ namespace VkRender::PathTracer {
 
         void setActiveCamera(const TransformComponent &transformComponent, float w, float h);
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform);
+        void uploadGaussiansFromTensors(GPUDataTensors& data);
 
 
         uint32_t m_width = 0, m_height = 0;
@@ -77,6 +78,7 @@ namespace VkRender::PathTracer {
         void freeResources();
 
         void resetState();
+        void prepareImageAndInfoBuffers();
         void uploadGaussianData(std::weak_ptr<Scene>& scene);
         void uploadVertexData(std::weak_ptr<Scene>& scene);
 

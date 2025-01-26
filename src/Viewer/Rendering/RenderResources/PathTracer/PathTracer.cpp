@@ -35,7 +35,8 @@ namespace VkRender::PathTracer {
         m_selector.getQueue().wait();
     }
 
-    void PhotonTracer::update(Settings& settings, std::shared_ptr<Scene> scene) {
+    void PhotonTracer::update(Settings& settings) {
+        try {
             if (m_cameraTransform.moved())
                 resetState();
             if (settings.clearImageMemory) {
@@ -81,7 +82,7 @@ namespace VkRender::PathTracer {
                     cgh.parallel_for(globalRange, kernel);
                 });
             }
-            queue.wait();
+            queue.wait_and_throw();
 
             sycl::free(cameraGPU, queue);
             sycl::free(rngGPU, queue);
@@ -97,6 +98,10 @@ namespace VkRender::PathTracer {
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
                     m_renderInformation->photonsAccumulated)) / 1000,
                 (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Exception: " << e.what() << std::endl;
+        }
     }
 
     void PhotonTracer::resetState() {
@@ -106,33 +111,32 @@ namespace VkRender::PathTracer {
         m_renderInformation->totalPhotons = 0;
     }
 
-    void PhotonTracer::upload(std::weak_ptr<Scene> scene) {
+    void PhotonTracer::prepareImageAndInfoBuffers() {
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-
         m_gpu.contribution = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
         if (!m_gpu.contribution) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-
         m_gpu.renderInformation = sycl::malloc_device<RenderInformation>(1, m_selector.getQueue());
         if (!m_gpu.renderInformation) {
             throw std::runtime_error("Device memory allocation failed.");
         }
         m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
-
         // Initialize device memory to 0
         m_selector.getQueue().fill(m_gpu.imageMemory, 0.0f, m_width * m_height).wait();
-
         // Initialize host memory to 0
         std::fill(m_imageMemory, m_imageMemory + (m_width * m_height * sizeof(float)), 0.0f);
-        Log::Logger::getInstance()->info("Creating Ray Tracer. Image dimensions are: {}x{}", m_width, m_height);
+        Log::Logger::getInstance()->info("Prepared Path Tracer SYCL image. Image dimensions are: {}x{}", m_width,
+                                         m_height);
+    }
 
+    void PhotonTracer::upload(std::weak_ptr<Scene> scene) {
+        prepareImageAndInfoBuffers();
         uploadVertexData(scene);
-
         uploadGaussianData(scene);
     }
 
@@ -180,6 +184,99 @@ namespace VkRender::PathTracer {
         }
 
         m_selector.getQueue().wait();
+    }
+
+
+    void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors& data) {
+        freeResources();
+        prepareImageAndInfoBuffers();
+        auto& queue = m_selector.getQueue();
+        // 2) Move Tensors to CPU (if they aren't already) so we can extract values
+        //    (SYCL can't just copy directly from a PyTorch CUDA device pointer.)
+        //    If data is already on CPU, this .cpu() will be basically a no-op.
+        auto positionsCpu = data.positions.cpu();
+        auto scalesCpu = data.scales.cpu();
+        auto normalsCpu = data.normals.cpu();
+
+        auto emissionsCpu = data.emissions.cpu();
+        auto colorsCpu = data.colors.cpu();
+        auto specularCpu = data.specular.cpu();
+        auto diffuseCpu = data.diffuse.cpu();
+
+        // 3) Some basic sanity checks on tensor shapes
+        //    Here we assume:
+        //      positions: [N, 3]
+        //      scales:    [N, 1] or just [N]
+        //      normals:   [N, 3]
+        TORCH_CHECK(positionsCpu.dim() == 2 && positionsCpu.size(1) == 3,
+                    "positions must have shape [N,3]");
+        TORCH_CHECK(normalsCpu.dim() == 2 && normalsCpu.size(1) == 3,
+                    "normals must have shape [N,3]");
+
+        // For scales, accept either [N] or [N,1]
+        TORCH_CHECK((scalesCpu.dim() == 2 && scalesCpu.size(1) == 2),
+                    "scales must have shape [N,2]");
+
+        // 4) Get the number of gaussians (N)
+        const auto N = positionsCpu.size(0);
+
+        // 5) Create a host vector of GaussianInputAssembly
+        std::vector<GaussianInputAssembly> hostGaussians(N);
+
+        // 6) Pointers to the underlying float data (on CPU).
+        //    We'll read them row-by-row.
+        //    Example: positionsCpu.data_ptr<float>() returns a pointer to the 2D array in row-major order.
+        const float* posPtr = positionsCpu.data_ptr<float>();
+        const float* scalesPtr = scalesCpu.data_ptr<float>();
+        const float* normalsPtr = normalsCpu.data_ptr<float>();
+
+        const float* emissionsPtr = emissionsCpu.data_ptr<float>();
+        const float* colorsPtr = colorsCpu.data_ptr<float>();
+        const float* specularPtr = specularCpu.data_ptr<float>();
+        const float* diffusePtr = diffuseCpu.data_ptr<float>();
+
+        // 7) Fill the hostGaussians array
+        //    (positions = 3 floats, normals = 3 floats, scale = 1 float, plus defaults)
+        for (int i = 0; i < N; ++i) {
+            GaussianInputAssembly point{};
+
+            // positions: [i,0..2]
+            point.position.x = posPtr[i * 3 + 0];
+            point.position.y = posPtr[i * 3 + 1];
+            point.position.z = posPtr[i * 3 + 2];
+
+            // scales: either shape [N,1] or [N].
+            // If [N,1], then index is i*1, else it's i
+            if (scalesCpu.dim() == 2) {
+                point.scale.x = scalesPtr[i * 2 + 0];
+                point.scale.y = scalesPtr[i * 2 + 1];
+            }
+
+            // normals: [i,0..2]
+            point.normal.x = normalsPtr[i * 3 + 0];
+            point.normal.y = normalsPtr[i * 3 + 1];
+            point.normal.z = normalsPtr[i * 3 + 2];
+
+            // Fill default appearance properties
+            point.emission =      emissionsPtr[i]; // emission = 0
+            point.color =         colorsPtr[i]; // color = 1
+            point.diffuse =       specularPtr[i]; // diffuse = 0.5
+            point.specular =      diffusePtr[i]; // specular = 0.5
+            point.phongExponent = 32; // phongExponent = 32
+
+            hostGaussians[i] = point;
+        }
+
+        // 8) Allocate device memory and copy
+        m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(N, queue);
+        queue.memcpy(m_gpu.gaussianInputAssembly, hostGaussians.data(), N * sizeof(GaussianInputAssembly));
+        queue.wait();
+
+        // 9) Set number of gaussians
+        m_gpu.numGaussians = N;
+
+        // Log
+        Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
     }
 
     void PhotonTracer::uploadGaussianData(std::weak_ptr<Scene>& scene) {
@@ -415,10 +512,11 @@ namespace VkRender::PathTracer {
 
     // For pinhole scene camera
     void PhotonTracer::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera,
-                                        const TransformComponent* cameraTransform) {
+                                       const TransformComponent* cameraTransform) {
         m_camera = *camera;
         m_cameraTransform = *cameraTransform;
     }
+
 
     /* Draw rays
      {

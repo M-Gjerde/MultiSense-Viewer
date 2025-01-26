@@ -4,6 +4,8 @@
 
 #include "EditorPathTracer.h"
 
+#include <stb_image_write.h>
+
 #include "Viewer/Application/Application.h"
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
@@ -242,7 +244,7 @@ namespace VkRender {
             settings.numBounces = imageUI->numBounces;
             settings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
 
-            m_pathTracer->update(settings, m_context->activeScene());
+            m_pathTracer->update(settings);
             float* image = m_pathTracer->getImage();
             if (image) {
                 uint32_t width = m_colorTexture->width();
@@ -279,7 +281,7 @@ namespace VkRender {
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
             float* image = m_pathTracer->getImage();
-            std::filesystem::path filename = "cornell.pfm";
+            std::filesystem::path filename = "screenshot.pfm";
             std::ofstream file(filename, std::ios::binary);
 
             if (!file.is_open()) {
@@ -314,6 +316,26 @@ namespace VkRender {
             }
 
             file.close();
+
+            std::vector<uint8_t> rgbDataPng(width * height * 3);
+
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    uint32_t pixelIndex = (y * width + x);
+                    uint32_t rgbIndex = pixelIndex * 3;
+
+                    // Assuming image is in RGBA format with float values in range [0.0, 1.0]
+                    rgbDataPng[rgbIndex + 0] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // R
+                    rgbDataPng[rgbIndex + 1] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // G
+                    rgbDataPng[rgbIndex + 2] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // B
+                }
+            }
+
+
+            // Write the image to a PNG file
+            if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3, rgbDataPng.data(), width * 3)) {
+                throw std::runtime_error("Failed to write PNG file: " + filename.string());
+            }
         }
     }
 

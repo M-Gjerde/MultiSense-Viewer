@@ -10,7 +10,26 @@
 #include "Viewer/Rendering/Components/MaterialComponent.h"
 #include "Viewer/Rendering/Components/Components.h"
 
+#ifdef DIFF_RENDERER_ENABLED
+#include "torch/torch.h"
+#endif
+
 namespace VkRender::PathTracer {
+#ifdef DIFF_RENDERER_ENABLED
+
+    struct GPUDataTensors {
+        torch::Tensor positions;
+        torch::Tensor scales;
+        torch::Tensor normals;
+
+        // properties
+        torch::Tensor emissions;
+        torch::Tensor colors;
+        torch::Tensor specular;
+        torch::Tensor diffuse;
+    };
+#endif
+
 
     // Enum for kernel types
     typedef enum KernelType {
@@ -47,11 +66,11 @@ namespace VkRender::PathTracer {
         glm::vec3 normal;
         glm::vec2 scale;
 
-        float emission;         // Emissive power
-        float color;             // Albedo
-        float diffuse;           // Diffuse coefficient
-        float specular;          // Specular coefficient
-        float phongExponent;     // Shininess exponent
+        float emission; // Emissive power
+        float color; // Albedo
+        float diffuse; // Diffuse coefficient
+        float specular; // Specular coefficient
+        float phongExponent; // Shininess exponent
     };
 
     struct RenderInformation {
@@ -62,29 +81,31 @@ namespace VkRender::PathTracer {
 
         float gamma = 2.2f;
     };
+
     struct GPUData {
-        InputAssembly *vertices = nullptr;
-        uint32_t *indices = nullptr;  // e.g., {0, 1, 2, 2, 3, 0, ...}
-        uint32_t *vertexOffsets = nullptr;
-        uint32_t *indexOffsets = nullptr;
-        TransformComponent *transforms = nullptr;
-        MaterialComponent *materials = nullptr;
-        TagComponent *tagComponents = nullptr;
+        InputAssembly* vertices = nullptr;
+        uint32_t* indices = nullptr; // e.g., {0, 1, 2, 2, 3, 0, ...}
+        uint32_t* vertexOffsets = nullptr;
+        uint32_t* indexOffsets = nullptr;
+        TransformComponent* transforms = nullptr;
+        MaterialComponent* materials = nullptr;
+        TagComponent* tagComponents = nullptr;
         uint32_t numEntities = 0;
 
         uint32_t totalVertices = 0;
         uint32_t totalIndices = 0;
 
         // GS
-        GaussianInputAssembly *gaussianInputAssembly = nullptr;
+        GaussianInputAssembly* gaussianInputAssembly = nullptr;
 
         size_t numGaussians = 0;
 
-        float *imageMemory = nullptr;
-        float *contribution = nullptr;
+        float* imageMemory = nullptr;
+        float* contribution = nullptr;
 
-        RenderInformation *renderInformation = nullptr;
+        RenderInformation* renderInformation = nullptr;
     };
+
 
     struct PCG32 {
         uint64_t state{};
@@ -113,6 +134,5 @@ namespace VkRender::PathTracer {
             return nextUInt() / static_cast<float>(UINT32_MAX);
         }
     };
-
 }
 #endif //DEFINITIONS_H

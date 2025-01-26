@@ -120,12 +120,15 @@ namespace VkRender::PathTracer {
                     if (cosTheta > 0.1f) {
                         if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                             // Atomic increment for photonsAccumulated
+                            m_gpuData.renderInformation->photonsAccumulated++;
+/*
                             sycl::atomic_ref<
                                     unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
                                 atomicPhotonsAccumulated(
                                     m_gpuData.renderInformation->photonsAccumulated);
 
                             atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
+                            */
                         }
                     }
                 }
@@ -271,13 +274,16 @@ namespace VkRender::PathTracer {
                                 if (cosTheta > 0.1f) {
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                         // Atomic increment for photonsAccumulated
+                                        m_gpuData.renderInformation->photonsAccumulated++;
 
+                                        /*
                                         sycl::atomic_ref<
                                                 unsigned long int, sycl::memory_order::relaxed,
                                                 sycl::memory_scope::device>
                                             atomicPhotonsAccumulated(
                                                 m_gpuData.renderInformation->photonsAccumulated);
                                         atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
+                                        */
                                     }
                                 }
                             }
@@ -591,9 +597,12 @@ namespace VkRender::PathTracer {
                 float newValue = std::min(1.0f, currentValue + photonFlux);
                 photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
 
+                m_gpuData.imageMemory[pixelIndex] += photonFlux;
+                /*
                 sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
                     m_gpuData.imageMemory[pixelIndex]);
                 atomicImageMemory.fetch_add(photonFlux);
+                */
                 // Atomic addition for imageMemory
 
 

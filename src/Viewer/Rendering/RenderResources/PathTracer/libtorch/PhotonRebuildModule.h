@@ -12,22 +12,27 @@
 // Wrap your raytracer in a Torch module
 namespace VkRender::PathTracer {
 
+
     class PhotonRebuildModule : public torch::nn::Module {
     public:
-        PhotonRebuildModule(PhotonTracer* rt);
+        PhotonRebuildModule(PhotonTracer* rt, std::weak_ptr<Scene> scene);
+        ~PhotonRebuildModule();
 
         // forward() will trigger a ray trace and return an image tensor
-        torch::Tensor forward(PhotonTracer::Settings& settings, std::shared_ptr<Scene> scene);
+        torch::Tensor forward(PhotonTracer::Settings& settings);
 
         float* getRenderedImage();
+        void freeData();
 
-        torch::Tensor myParam;
+        void uploadPathTracerFromTensor();
 
-
-        GPUData m_gpuData;
+        GPUData m_data; // Todo rename
+        GPUDataTensors m_tensorData;
 
     private:
         PhotonTracer* m_photonRebuild;
+        void uploadFromScene(std::weak_ptr<Scene> scene);
+
     };
 
 }

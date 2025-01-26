@@ -43,17 +43,23 @@ namespace VkRender {
             auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_editor->ui());
 
             imageUI->reloadRenderer = ImGui::Button("Reload");
-
             ImGui::SameLine();
+
             imageUI->uploadScene = ImGui::Button("Upload");
-
             ImGui::SameLine();
+
             imageUI->step = ImGui::Button("Step");
-
             ImGui::SameLine();
-            ImGui::Checkbox("Step##Toggle", &imageUI->toggleStep);
 
+            imageUI->backprop = ImGui::Button("Backprop");
+            ImGui::SameLine();
+
+            ImGui::Checkbox("Step##Toggle", &imageUI->toggleStep);
+            ImGui::SameLine();
+
+            ImGui::Checkbox("Accumulate##Toggle", &imageUI->checkStartAccumulation);
             ImGui::SameLine(); // Dropdown for selecting render kernel
+
             const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
             imageUI->switchKernelDevice = false;
             ImGui::SetNextItemWidth(100.0f);

@@ -50,9 +50,25 @@ namespace VkRender {
                                                      m_queue.get_device().get_info<sycl::info::device::name>());
                 } else if (deviceType == DeviceType::CPU) {
                     // Select CPU if available
-                    m_queue = sycl::queue(sycl::cpu_selector_v, properties);
-                    Log::Logger::getInstance()->info("Using CPU: {}",
-                                                     m_queue.get_device().get_info<sycl::info::device::name>());
+                    bool openCLFound = false;
+
+                    for (const auto& platform : sycl::platform::get_platforms()) {
+                            for (const auto& device : platform.get_devices()) {
+                                if (device.is_cpu() && device.get_backend() == sycl::backend::ocl) {
+                                    m_queue = sycl::queue(device, properties);
+                                    Log::Logger::getInstance()->info("Using OpenCL CPU Device: {}",
+                                                                     device.get_info<sycl::info::device::name>());
+                                    openCLFound = true;
+                                    break;
+                                }
+                            }
+                        if (openCLFound) break;
+                        }
+                    if (!openCLFound) {
+                        Log::Logger::getInstance()->error("No OpenCL CPU device found. Defaulting to CPU selector.");
+                        m_queue = sycl::queue(sycl::cpu_selector_v, properties);
+                    }
+
                 } else {
                     // Default device selector (picks the best available)
                     m_queue = sycl::queue(sycl::default_selector_v, properties);
