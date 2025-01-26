@@ -8,6 +8,7 @@
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayerUI.h"
 #include <OpenImageDenoise/oidn.hpp>
+#include <yaml-cpp/yaml.h>
 
 
 namespace VkRender {
@@ -71,14 +72,10 @@ namespace VkRender {
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Prepare path tracer forward settings
-            PathTracer::PhotonTracer::Settings settings;
-            settings.photonCount = imageUI->photonCount;
-            settings.numBounces = imageUI->numBounces;
-            settings.gammaCorrection = imageUI->gammaCorrection;
-            settings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
+
 
             // Forward pass (autograd-compatible)
-            m_accumulatedTensor = m_photonRebuildModule->forward(settings);
+            m_accumulatedTensor = m_photonRebuildModule->forward(m_renderSettings);
             m_numAccumulated++;
 
             // Optionally retrieve the float* for real-time display
@@ -114,15 +111,9 @@ namespace VkRender {
             int width = m_accumulatedTensor.size(1);
             int height = m_accumulatedTensor.size(0);
             // Load the target tensor
-            torch::Tensor targetTensor = loadPFM("target.pfm", width, height);
+            torch::Tensor targetTensor = loadPFM("direct/screenshot.pfm", width, height);
 
-            std::cout << "m_accumulatedTensor contains NaN: " << m_accumulatedTensor.isnan().any().item<bool>() <<
-                std::endl;
-            std::cout << "m_accumulatedTensor contains Inf: " << m_accumulatedTensor.isinf().any().item<bool>() <<
-                std::endl;
 
-            std::cout << "targetTensor contains NaN: " << targetTensor.isnan().any().item<bool>() << std::endl;
-            std::cout << "targetTensor contains Inf: " << targetTensor.isinf().any().item<bool>() << std::endl;
 
             // Compute loss
             auto loss = torch::mse_loss(m_accumulatedTensor, targetTensor);
@@ -159,20 +150,6 @@ namespace VkRender {
                 std::cout << "gradPositions is undefined.\n";
             }
 
-            // Similarly for gradScales, gradNormals, etc...
-            if (gradScales.defined()) {
-                if (gradScales.isnan().any().item<bool>()) {
-                    std::cout << "gradScales contain NaNs!\n";
-                }
-                // ...
-            }
-
-            if (gradNormals.defined()) {
-                if (gradNormals.isnan().any().item<bool>()) {
-                    std::cout << "gradNormals contain NaNs!\n";
-                }
-                // ...
-            }
 
             // Optimizer step
             m_optimizer->step();
@@ -343,6 +320,32 @@ namespace VkRender {
                     torch::optim::AdamOptions(1)
                 );
 
+                // Load the YAML file
+                std::filesystem::path filePath = "direct/render_info.yaml";
+                if (std::filesystem::exists(filePath)) {
+                    YAML::Node config = YAML::LoadFile(filePath);
+                    // Retrieve values from YAML nodes
+                    auto gamma           = config["Gamma"].as<double>();
+                    auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
+                    auto photonsEmitted  = config["PhotonsEmitted"].as<uint64_t>();
+                    auto frameCount      = config["FrameCount"].as<uint32_t>();
+                    auto photonBounceCount      = config["PhotonBounceCount"].as<uint32_t>();
+
+                    // Print them out (or use them in your application)
+                    std::cout << "Gamma: " << gamma << std::endl;
+                    std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
+                    std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
+                    std::cout << "FrameCount: " << frameCount << std::endl;
+                    m_renderSettings.photonCount = photonsEmitted;
+                    m_renderSettings.numBounces = photonBounceCount;
+                    m_renderSettings.gammaCorrection = gamma;
+                    m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
+                } else {
+                    m_renderSettings.photonCount = 10000;
+                    m_renderSettings.numBounces = 32;
+                    m_renderSettings.gammaCorrection = 3.0f;
+                    m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
+                }
                 break;
             }
         }

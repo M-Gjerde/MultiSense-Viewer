@@ -32,13 +32,14 @@ namespace VkRender::PathTracer {
             KernelType kernelType = KERNEL_PATH_TRACER_2DGS;
 
             // Render settings
-            int photonCount = 1e4;
+            uint64_t photonCount = 1e4;
             int numBounces = 32;
             float gammaCorrection = 2.2f;
 
         };
 
         void setExecutionDevice(Settings& settings);
+        RenderInformation getRenderInfo();
 
         void update(Settings& editorImageUI);
 
@@ -70,8 +71,6 @@ namespace VkRender::PathTracer {
 
 
         void saveAsPPM(const std::filesystem::path& filename) const;
-
-        uint32_t m_frameID = 0;
 
         void saveAsPFM(const std::filesystem::path &filename) const;
 

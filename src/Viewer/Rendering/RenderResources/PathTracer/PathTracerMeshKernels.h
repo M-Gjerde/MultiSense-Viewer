@@ -122,13 +122,6 @@ namespace VkRender::PathTracer {
                         float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
                         if (cosTheta > 0.1f) {
                             if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
-                                // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<
-                                        unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                        atomicPhotonsAccumulated(
-                                        m_gpuData.renderInformation->photonsAccumulated);
-
-                                atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
 
                             }
                         }
@@ -184,13 +177,6 @@ namespace VkRender::PathTracer {
                         //sycl::ext::oneapi::experimental::printf("Photon %d, Hit camera at: (%f,%f,%f)\n", photonID, hitPointWorld.x, hitPointWorld.y, hitPointWorld.z);
                         if (tCam < tGeom) {
                             if (accumulateOnSensor(photonID, hitPointWorld, photonFlux)) {
-                                // Atomic increment for photonsAccumulated
-                                sycl::atomic_ref<
-                                        unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                        atomicPhotonsAccumulated(
-                                        m_gpuData.renderInformation->photonsAccumulatedDirect);
-
-                                //atomicPhotonsAccumulated.fetch_add(1);
                             }
                             return; // Photon path terminates
                         }
@@ -327,13 +313,6 @@ namespace VkRender::PathTracer {
                                 if (cosTheta > 0.1f) {
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                         // Atomic increment for photonsAccumulated
-
-                                        sycl::atomic_ref<
-                                                unsigned long int, sycl::memory_order::relaxed,
-                                                sycl::memory_scope::device>
-                                                atomicPhotonsAccumulated(
-                                                m_gpuData.renderInformation->photonsAccumulated);
-                                        atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
                                     }
                                 }
                             }
@@ -578,14 +557,9 @@ namespace VkRender::PathTracer {
                 float newValue = std::min(1.0f, currentValue + photonFlux);
                 photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
 
-                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
-                        m_gpuData.imageMemory[pixelIndex]);
-                atomicImageMemory.fetch_add(photonFlux);
+                m_gpuData.imageMemory[pixelIndex]+= photonFlux;
+                m_gpuData.renderInformation->photonsAccumulated++;
                 // Atomic addition for imageMemory
-
-
-
-
 
                 return true;
             }

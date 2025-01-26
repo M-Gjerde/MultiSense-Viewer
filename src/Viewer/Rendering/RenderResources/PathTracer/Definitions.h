@@ -74,12 +74,14 @@ namespace VkRender::PathTracer {
     };
 
     struct RenderInformation {
-        unsigned long int photonsAccumulated = 0;
-        unsigned long int photonsAccumulatedDirect = 0;
-        uint64_t frameID = 0;
+        uint64_t photonsAccumulated = 0;
         uint64_t totalPhotons = 0;
 
         float gamma = 2.2f;
+
+        uint32_t numBounces = 32;
+        uint32_t frameID = 0;
+
     };
 
     struct GPUData {

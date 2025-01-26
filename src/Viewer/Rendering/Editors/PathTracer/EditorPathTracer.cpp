@@ -5,6 +5,7 @@
 #include "EditorPathTracer.h"
 
 #include <stb_image_write.h>
+#include <yaml-cpp/emitter.h>
 
 #include "Viewer/Application/Application.h"
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
@@ -278,6 +279,26 @@ namespace VkRender {
             }
         }
         if (imageUI->saveImage) {
+            // Save render information:
+            PathTracer::RenderInformation info = m_pathTracer->getRenderInfo();
+            // Create a YAML emitter
+            YAML::Emitter out;
+            out << YAML::BeginMap;
+            out << YAML::Key << "Gamma"                    << YAML::Value << info.gamma;
+            out << YAML::Key << "PhotonHitCount"       << YAML::Value << info.photonsAccumulated;
+            out << YAML::Key << "PhotonBounceCount"       << YAML::Value << info.numBounces;
+            out << YAML::Key << "PhotonsEmitted"       << YAML::Value << info.totalPhotons;
+            out << YAML::Key << "FrameCount"                  << YAML::Value << info.frameID; // Start from 0
+            out << YAML::EndMap;
+
+            // Write YAML content to a file
+            std::string infoFileName = "render_info.yaml";  // Change to your desired infoFileName/path
+            std::ofstream fout(infoFileName);
+            if (fout.is_open()) {
+                fout << out.c_str();
+                fout.close();
+            }
+
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
             float* image = m_pathTracer->getImage();
@@ -336,6 +357,7 @@ namespace VkRender {
             if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3, rgbDataPng.data(), width * 3)) {
                 throw std::runtime_error("Failed to write PNG file: " + filename.string());
             }
+
         }
     }
 

@@ -120,7 +120,6 @@ namespace VkRender::PathTracer {
                     if (cosTheta > 0.1f) {
                         if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                             // Atomic increment for photonsAccumulated
-                            m_gpuData.renderInformation->photonsAccumulated++;
 /*
                             sycl::atomic_ref<
                                     unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
@@ -274,7 +273,6 @@ namespace VkRender::PathTracer {
                                 if (cosTheta > 0.1f) {
                                     if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                                         // Atomic increment for photonsAccumulated
-                                        m_gpuData.renderInformation->photonsAccumulated++;
 
                                         /*
                                         sycl::atomic_ref<
@@ -598,6 +596,8 @@ namespace VkRender::PathTracer {
                 photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
 
                 m_gpuData.imageMemory[pixelIndex] += photonFlux;
+                m_gpuData.renderInformation->photonsAccumulated++;
+
                 /*
                 sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
                     m_gpuData.imageMemory[pixelIndex]);

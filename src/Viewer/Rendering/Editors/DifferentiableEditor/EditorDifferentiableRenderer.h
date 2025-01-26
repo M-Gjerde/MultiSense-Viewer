@@ -60,6 +60,9 @@ namespace VkRender {
         std::unique_ptr<torch::optim::Adam> m_optimizer;  // Or any other optimizer in <torch/optim.h>
         torch::Tensor m_accumulatedTensor = torch::Tensor();
         uint32_t m_numAccumulated = 0;
+
+        PathTracer::PhotonTracer::Settings m_renderSettings;
+
     };
 }
 #endif //MULTISENSE_VIEWER_EDITOR_DIFFRENTIABLE_RENDERER

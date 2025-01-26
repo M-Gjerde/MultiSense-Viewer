@@ -35,6 +35,11 @@ namespace VkRender::PathTracer {
         m_selector.getQueue().wait();
     }
 
+    RenderInformation PhotonTracer::getRenderInfo() {
+
+        return *m_renderInformation;
+    }
+
     void PhotonTracer::update(Settings& settings) {
         try {
             if (m_cameraTransform.moved())
@@ -46,17 +51,18 @@ namespace VkRender::PathTracer {
             auto& queue = m_selector.getQueue();
 
             m_renderInformation->frameID++;
-            int simulatePhotonCount = settings.photonCount;
+            uint64_t simulatePhotonCount = settings.photonCount;
 
             std::vector<PCG32> rng(simulatePhotonCount);
             for (int i = 0; i < simulatePhotonCount; ++i)
-                rng[i].init(m_frameID, i * m_frameID);
+                rng[i].init(m_renderInformation->frameID, i * m_renderInformation->frameID);
 
             auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
             queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
 
             m_renderInformation->totalPhotons += simulatePhotonCount;
             m_renderInformation->gamma = settings.gammaCorrection;
+            m_renderInformation->numBounces = settings.numBounces;
             /** Any shared GPU/CPU debug information must be stored before here**/
             queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
 
@@ -69,7 +75,7 @@ namespace VkRender::PathTracer {
                 queue.submit([&](sycl::handler& cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                             settings.numBounces, rngGPU);
+                                             settings.numBounces, rngGPU); // TODO set numBounces from renderInformation
                     cgh.parallel_for(globalRange, kernel);
                 });
             }
@@ -86,18 +92,15 @@ namespace VkRender::PathTracer {
 
             sycl::free(cameraGPU, queue);
             sycl::free(rngGPU, queue);
-            m_frameID++;
 
             /** Any shared GPU/CPU debug information must be stored after here**/
             queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
             queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
 
             Log::Logger::getInstance()->trace(
-                "simulated {:.3f} Billion photons. About {}k Photons hit the sensor, of which {}k hit directly",
-                m_renderInformation->totalPhotons / 1e9 * m_renderInformation->frameID,
-                (static_cast<float>(m_renderInformation->photonsAccumulatedDirect +
-                    m_renderInformation->photonsAccumulated)) / 1000,
-                (static_cast<float>(m_renderInformation->photonsAccumulatedDirect)) / 1000);
+                "simulated {:.3f} Billion photons. About {}k Photons hit the sensor",
+                m_renderInformation->totalPhotons / 1e9,
+                m_renderInformation->photonsAccumulated / 1000);
         }
         catch (const std::exception& e) {
             std::cerr << "Exception: " << e.what() << std::endl;
@@ -106,9 +109,11 @@ namespace VkRender::PathTracer {
 
     void PhotonTracer::resetState() {
         m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
-        m_frameID = 0;
+        m_renderInformation->frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
+        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).wait();
+
     }
 
     void PhotonTracer::prepareImageAndInfoBuffers() {
