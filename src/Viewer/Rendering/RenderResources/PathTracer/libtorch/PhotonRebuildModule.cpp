@@ -32,7 +32,11 @@ namespace VkRender::PathTracer {
             m_photonRebuild,
             m_tensorData.positions,
             m_tensorData.scales,
-            m_tensorData.normals
+            m_tensorData.normals,
+            m_tensorData.emissions,
+            m_tensorData.colors,
+            m_tensorData.specular,
+            m_tensorData.diffuse
         );
         return result;
     }

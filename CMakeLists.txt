@@ -145,16 +145,19 @@ if (ENABLE_SYCL)
 
     elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package
+        set(ACPP_TARGETS "omp")
+        target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
+        target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
+
         find_package(AdaptiveCpp REQUIRED)
         # Check if ACPP_TARGETS is passed via command line or environment
-        set(ACPP_TARGETS "generic")
         # Print a message showing which targets are being used
         message(STATUS "[VkRenderINFO]: Using AdaptiveCpp with targets: ${ACPP_TARGETS} to project name ${PROJECT_NAME}")
         # Add sycl to target using AdaptiveCpp's helper
         add_sycl_to_target(TARGET ${PROJECT_NAME} TARGETS ${ACPP_TARGETS})
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
+            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g )
+            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
             message(STATUS "[VkRenderINFO]: Compiling using AdaptiveCpp without optimization")
         endif()
     else ()
@@ -311,6 +314,7 @@ endif ()# Add SYCL-specific files
 if (${ENABLE_PYTORCH})
     set (DIFF_RENDER_SOURCES
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildModule.cpp
+            src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildFunction.cpp
             src/Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.cpp
     )
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})

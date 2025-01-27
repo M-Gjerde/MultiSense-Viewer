@@ -28,6 +28,8 @@ namespace VkRender::PathTracer {
         torch::Tensor specular;
         torch::Tensor diffuse;
     };
+#else
+    struct GPUDataTensors;
 #endif
 
 

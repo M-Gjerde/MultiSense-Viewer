@@ -75,7 +75,7 @@ namespace VkRender::PathTracer {
                 queue.submit([&](sycl::handler& cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                             settings.numBounces, rngGPU); // TODO set numBounces from renderInformation
+                                             settings.numBounces, rngGPU); // TODO set numBounces from renderInformation instead
                     cgh.parallel_for(globalRange, kernel);
                 });
             }
@@ -193,6 +193,7 @@ namespace VkRender::PathTracer {
 
 
     void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors& data) {
+#ifdef DIFF_RENDERER_ENABLED
         freeResources();
         prepareImageAndInfoBuffers();
         auto& queue = m_selector.getQueue();
@@ -282,6 +283,7 @@ namespace VkRender::PathTracer {
 
         // Log
         Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
+#endif
     }
 
     void PhotonTracer::uploadGaussianData(std::weak_ptr<Scene>& scene) {
