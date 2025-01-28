@@ -11,6 +11,7 @@
 
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracerMeshKernels.h"
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernel.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernelBackward.h"
 
 namespace VkRender::PathTracer {
     PhotonTracer::PhotonTracer(Application* ctx, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) :
@@ -22,6 +23,9 @@ namespace VkRender::PathTracer {
         // Allocate host memory for RGBA image (4 floats per pixel)
         m_imageMemory = new float[width * height * 4];
         m_renderInformation = std::make_unique<RenderInformation>();
+
+        m_backwardInfo.gradients = new glm::vec3[500000];
+        m_backwardInfo.sumGradients = new glm::vec3();
     }
 
     void PhotonTracer::setExecutionDevice(Settings& settings) {
@@ -36,7 +40,6 @@ namespace VkRender::PathTracer {
     }
 
     RenderInformation PhotonTracer::getRenderInfo() {
-
         return *m_renderInformation;
     }
 
@@ -75,7 +78,8 @@ namespace VkRender::PathTracer {
                 queue.submit([&](sycl::handler& cgh) {
                     // Capture GPUData, etc. by value or reference as needed
                     LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                             settings.numBounces, rngGPU); // TODO set numBounces from renderInformation instead
+                                             settings.numBounces,
+                                             rngGPU); // TODO set numBounces from renderInformation instead
                     cgh.parallel_for(globalRange, kernel);
                 });
             }
@@ -107,13 +111,59 @@ namespace VkRender::PathTracer {
         }
     }
 
+    PhotonTracer::BackwardInfo PhotonTracer::backward(Settings& settings) {
+        try {
+            auto& queue = m_selector.getQueue();
+            uint64_t simulatePhotonCount = settings.photonCount;
+
+            std::vector<PCG32> rng(simulatePhotonCount);
+            for (int i = 0; i < simulatePhotonCount; ++i)
+                rng[i].init(m_renderInformation->frameID, i * m_renderInformation->frameID);
+
+            auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
+            queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
+
+            queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * m_width * m_height);
+
+            m_renderInformation->totalPhotons += simulatePhotonCount;
+            m_renderInformation->gamma = settings.gammaCorrection;
+            m_renderInformation->numBounces = settings.numBounces;
+            /** Any shared GPU/CPU debug information must be stored before here**/
+            queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+            auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
+            queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
+            queue.wait();
+            sycl::range<1> globalRange(simulatePhotonCount);
+            queue.submit([&](sycl::handler& cgh) {
+                // Capture GPUData, etc. by value or reference as needed
+                LightTracerKernelBackward kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
+                                         settings.numBounces,
+                                         rngGPU); // TODO set numBounces from renderInformation instead
+                cgh.parallel_for(globalRange, kernel);
+            });
+
+            queue.wait_and_throw();
+            sycl::free(cameraGPU, queue);
+            sycl::free(rngGPU, queue);
+            /** Any shared GPU/CPU debug information must be stored after here**/
+            //queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
+
+            queue.memcpy(m_backwardInfo.gradients, m_gpu.gradients, simulatePhotonCount * sizeof(glm::vec3));
+            queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients,  sizeof(glm::vec3));
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Exception: " << e.what() << std::endl;
+        }
+        return m_backwardInfo;
+    }
+
     void PhotonTracer::resetState() {
         m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
         m_renderInformation->frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
-        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).wait();
-
+        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).
+                   wait();
     }
 
     void PhotonTracer::prepareImageAndInfoBuffers() {
@@ -186,6 +236,18 @@ namespace VkRender::PathTracer {
         if (m_gpu.gaussianInputAssembly) {
             sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
             m_gpu.gaussianInputAssembly = nullptr;
+        }
+        if (m_gpu.gradients) {
+            sycl::free(m_gpu.gradients, m_selector.getQueue());
+            m_gpu.gradients = nullptr;
+        }
+        if (m_gpu.sumGradients) {
+            sycl::free(m_gpu.sumGradients, m_selector.getQueue());
+            m_gpu.sumGradients = nullptr;
+        }
+        if (m_gpu.gradientImage) {
+            sycl::free(m_gpu.gradientImage, m_selector.getQueue());
+            m_gpu.gradientImage = nullptr;
         }
 
         m_selector.getQueue().wait();
@@ -264,10 +326,10 @@ namespace VkRender::PathTracer {
             point.normal.z = normalsPtr[i * 3 + 2];
 
             // Fill default appearance properties
-            point.emission =      emissionsPtr[i]; // emission = 0
-            point.color =         colorsPtr[i]; // color = 1
-            point.diffuse =       specularPtr[i]; // diffuse = 0.5
-            point.specular =      diffusePtr[i]; // specular = 0.5
+            point.emission = emissionsPtr[i]; // emission = 0
+            point.color = colorsPtr[i]; // color = 1
+            point.diffuse = specularPtr[i]; // diffuse = 0.5
+            point.specular = diffusePtr[i]; // specular = 0.5
             point.phongExponent = 32; // phongExponent = 32
 
             hostGaussians[i] = point;
@@ -276,10 +338,20 @@ namespace VkRender::PathTracer {
         // 8) Allocate device memory and copy
         m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(N, queue);
         queue.memcpy(m_gpu.gaussianInputAssembly, hostGaussians.data(), N * sizeof(GaussianInputAssembly));
-        queue.wait();
+
+        uint32_t numPhotons = 500000;
+        m_gpu.gradients = sycl::malloc_device<glm::vec3>(numPhotons, queue);
+        queue.fill(m_gpu.gradients, glm::vec3(0.0f), numPhotons);
+
+        m_gpu.sumGradients = sycl::malloc_device<glm::vec3>(1, queue);
+        queue.fill(m_gpu.sumGradients, glm::vec3(0.0f), 1);
+
+        m_gpu.gradientImage = sycl::malloc_device<float>(m_width * m_height, queue);
+        queue.fill(m_gpu.gradientImage, 0.0f, m_width * m_height);
 
         // 9) Set number of gaussians
         m_gpu.numGaussians = N;
+        queue.wait();
 
         // Log
         Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
@@ -435,7 +507,12 @@ namespace VkRender::PathTracer {
         if (m_imageMemory) {
             delete[] m_imageMemory;
         }
-
+        if (m_backwardInfo.gradients) {
+            delete[] m_backwardInfo.gradients;
+        }
+        if (m_backwardInfo.sumGradients) {
+            delete[] m_backwardInfo.sumGradients;
+        }
         freeResources();
     }
 

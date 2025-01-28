@@ -56,6 +56,8 @@ if (ENABLE_PYTORCH)
     set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_EXTENSIONS OFF)
+    message(STATUS "[VkRenderINFO]: Attempting to find LibTorch")
+    set(CMAKE_CUDA_ARCHITECTURES 89)
 
     set(hipblas-common_DIR /opt/rocm-6.3.1/lib/cmake/hipblas-common)
     find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch

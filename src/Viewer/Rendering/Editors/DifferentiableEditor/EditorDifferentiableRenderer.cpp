@@ -104,19 +104,19 @@ namespace VkRender {
         // ----------------------------------------------------------
         // e.g. if the user toggled a "finalize accumulation & train" button
         // or you simply want to backprop once after some number of passes
-        if (imageUI->backprop && m_accumulatedTensor.defined() && m_numAccumulated > 0) {
+        if ((imageUI->backprop || imageUI->toggleStep) && m_accumulatedTensor.defined() && m_numAccumulated > 0) {
             // If you want the average instead of the sum, do so here:
             // Create or load your target tensor (matching shape)
             // For demonstration, just zero:
             int width = m_accumulatedTensor.size(1);
             int height = m_accumulatedTensor.size(0);
             // Load the target tensor
-            torch::Tensor targetTensor = loadPFM("direct/screenshot.pfm", width, height);
+            torch::Tensor targetTensor = loadPFM("/home/magnus/datasets/PathTracingGS/screenshot.pfm", width, height);
 
 
 
             // Compute loss
-            auto loss = torch::mse_loss(m_accumulatedTensor, targetTensor);
+            auto loss = torch::mean(torch::abs(m_accumulatedTensor - targetTensor));
 
             // Backward
             loss.backward();
@@ -126,10 +126,25 @@ namespace VkRender {
 
             // Gradient checks: positions, scales, normals
             // (Make sure you've actually registered these as parameters in your module!)
+            auto positions = m_photonRebuildModule->m_tensorData.positions;
+
             auto gradPositions = m_photonRebuildModule->m_tensorData.positions.grad();
             auto gradScales = m_photonRebuildModule->m_tensorData.scales.grad();
             auto gradNormals = m_photonRebuildModule->m_tensorData.normals.grad();
 
+            if (positions.defined()) {
+                // Check for NaNs or Infs
+                if (positions.isnan().any().item<bool>()) {
+                    std::cout << "positions contain NaNs!\n";
+                }
+                if (positions.isinf().any().item<bool>()) {
+                    std::cout << "positions contain Infs!\n";
+                }
+                std::cout << "Positions:\n"
+                    << positions.slice(/*dim=*/0, /*start=*/0, /*end=*/5) << "\n";            }
+            else {
+                std::cout << "gradPositions is undefined.\n";
+            }
             if (gradPositions.defined()) {
                 // Check for NaNs or Infs
                 if (gradPositions.isnan().any().item<bool>()) {
@@ -317,11 +332,11 @@ namespace VkRender {
                     // We pass in the parameters of our module (or custom parameter list)
                     m_photonRebuildModule->parameters(),
                     // Then define the Adam options, e.g. learning rate = 1e-3
-                    torch::optim::AdamOptions(1)
+                    torch::optim::AdamOptions(0.1)
                 );
 
                 // Load the YAML file
-                std::filesystem::path filePath = "direct/render_info.yaml";
+                std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/render_info.yaml";
                 if (std::filesystem::exists(filePath)) {
                     YAML::Node config = YAML::LoadFile(filePath);
                     // Retrieve values from YAML nodes
@@ -345,6 +360,7 @@ namespace VkRender {
                     m_renderSettings.numBounces = 32;
                     m_renderSettings.gammaCorrection = 3.0f;
                     m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
+                    Log::Logger::getInstance()->warning("Did not load params from dataset folder");
                 }
                 break;
             }
@@ -411,11 +427,6 @@ namespace VkRender {
         // If truly grayscale repeated in R/G/B, average them to get [height, width]
         torch::Tensor tensor2D = tensor3D.mean(2);
 
-        // Debug checks
-        auto minVal = tensor2D.min().item<float>();
-        auto maxVal = tensor2D.max().item<float>();
-        std::cout << "Loaded " << filename << " -> shape: " << tensor2D.sizes()
-            << ", min=" << minVal << ", max=" << maxVal << std::endl;
 
         if (tensor2D.isnan().any().item<bool>()) {
             throw std::runtime_error("PFM data contains NaN after load!");

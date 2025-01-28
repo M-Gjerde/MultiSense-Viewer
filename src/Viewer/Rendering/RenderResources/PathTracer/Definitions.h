@@ -103,6 +103,9 @@ namespace VkRender::PathTracer {
         GaussianInputAssembly* gaussianInputAssembly = nullptr;
 
         size_t numGaussians = 0;
+        glm::vec3* gradients = nullptr;
+        glm::vec3* sumGradients = nullptr;
+        float * gradientImage = nullptr;
 
         float* imageMemory = nullptr;
         float* contribution = nullptr;

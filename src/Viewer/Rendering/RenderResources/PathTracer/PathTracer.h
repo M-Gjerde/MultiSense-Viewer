@@ -38,10 +38,17 @@ namespace VkRender::PathTracer {
 
         };
 
+        struct BackwardInfo {
+            glm::vec3* gradients = nullptr;
+            glm::vec3* sumGradients = nullptr;
+            float* gradientImage = nullptr;
+        };
+
         void setExecutionDevice(Settings& settings);
         RenderInformation getRenderInfo();
 
         void update(Settings& editorImageUI);
+        BackwardInfo backward(Settings& settings);
 
         float* getImage() {return m_imageMemory;}
         void upload(std::weak_ptr<Scene> ptr);
@@ -54,19 +61,20 @@ namespace VkRender::PathTracer {
 
 
         uint32_t m_width = 0, m_height = 0;
-
-    private:
         PinholeCamera m_camera{};
         TransformComponent m_cameraTransform{};
+        std::unique_ptr<RenderInformation> m_renderInformation;
+        BackwardInfo m_backwardInfo;
+
+    private:
+
 
         Application* m_context;
         SyclDeviceSelector m_selector{};
 
         float* m_imageMemory = nullptr;
 
-
         GPUData m_gpu;
-        std::unique_ptr<RenderInformation> m_renderInformation;
         MeshManager m_meshManager;
 
 

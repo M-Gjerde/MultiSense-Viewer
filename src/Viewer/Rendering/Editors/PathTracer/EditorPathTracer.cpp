@@ -302,6 +302,14 @@ namespace VkRender {
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
             float* image = m_pathTracer->getImage();
+            std::vector<float> denoisedImage;
+
+            if (imageUI->denoise) {
+                denoiseImage(image, width, height, denoisedImage);
+                image = denoisedImage.data();
+            }
+
+
             std::filesystem::path filename = "screenshot.pfm";
             std::ofstream file(filename, std::ios::binary);
 
