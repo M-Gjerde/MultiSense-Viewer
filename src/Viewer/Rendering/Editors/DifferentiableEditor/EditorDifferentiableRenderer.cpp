@@ -7,9 +7,9 @@
 #include "Viewer/Application/Application.h"
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayerUI.h"
+
 #include <OpenImageDenoise/oidn.hpp>
 #include <yaml-cpp/yaml.h>
-
 
 namespace VkRender {
     EditorDifferentiableRenderer::EditorDifferentiableRenderer(EditorCreateInfo& createInfo, UUID uuid) : Editor(

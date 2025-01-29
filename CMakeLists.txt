@@ -60,8 +60,10 @@ if (ENABLE_PYTORCH)
     set(CMAKE_CUDA_ARCHITECTURES 89)
 
     set(hipblas-common_DIR /opt/rocm-6.3.1/lib/cmake/hipblas-common)
-    find_package(Torch QUIET HINTS /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
+    find_package(Torch REQUIRED HINTS
+            /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
             /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
+
     )
 
     if (Torch_FOUND)
@@ -147,7 +149,7 @@ if (ENABLE_SYCL)
 
     elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package
-        set(ACPP_TARGETS "omp")
+        set(ACPP_TARGETS "generic")
         target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
         target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
 
