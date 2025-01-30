@@ -42,86 +42,196 @@ namespace VkRender::PathTracer {
         // Single Photon Trace (Multi-Bounce)
         // ---------------------------------------------------------
         void traceOnePhoton(size_t photonID) const {
-            // 1) Pick an emissive triangle and sample a random point on it
             auto cameraTransform = m_cameraTransform.getTransform();
+            glm::mat4 worldToCamera = glm::inverse(cameraTransform);
+
             // Camera plane normal in world space
             glm::vec3 cameraNormal = glm::normalize(
                 glm::mat3(cameraTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
             glm::vec3 pinholePosition = m_cameraTransform.getPosition();
 
+            glm::vec3 cameraPlanePointWorld = glm::vec3(
+    cameraTransform *
+    glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
+
             glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[0].position;
             glm::vec3 gaussianNormal = m_gpuData.gaussianInputAssembly[0].normal;
             glm::vec2 gaussianScale = m_gpuData.gaussianInputAssembly[0].scale;
-
             glm::vec3 emissionOrigin, emissionDir;
             float emissionPower = m_gpuData.gaussianInputAssembly[0].emission;
             sampleGaussianPositionAndNormal(gaussianPosition, gaussianNormal, gaussianScale, photonID,
                                             emissionOrigin,
                                             emissionDir, emissionPower);
 
-
             float apertureDiameter = (10.0 / 4.0) / 1000;
             float apertureRadius = apertureDiameter * 0.5f;
 
+            glm::vec3 apertureHitPoint;
+
             glm::vec3 emissionDirection = sampleDirectionTowardAperture(
                 emissionOrigin, pinholePosition, cameraNormal,
-                apertureRadius, photonID);
-
-            float etmin = FLT_MAX;
+                apertureRadius, apertureHitPoint, photonID);
+            float e_tmin = FLT_MAX;
             float cosAngleHit = 0.0f;
             glm::vec3 cameraHitPointWorld(0.0f);
             checkCameraPlaneIntersection(emissionOrigin, emissionDirection,
-                                       cameraHitPointWorld, etmin, cosAngleHit);
+                                       cameraHitPointWorld, e_tmin, cosAngleHit);
 
-            glm::mat4 worldToCamera = glm::inverse(cameraTransform);
-            glm::vec4 hitPointCam = worldToCamera * glm::vec4(cameraHitPointWorld, 1.0f);
-            // Pixel
-            float Px = hitPointCam.x * 1000.0f;
-            float Py = hitPointCam.y * 1000.0f;
-            float Pz = hitPointCam.z * 1000.0f;
-            float xSensor_mm = 10.0f * (Px / Pz);
-            float ySensor_mm = 10.0f * (Py / Pz);
-            float xPitchSize = ((10.0f) / 600.0f);
-            float yPitchSize = ((10.0f) / 600.0f);
-            float xPixel = (xSensor_mm / xPitchSize) + 300.0f;
-            float yPixel = (ySensor_mm / yPitchSize) + 300.0f;
-            int px = static_cast<int>(std::round(xPixel));
-            int py = static_cast<int>(std::round(yPixel));
-            if (px >= 0 && px < static_cast<int>(m_camera->parameters().width) &&
-                py >= 0 && py < static_cast<int>(m_camera->parameters().height)) {
+            // For clarity, rename e_o = emissionOrigin, e_d = apertureSampleDir
+            glm::vec3 e_o = emissionOrigin;
+            glm::vec3 e_d = emissionDirection;
+            glm::vec3 a = apertureHitPoint;
 
-                float Le = emissionPower;
-                float dist = glm::length(pinholePosition - emissionOrigin);
-                float costTheta = glm::dot(cameraNormal, -emissionDirection);
-                float I_pred = Le;
+            // Then your camera transform / projection to pixel
+            // (some steps might differ if you do them in camera space first)
+            glm::mat4 cameraToWorld = m_cameraTransform.getTransform();
+            glm::vec4 hitCam = worldToCamera * glm::vec4(cameraHitPointWorld, 1.0f);
+            glm::vec3 hitCam3 = glm::vec3(hitCam) / hitCam.w;
+            // Camera intrinsics
+            float fx = m_camera->parameters().fx;
+            float fy = m_camera->parameters().fy;
+            float cx = m_camera->parameters().cx;
+            float cy = m_camera->parameters().cy;
+            float px = hitCam3.x * 1000.f;
+            float py = hitCam3.y * 1000.f;
+            float pz = hitCam3.z * 1000.f;
 
-                float fcos = glm::dot(-emissionDirection, cameraNormal);
-                glm::vec3 d = pinholePosition - emissionOrigin;
-                glm::mat3 mat = (glm::outerProduct(d, d) / std::pow(glm::length(d), 3.0f)) - (glm::mat3(1.0f) /
-                    glm::length(d));
-                glm::vec3 fcos_d = mat * cameraNormal;
-                glm::vec3 dist_d = emissionDirection;
+            float xPixel = (fx * px / pz) + cx;
+            float yPixel = (fy * py / pz) + cy;
+            int pxInt = std::round(xPixel);
+            int pyInt = std::round(yPixel);
 
-                glm::vec3 I_pred_d = I_pred * ((2 * dist * dist_d * fcos) - (dist * dist *
-                    fcos_d)) / (fcos * fcos);
+            if (pxInt >= 0 && pxInt < (int)m_camera->parameters().width &&
+                pyInt >= 0 && pyInt < (int)m_camera->parameters().height) {
+                // Example: add the emission to that pixel
+                // ...
+                // Now do the backward pass to accumulate ∂L/∂e_o:
+                // 1) Get dLoss/dI[u,v] from your gradient buffer
+                int pixelIndex = pyInt * static_cast<int>(m_camera->parameters().width) + pxInt;
+                float dLoss = m_gpuData.gradientImage[pixelIndex];
+                // 2) We need the local partial derivative: (u,v) w.r.t. e_o
+                //    We'll replicate the chain rule steps with your known transformations.
+                //    The code below is just a skeleton; fill in details carefully.
+                // 2.1) Emission Direction Derivative:
+                // (a) r = a - e_o, e_d = r / norm(r)
+                //     J_{e_d,e_o} = ...
+                glm::vec3 r = a- e_o;
+                float r_length = glm::length(r);
+                glm::mat3x3 Jed_eo = (glm::outerProduct(r, r) / (r_length * r_length * r_length)) - (1 / r_length) * glm::mat3(1.0f);
+                // 2.2) Focal Plane intersection parameter:
+                // (b) tMin = ...
+                //     dtMin/de_o = ...
+                glm::vec3 f_n = cameraNormal;
+                glm::vec3 f = cameraPlanePointWorld;
+                // Dot product for denominator
+                float denom = glm::dot(e_d, f_n); // Scalar
+                float denom_squared = denom * denom; // Avoid recomputing later
+                glm::vec3 term1 = -f_n * denom; // Scalar * Vector = Vector
+                glm::vec3 term2 = (glm::dot(f, f_n) - glm::dot(e_o, f_n)) * (Jed_eo * f_n); // Scalar * (Matrix * Vector) = Vector
+                glm::vec3 etmin_de_o = (term1 - term2) / denom_squared; // Element-wise division
 
-                size_t pixelIndex =
-                    static_cast<size_t>(py) * static_cast<size_t>(m_camera->parameters().width) +
-                    static_cast<size_t>(px);
-                float dx = I_pred_d.x;
-                float dy = I_pred_d.y;
-                float dz = I_pred_d.z;
-                float grad_x = dx;
-                float grad_y = dy;
-                float grad_z = dz;
+                // 2.3) Derivatives for intersections with the focal plane
+                // (c) p = e_o + tMin * e_d
+                //     dp/de_o = ...
+                // Identity matrix (3x3)
+                glm::mat3 I(1.0f);
+                // Compute first term: I
+                glm::mat3 dp_de_o = I;
+                // Compute second term: (∂e_tmin / ∂e_o) * e_d (3x3 * 3x1 = 3x3)
+                dp_de_o += glm::outerProduct(e_d, etmin_de_o);
+                // Compute third term: e_tmin * (∂e_d / ∂e_o)  (scalar * 3x3 = 3x3)
+                dp_de_o += e_tmin * Jed_eo;
+                // 2.4) Derivatives for the pinhole projection
+                // (d) project p -> (u,v).  Then chain:
+                //     d(u,v)/de_o = J_{(u,v),p} * dp/de_o
+                float px_camera = hitCam3.x;
+                float py_camera = hitCam3.y;
+                float pz_camera = hitCam3.z;
+                // Compute derivatives
+                float inv_pz = 1.0f / pz_camera;
+                float inv_pz2 = inv_pz * inv_pz; // 1/pz^2
+                // Construct Jacobian matrix J_(u,v),p (2x3)
+                glm::mat2x3 J_uv_p;
+                J_uv_p[0][0] = fx * inv_pz;   // ∂u/∂px
+                J_uv_p[0][1] = 0.0f;          // ∂u/∂py
+                J_uv_p[0][2] = -fx * px_camera * inv_pz2; // ∂u/∂pz
 
-                //m_gpuData.gradients[photonID] = I_pred_d;
+                J_uv_p[1][0] = 0.0f;          // ∂v/∂px
+                J_uv_p[1][1] = fy * inv_pz;   // ∂v/∂py
+                J_uv_p[1][2] = -fy * py_camera * inv_pz2; // ∂v/∂pz
 
-                *m_gpuData.sumGradients += glm::vec3(grad_x, grad_y, grad_z);
+                // PSEUDO: Suppose we do it in world space
+                // build the relevant Jacobians:
+
+                // 5) chain them: J_uv_eo = J_uv_p * dp_de_o => (2×3) * (3×3) = 2×3
+                glm::mat2x3 J_uv_eo(0.0f);
+                for (int row = 0; row < 2; ++row) {
+                    for (int col = 0; col < 3; ++col) {
+                        // dot across the 3 in the middle
+                        float sumVal = 0.f;
+                        for (int k = 0; k < 3; ++k) {
+                            sumVal += J_uv_p[row][k] * dp_de_o[k][col];
+                        }
+                        J_uv_eo[row][col] = sumVal;
+                    }
+                }
+                // 6) Multiply that by dLoss/dI if your pixel's intensity is
+                //    "I[u,v] += emissionPower" or something similar.
+                //    If you have dLoss/d(u,v) as well, you would incorporate that,
+                //    but let's assume your gradientImage is effectively dL/dI.
+
+                    // We want dL/d(e_o) = dLoss_dI * dI/d(e_o).
+                    // If "I" is just the 1-pixel deposit, then dI/d(u,v) ~ 1 in your discrete sense.
+                    // => dL/d(e_o) = dLoss_dI * [ ∂u/∂e_o , ∂v/∂e_o ] basically.
+                    // The result is a 1×3 vector. We can combine the two rows:
+
+                    // row0 = partial u / partial e_o
+                    glm::vec3 dU_deo = { J_uv_eo[0][0], J_uv_eo[0][1], J_uv_eo[0][2] };
+                    // row1 = partial v / partial e_o
+                    glm::vec3 dV_deo = { J_uv_eo[1][0], J_uv_eo[1][1], J_uv_eo[1][2] };
+                    float dx_u = dU_deo.x;
+                    float dy_u = dU_deo.y;
+                    float dz_u = dU_deo.z;
+
+                    float dx_v = dV_deo.x;
+                    float dy_v = dV_deo.y;
+                    float dz_v = dV_deo.z;
+                    // If the photon’s contribution to the pixel is direct =>
+                    //   dI/d(u,v) = 1,
+                    //   so dL/d(e_o) = dLoss_dI * [ dU_deo + dV_deo ]
+                    // or you might choose to handle them separately:
+                    glm::vec3 dL_deo = dU_deo * dLoss;
+
+                    // Accumulate this into your global sum:
+                // Assuming dL_deo is a glm::vec3 and m_gpuData.sumGradients is a pointer to glm::vec3
+                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device,
+                                 sycl::access::address_space::global_space>
+                    sum_x(m_gpuData.sumGradients->x),
+                    sum_y(m_gpuData.sumGradients->y),
+                    sum_z(m_gpuData.sumGradients->z);
+
+                // Atomically accumulate into sumGradients
+                sum_x.fetch_add(dL_deo.x);
+                sum_y.fetch_add(dL_deo.y);
+                sum_z.fetch_add(dL_deo.z);
+
             }
         }
 
+        glm::mat2x3 multiplyMat2x3Mat3(const glm::mat2x3& A, const glm::mat3& B) const {
+            glm::mat2x3 result;
 
+            // Column-major multiplication: B is 3x3, A is 2x3
+            for (int col = 0; col < 3; ++col) { // Iterate over columns of result
+                for (int row = 0; row < 2; ++row) { // Iterate over rows of result
+                    result[row][col] = A[0][col] * B[row][0] + // First row of A * first column of B
+                                       A[1][col] * B[row][1] + // Second row of A * second column of B
+                                       A[2][col] * B[row][2];  // Third row of A * third column of B
+                }
+            }
+
+            return result;
+        }
         bool geometryIntersection2DGS(
             size_t gaussianID,
             const glm::vec3& rayOrigin,
@@ -258,8 +368,14 @@ namespace VkRender::PathTracer {
             float r = radius * sqrt(m_rng[photonID].nextFloat());
             float theta = 2.f * M_PI * m_rng[photonID].nextFloat();
 
+
+            glm::vec3 refVec = sampleRandomDirection(photonID);
+            // Ensure refVec is not parallel or nearly parallel to normal
+            if (abs(dot(normal, refVec)) > 0.999f) {
+                refVec = glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)); // Use a fixed backup vector
+            }
             // Construct orthonormal basis for the disk plane
-            glm::vec3 u = normalize(cross(normal, glm::vec3(0.0f, 0.0f, 1.0f))); // pick any stable "someOtherVec"
+            glm::vec3 u = normalize(cross(normal, refVec));
             glm::vec3 v = cross(normal, u);
 
             float dx = r * cos(theta);
@@ -274,9 +390,10 @@ namespace VkRender::PathTracer {
             const glm::vec3& apertureCenter,
             const glm::vec3& apertureNormal,
             float apertureRadius,
+            glm::vec3& lensHitPoint,
             uint64_t photonID) const {
             // pick random point on the lens
-            glm::vec3 lensHitPoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
+            lensHitPoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
             // direction from light to lens point
             glm::vec3 dir = lensHitPoint - lightPos;
             return normalize(dir);

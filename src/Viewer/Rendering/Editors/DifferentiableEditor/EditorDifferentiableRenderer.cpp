@@ -73,6 +73,7 @@ namespace VkRender {
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Prepare path tracer forward settings
 
+            m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
 
             // Forward pass (autograd-compatible)
             m_accumulatedTensor = m_photonRebuildModule->forward(m_renderSettings);
@@ -140,26 +141,11 @@ namespace VkRender {
                 if (positions.isinf().any().item<bool>()) {
                     std::cout << "positions contain Infs!\n";
                 }
-                std::cout << "Positions:\n"
-                    << positions.slice(/*dim=*/0, /*start=*/0, /*end=*/5) << "\n";            }
-            else {
-                std::cout << "gradPositions is undefined.\n";
-            }
-            if (gradPositions.defined()) {
-                // Check for NaNs or Infs
-                if (gradPositions.isnan().any().item<bool>()) {
-                    std::cout << "gradPositions contain NaNs!\n";
-                }
-                if (gradPositions.isinf().any().item<bool>()) {
-                    std::cout << "gradPositions contain Infs!\n";
-                }
-                // Print first 5
-                std::cout << "Gradients for positions (first 5 elements):\n"
-                    << gradPositions.slice(/*dim=*/0, /*start=*/0, /*end=*/5) << "\n";
-                // Print min/max
-                auto minVal = gradPositions.min().item<float>();
-                auto maxVal = gradPositions.max().item<float>();
-                std::cout << "Positions grad min: " << minVal << ", max: " << maxVal << std::endl;
+                std::cout << "Positions: ("
+                          << positions[0][0].item<float>() << ", "
+                          << positions[0][1].item<float>() << ", "
+                          << positions[0][2].item<float>() << ")"
+                          << std::endl;
             }
             else {
                 std::cout << "gradPositions is undefined.\n";
@@ -173,7 +159,6 @@ namespace VkRender {
             m_accumulatedTensor = torch::Tensor();
             m_numAccumulated = 0;
             m_optimizer->zero_grad(); // Clear old gradients
-            m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
         }
     }
 

@@ -150,6 +150,7 @@ namespace VkRender::PathTracer {
 
             queue.memcpy(m_backwardInfo.gradients, m_gpu.gradients, simulatePhotonCount * sizeof(glm::vec3));
             queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients,  sizeof(glm::vec3));
+            queue.wait();
         }
         catch (const std::exception& e) {
             std::cerr << "Exception: " << e.what() << std::endl;

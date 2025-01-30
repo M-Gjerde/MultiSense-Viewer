@@ -124,7 +124,7 @@ namespace VkRender::PathTracer {
             hostScales.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 2},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
         // ... do the same for normals, emissions, colors, etc. ...
 
@@ -141,7 +141,7 @@ namespace VkRender::PathTracer {
             hostNormals.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 3},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
         /**  Appearance properties //// **/
         // Example for normals:
@@ -161,25 +161,25 @@ namespace VkRender::PathTracer {
             emissions.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 1},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
         m_tensorData.colors = torch::from_blob(
             colors.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 1},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
         m_tensorData.specular = torch::from_blob(
             specular.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 1},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
         m_tensorData.diffuse = torch::from_blob(
             diffuse.data(),
             {static_cast<long>(gaussianInputAssembly.size()), 1},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
-        ).clone().to(device).set_requires_grad(true);
+        ).clone().to(device).set_requires_grad(false);
 
 
         register_parameter("positions", m_tensorData.positions);

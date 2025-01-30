@@ -120,14 +120,14 @@ namespace VkRender::PathTracer {
                     if (cosTheta > 0.1f) {
                         if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
                             // Atomic increment for photonsAccumulated
-/*
-                            sycl::atomic_ref<
-                                    unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                atomicPhotonsAccumulated(
-                                    m_gpuData.renderInformation->photonsAccumulated);
+                            /*
+                                                        sycl::atomic_ref<
+                                                                unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
+                                                            atomicPhotonsAccumulated(
+                                                                m_gpuData.renderInformation->photonsAccumulated);
 
-                            atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
-                            */
+                                                        atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
+                                                        */
                         }
                     }
                 }
@@ -299,15 +299,15 @@ namespace VkRender::PathTracer {
 
 
         bool geometryIntersection2DGS(
-                size_t           gaussianID,
-                const glm::vec3& rayOrigin,
-                const glm::vec3& rayDir,
-                size_t&          hitPointIdx,
-                float&           closest_t,
-                glm::vec3&       hitPointWorld,
-                glm::vec3&       hitNormalWorld
+            size_t gaussianID,
+            const glm::vec3& rayOrigin,
+            const glm::vec3& rayDir,
+            size_t& hitPointIdx,
+            float& closest_t,
+            glm::vec3& hitPointWorld,
+            glm::vec3& hitNormalWorld
         ) const {
-            bool  hit    = false;
+            bool hit = false;
             float epsilon = 1e-6f;
 
             for (uint32_t i = 0; i < m_gpuData.numGaussians; ++i) {
@@ -315,8 +315,8 @@ namespace VkRender::PathTracer {
                     continue;
 
                 const GaussianInputAssembly& gp = m_gpuData.gaussianInputAssembly[i];
-                glm::vec3 N     = gp.normal; // plane normal
-                float     denom = glm::dot(N, rayDir);
+                glm::vec3 N = gp.normal; // plane normal
+                float denom = glm::dot(N, rayDir);
 
                 if (fabs(denom) < epsilon) {
                     continue; // nearly parallel => no valid intersection
@@ -328,7 +328,7 @@ namespace VkRender::PathTracer {
                 }
 
                 glm::vec3 p = rayOrigin + t * rayDir;
-                float dist  = glm::distance(rayOrigin, p);
+                float dist = glm::distance(rayOrigin, p);
                 if (dist >= closest_t) {
                     continue; // not closer than current intersection
                 }
@@ -346,7 +346,7 @@ namespace VkRender::PathTracer {
                 float sigmaU = gp.scale.x;
                 float sigmaV = gp.scale.y;
                 float ellipseParam = (u * u) / (sigmaU * sigmaU)
-                                     + (v * v) / (sigmaV * sigmaV);
+                    + (v * v) / (sigmaV * sigmaV);
 
                 if (ellipseParam > 1.0f) {
                     // Outside the ellipse => ignore this intersection
@@ -354,16 +354,15 @@ namespace VkRender::PathTracer {
                 }
 
                 // If we get here, we have a valid intersection
-                closest_t      = dist;
-                hitPointIdx    = i;
-                hitPointWorld  = p;
+                closest_t = dist;
+                hitPointIdx = i;
+                hitPointWorld = p;
                 hitNormalWorld = N;
                 hit = true;
             }
 
             return hit;
         }
-
 
 
         bool geometryIntersection(size_t lightEntityIdx, const glm::vec3& rayOrigin, const glm::vec3& rayDir,
@@ -435,8 +434,14 @@ namespace VkRender::PathTracer {
             float r = radius * sqrt(m_rng[photonID].nextFloat());
             float theta = 2.f * M_PI * m_rng[photonID].nextFloat();
 
+
+            glm::vec3 refVec = sampleRandomDirection(photonID);
+            // Ensure refVec is not parallel or nearly parallel to normal
+            if (abs(dot(normal, refVec)) > 0.999f) {
+                refVec = glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)); // Use a fixed backup vector
+            }
             // Construct orthonormal basis for the disk plane
-            glm::vec3 u = normalize(cross(normal, glm::vec3(0.0f, 0.0f, 1.0f))); // pick any stable "someOtherVec"
+            glm::vec3 u = normalize(cross(normal, refVec));
             glm::vec3 v = cross(normal, u);
 
             float dx = r * cos(theta);
@@ -662,30 +667,30 @@ namespace VkRender::PathTracer {
             glm::vec3 t2;
             buildTangentBasis(n, t1, t2);
             // 2. Repeatedly draw samples from a standard normal, then scale
-//    them by (sigma_x, sigma_y), until they fall inside the ellipse.
+            //    them by (sigma_x, sigma_y), until they fall inside the ellipse.
 
-            float x, y;  // final offsets in local 2D coords
+            float x, y; // final offsets in local 2D coords
 
-                // (a) Generate two uniform randoms in [0,1)
-                float u1 = m_rng[photonID].nextFloat();
-                float u2 = m_rng[photonID].nextFloat();
+            // (a) Generate two uniform randoms in [0,1)
+            float u1 = m_rng[photonID].nextFloat();
+            float u2 = m_rng[photonID].nextFloat();
 
-                // (b) Box-Muller transform for standard normal
-                float r     = sqrtf(-2.0f * logf(u1));
-                float theta = 2.0f * M_PIf * u2;
-                float z0    = r * cosf(theta); // ~ N(0,1)
-                float z1    = r * sinf(theta); // ~ N(0,1)
+            // (b) Box-Muller transform for standard normal
+            float r = sqrtf(-2.0f * logf(u1));
+            float theta = 2.0f * M_PIf * u2;
+            float z0 = r * cosf(theta); // ~ N(0,1)
+            float z1 = r * sinf(theta); // ~ N(0,1)
 
-                // (c) Scale by anisotropic stddev (sigma_x, sigma_y)
-                x = z0 * gaussian.scale.x;
-                y = z1 * gaussian.scale.y;
+            // (c) Scale by anisotropic stddev (sigma_x, sigma_y)
+            x = z0 * gaussian.scale.x;
+            y = z1 * gaussian.scale.y;
 
-                // (d) Check elliptical boundary
-                //     If scale.x=1 => maximum distance is 1 meter in X
-                //     If scale.y=1 => maximum distance is 1 meter in Y
-                //     For ellipse: (x/σx)^2 + (y/σy)^2 <= 1
-                float ellipseParam = (x * x) / (gaussian.scale.x * gaussian.scale.x)
-                                     + (y * y) / (gaussian.scale.y * gaussian.scale.y);
+            // (d) Check elliptical boundary
+            //     If scale.x=1 => maximum distance is 1 meter in X
+            //     If scale.y=1 => maximum distance is 1 meter in Y
+            //     For ellipse: (x/σx)^2 + (y/σy)^2 <= 1
+            float ellipseParam = (x * x) / (gaussian.scale.x * gaussian.scale.x)
+                + (y * y) / (gaussian.scale.y * gaussian.scale.y);
 
             // ------------------------------------------------------------------
             // 3. Offset the center by (x, y) in the plane spanned by (t1, t2).
@@ -709,7 +714,7 @@ namespace VkRender::PathTracer {
 
             // Gaussian PDF (unnormalized since we are within the ellipse)
             float gaussianPDF = (1.0f / (2.0f * M_PIf * sigma_x * sigma_y)) *
-                                expf(-0.5f * ((x * x) / (sigma_x * sigma_x) + (y * y) / (sigma_y * sigma_y)));
+                expf(-0.5f * ((x * x) / (sigma_x * sigma_x) + (y * y) / (sigma_y * sigma_y)));
 
             // Area of the ellipse
             float ellipseArea = M_PIf * sigma_x * sigma_y;
