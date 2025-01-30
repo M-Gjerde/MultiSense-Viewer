@@ -2,7 +2,7 @@
 // Created by magnus on 1/15/25.
 //
 
-#include "EditorPathTracer.h"
+#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracer.h"
 
 #include <stb_image_write.h>
 #include <yaml-cpp/emitter.h>
@@ -10,6 +10,7 @@
 #include "Viewer/Application/Application.h"
 #include "Viewer/Rendering/Editors/CommonEditorFunctions.h"
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
+#include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
 
 #ifdef SYCL_ENABLED
 #include <OpenImageDenoise/oidn.hpp>
