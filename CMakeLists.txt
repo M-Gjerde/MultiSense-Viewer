@@ -52,13 +52,8 @@ set(USE_CUDA FALSE)
 set(USE_ROCM FALSE)
 
 if (ENABLE_PYTORCH)
-    # Find PyTorch
-    set(CMAKE_CUDA_STANDARD 20)
-    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-    set(CMAKE_CUDA_EXTENSIONS OFF)
-    message(STATUS "[VkRenderINFO]: Attempting to find LibTorch")
-    set(CMAKE_CUDA_ARCHITECTURES 89)
 
+    message(STATUS "[VkRenderINFO]: Attempting to find LibTorch")
     set(hipblas-common_DIR /opt/rocm-6.3.1/lib/cmake/hipblas-common)
     find_package(Torch REQUIRED HINTS
             /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
@@ -95,6 +90,9 @@ if (PYTORCH_AVAILABLE)
         set(CMAKE_CUDA_STANDARD 20)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
         set(CMAKE_CUDA_EXTENSIONS OFF)
+
+        set(CMAKE_CUDA_ARCHITECTURES 89)
+
         message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
         target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
         target_link_directories(${PROJECT_NAME} PRIVATE /usr/local/cuda/lib64)
@@ -149,7 +147,11 @@ if (ENABLE_SYCL)
 
     elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package
-        set(ACPP_TARGETS "generic")
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(ACPP_TARGETS "generic")
+        else()
+            set(ACPP_TARGETS "omp")
+        endif()
         target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
         target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
 

@@ -11,18 +11,15 @@ namespace VkRender::PathTracer {
     class PathTracerMeshKernels {
     public:
         PathTracerMeshKernels(GPUData gpuData,
-                              uint32_t numPhotons,
                               TransformComponent cameraPose,
                               PinholeCamera *camera,
-                              uint32_t maxBounces,
                               PCG32 *rng)
-                : m_gpuData(gpuData), m_numPhotons(numPhotons), m_cameraTransform(cameraPose), m_camera(camera),
-                  m_maxBounces(maxBounces), m_rng(rng) {
+                : m_gpuData(gpuData), m_cameraTransform(cameraPose), m_camera(camera), m_rng(rng) {
         }
 
         void operator()(sycl::item<1> item) const {
             size_t photonID = item.get_linear_id();
-            if (photonID >= m_numPhotons) {
+            if (photonID >= m_gpuData.renderInformation->totalPhotons) {
                 return;
             }
             // Each thread traces one photon.
@@ -31,8 +28,8 @@ namespace VkRender::PathTracer {
 
     private:
         GPUData m_gpuData{};
-        uint32_t m_numPhotons{};
-        uint32_t m_maxBounces = 5; // e.g. 5, 8, or 10
+        //uint32_t m_numPhotons{};
+        //uint32_t m_maxBounces = 5; // e.g. 5, 8, or 10
 
         PCG32 *m_rng;
         TransformComponent m_cameraTransform{};
@@ -130,7 +127,7 @@ namespace VkRender::PathTracer {
             }
 
             // 3) Multi-bounce loop
-            for (uint32_t bounce = 0; bounce < m_maxBounces; ++bounce) {
+            for (uint32_t bounce = 0; bounce < m_gpuData.renderInformation->numBounces; ++bounce) {
                 // A) Intersect with the scene
                 float closest_t = FLT_MAX;
                 size_t hitEntity = 0;
@@ -389,16 +386,22 @@ namespace VkRender::PathTracer {
         }
 
         glm::vec3 samplePointOnDisk(size_t photonID,
-                                    const glm::vec3 &center,
-                                    const glm::vec3 &normal,
+                                    const glm::vec3& center,
+                                    const glm::vec3& normal,
                                     float radius) const {
             // Or use any 2D disk sampling approach (e.g., concentric disk sampling).
             // We'll do a simple naive approach:
             float r = radius * sqrt(m_rng[photonID].nextFloat());
             float theta = 2.f * M_PI * m_rng[photonID].nextFloat();
 
+
+            glm::vec3 refVec = sampleRandomDirection(photonID);
+            // Ensure refVec is not parallel or nearly parallel to normal
+            if (abs(dot(normal, refVec)) > 0.999f) {
+                refVec = glm::normalize(glm::vec3(1.0f, 2.0f, 3.0f)); // Use a fixed backup vector
+            }
             // Construct orthonormal basis for the disk plane
-            glm::vec3 u = normalize(cross(normal, glm::vec3(0.0f, 0.0f, 1.0f))); // pick any stable "someOtherVec"
+            glm::vec3 u = normalize(cross(normal, refVec));
             glm::vec3 v = cross(normal, u);
 
             float dx = r * cos(theta);
@@ -552,13 +555,16 @@ namespace VkRender::PathTracer {
                 */
 
                 photonFlux = std::pow(photonFlux, 1.0f / m_gpuData.renderInformation->gamma);
-
-                float currentValue = m_gpuData.imageMemory[pixelIndex];
+                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
+                    imageMemoryAtomic(m_gpuData.imageMemory[pixelIndex]);
+                float currentValue = imageMemoryAtomic.load();
                 float newValue = std::min(1.0f, currentValue + photonFlux);
                 photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
+                imageMemoryAtomic.fetch_add(photonFlux);
+                sycl::atomic_ref<uint64_t, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
+                    photonsAccumulatedAtomic(m_gpuData.renderInformation->photonsAccumulated);
 
-                m_gpuData.imageMemory[pixelIndex]+= photonFlux;
-                m_gpuData.renderInformation->photonsAccumulated++;
+                photonsAccumulatedAtomic.fetch_add(static_cast<uint64_t>(1));
                 // Atomic addition for imageMemory
 
                 return true;
@@ -828,7 +834,7 @@ namespace VkRender::PathTracer {
         // ---------------------------------------------------------------------
         //  sampleRandomDirection (Lambertian reflection) using PCG32
         // ---------------------------------------------------------------------
-        glm::vec3 sampleRandomDirection(const glm::vec3 &normal, size_t photonID) const {
+        glm::vec3 sampleRandomDirection(size_t photonID) const {
             glm::vec3 r = randomUnitVector(photonID);
             return glm::normalize(r);
         }

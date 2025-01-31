@@ -8,7 +8,15 @@
 #include <glm/gtx/quaternion.hpp>
 
 namespace VkRender::PathTracer {
-    static void save_gradient_to_png(torch::Tensor gradient, const std::string& filename) {
+    static void save_gradient_to_png(torch::Tensor gradient, const std::filesystem::path& filename) {
+        std::filesystem::path dir = filename.parent_path();
+
+        // Create directory if it doesn't exist
+        if (!dir.empty() && !std::filesystem::exists(dir)) {
+            std::filesystem::create_directories(dir);
+        }
+
+
         // Ensure the tensor is on CPU and in float32
         gradient = gradient.detach().cpu().to(torch::kFloat32);
 
@@ -158,9 +166,9 @@ namespace VkRender::PathTracer {
         auto gradients = pathTracer->backward(*settings);
         glm::vec3 grad = *gradients.sumGradients;
 
-        float grad_x = -0.1f;
-        float grad_y = 0.0f;
-        float grad_z = 0.0f;
+        float grad_x = grad.x;
+        float grad_y = grad.y;
+        float grad_z = grad.z;
 
         auto grad_positions = torch::zeros_like(positions);
         auto gradPosA = grad_positions.accessor<float, 2>();

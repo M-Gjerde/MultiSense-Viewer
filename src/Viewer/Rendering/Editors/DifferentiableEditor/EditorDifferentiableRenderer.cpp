@@ -112,19 +112,18 @@ namespace VkRender {
             int width = m_accumulatedTensor.size(1);
             int height = m_accumulatedTensor.size(0);
             // Load the target tensor
-            torch::Tensor targetTensor = loadPFM("/home/magnus/datasets/PathTracingGS/screenshot.pfm", width, height);
-
-
+            torch::Tensor targetTensor = loadPFM("/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm",
+                                                 width, height);
 
             // Compute loss
-            auto loss = torch::mean(torch::abs(m_accumulatedTensor - targetTensor));
+            auto loss = torch::mean(torch::pow(targetTensor-m_accumulatedTensor, 2));
 
             // Backward
             loss.backward();
 
             // Example debug prints
             std::cout << "Loss: " << loss.item<float>() << std::endl;
-
+            Log::Logger::getInstance()->info("Loss: {}", loss.item<float>());
             // Gradient checks: positions, scales, normals
             // (Make sure you've actually registered these as parameters in your module!)
             auto positions = m_photonRebuildModule->m_tensorData.positions;
@@ -142,19 +141,23 @@ namespace VkRender {
                     std::cout << "positions contain Infs!\n";
                 }
                 std::cout << "Positions: ("
-                          << positions[0][0].item<float>() << ", "
-                          << positions[0][1].item<float>() << ", "
-                          << positions[0][2].item<float>() << ")"
-                          << std::endl;
-            }
-            else {
-                std::cout << "gradPositions is undefined.\n";
-            }
+                    << positions[0][0].item<float>() << ", "
+                    << positions[0][1].item<float>() << ", "
+                    << positions[0][2].item<float>() << ")"
+                    << std::endl;
 
+                Log::Logger::getInstance()->info("eo Gradient: ({},{},{})",
+                    gradPositions[0][0].item<float>(),
+                    gradPositions[0][1].item<float>(),
+                    gradPositions[0][2].item<float>());
 
+                Log::Logger::getInstance()->info("e0 Position: ({},{},{})",
+                    positions[0][0].item<float>(),
+                    positions[0][1].item<float>(),
+                    positions[0][2].item<float>());
+            }
             // Optimizer step
             m_optimizer->step();
-
             // Reset the accumulation if you only wanted to do a single backprop per accumulation
             m_accumulatedTensor = torch::Tensor();
             m_numAccumulated = 0;
@@ -321,15 +324,15 @@ namespace VkRender {
                 );
 
                 // Load the YAML file
-                std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/render_info.yaml";
+                std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
                 if (std::filesystem::exists(filePath)) {
                     YAML::Node config = YAML::LoadFile(filePath);
                     // Retrieve values from YAML nodes
-                    auto gamma           = config["Gamma"].as<double>();
+                    auto gamma = config["Gamma"].as<double>();
                     auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
-                    auto photonsEmitted  = config["PhotonsEmitted"].as<uint64_t>();
-                    auto frameCount      = config["FrameCount"].as<uint32_t>();
-                    auto photonBounceCount      = config["PhotonBounceCount"].as<uint32_t>();
+                    auto photonsEmitted = config["PhotonsEmitted"].as<uint64_t>();
+                    auto frameCount = config["FrameCount"].as<uint32_t>();
+                    auto photonBounceCount = config["PhotonBounceCount"].as<uint32_t>();
 
                     // Print them out (or use them in your application)
                     std::cout << "Gamma: " << gamma << std::endl;
@@ -340,7 +343,8 @@ namespace VkRender {
                     m_renderSettings.numBounces = photonBounceCount;
                     m_renderSettings.gammaCorrection = gamma;
                     m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
-                } else {
+                }
+                else {
                     m_renderSettings.photonCount = 10000;
                     m_renderSettings.numBounces = 32;
                     m_renderSettings.gammaCorrection = 3.0f;

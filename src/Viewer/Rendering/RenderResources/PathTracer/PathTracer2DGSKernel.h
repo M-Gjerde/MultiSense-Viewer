@@ -61,8 +61,8 @@ namespace VkRender::PathTracer {
             //glm::vec3 emitNormalWorld = glm::normalize(normalMatrix * emitNormalLocal);
 
             // 2) Sample emission direction
-            //glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalLocal, photonID);
-            glm::vec3 rayDir = sampleRandomDirection(photonID);
+            glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalLocal, photonID);
+            //glm::vec3 rayDir = sampleRandomDirection(photonID);
 
             // The photon throughput tracks how much flux remains after each bounce
             float photonFlux = emissionPower; // or you can store a color as a vec3 if needed
@@ -114,22 +114,10 @@ namespace VkRender::PathTracer {
                 if (tCam < tGeom) {
                     glm::vec3 cameraHitPointWorld = directLightingOrigin + directLightingDir * tCam;
 
-                    float d = glm::length(cameraHitPointWorld) - 1.0f;
+                    float d = glm::length(cameraHitPointWorld);
                     float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
-                    float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
-                    if (cosTheta > 0.1f) {
-                        if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
-                            // Atomic increment for photonsAccumulated
-                            /*
-                                                        sycl::atomic_ref<
-                                                                unsigned long int, sycl::memory_order::relaxed, sycl::memory_scope::device>
-                                                            atomicPhotonsAccumulated(
-                                                                m_gpuData.renderInformation->photonsAccumulated);
-
-                                                        atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
-                                                        */
-                        }
-                    }
+                    float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / glm::max(0.1f, cosTheta);
+                    accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor);
                 }
             }
 
@@ -228,8 +216,8 @@ namespace VkRender::PathTracer {
                     photonFlux = photonFlux / rrProb;
 
                     // Sample new direction (Lambertian reflection)
-                    //glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
-                    glm::vec3 newDir = sampleRandomDirection(photonID);
+                    glm::vec3 newDir = sampleCosineWeightedHemisphere(hitNormalWorld, photonID);
+                    //glm::vec3 newDir = sampleRandomDirection(photonID);
                     rayOrigin = hitPointWorld + hitNormalWorld * 1e-6f; // Offset to prevent self-intersection
                     rayDir = glm::normalize(newDir);
 
@@ -267,23 +255,10 @@ namespace VkRender::PathTracer {
                             float tGeom = hit ? closest_t : FLT_MAX;
                             if (tCam < tGeom) {
                                 glm::vec3 cameraHitPointWorld = contributionRayOrigin + contributionRayDir * tCam;
-                                float d = glm::length(cameraHitPointWorld) - 1.0f;
+                                float d = glm::length(cameraHitPointWorld);
                                 float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
-                                float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / cosTheta;
-                                if (cosTheta > 0.1f) {
-                                    if (accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor)) {
-                                        // Atomic increment for photonsAccumulated
-
-                                        /*
-                                        sycl::atomic_ref<
-                                                unsigned long int, sycl::memory_order::relaxed,
-                                                sycl::memory_scope::device>
-                                            atomicPhotonsAccumulated(
-                                                m_gpuData.renderInformation->photonsAccumulated);
-                                        atomicPhotonsAccumulated.fetch_add(static_cast<unsigned long int>(1));
-                                        */
-                                    }
-                                }
+                                float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / glm::max(0.1f, cosTheta);
+                                accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor);
                             }
                         }
                     }
@@ -530,7 +505,7 @@ namespace VkRender::PathTracer {
         // ---------------------------------------------------------------------
         //  accumulateOnSensor
         // ---------------------------------------------------------------------
-        bool accumulateOnSensor(size_t photonID, const glm::vec3& hitPointWorld, float photonFlux) const {
+        void accumulateOnSensor(size_t photonID, const glm::vec3& hitPointWorld, float photonFlux) const {
             //
             // 1. Transform the hit point from world space to camera space
             //
@@ -555,7 +530,7 @@ namespace VkRender::PathTracer {
             float Zc_mm = Zc_m * 1000.0f; // If needed for consistent usage
 
             if (Zc_m <= 0.0f) {
-                return false; // Behind the camera
+                return; // Behind the camera
             }
 
 
@@ -588,32 +563,18 @@ namespace VkRender::PathTracer {
                     static_cast<size_t>(px);
                 // Prevent saturation
 
-                /*
-                float currentValue = m_gpuData.imageMemory[pixelIndex];
-                float newValue = std::min(1.0f, currentValue + photonFlux);
-                photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
-                */
-
                 photonFlux = std::pow(photonFlux, 1.0f / m_gpuData.renderInformation->gamma);
-
-                float currentValue = m_gpuData.imageMemory[pixelIndex];
+                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
+                    imageMemoryAtomic(m_gpuData.imageMemory[pixelIndex]);
+                float currentValue = imageMemoryAtomic.load();
                 float newValue = std::min(1.0f, currentValue + photonFlux);
                 photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
+                imageMemoryAtomic.fetch_add(photonFlux);
+                sycl::atomic_ref<uint64_t, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
+                    photonsAccumulatedAtomic(m_gpuData.renderInformation->photonsAccumulated);
 
-                m_gpuData.imageMemory[pixelIndex] += photonFlux;
-                m_gpuData.renderInformation->photonsAccumulated++;
-
-                /*
-                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device> atomicImageMemory(
-                    m_gpuData.imageMemory[pixelIndex]);
-                atomicImageMemory.fetch_add(photonFlux);
-                */
-                // Atomic addition for imageMemory
-
-
-                return true;
+                photonsAccumulatedAtomic.fetch_add(static_cast<uint64_t>(1));
             }
-            return false;
         }
 
 
