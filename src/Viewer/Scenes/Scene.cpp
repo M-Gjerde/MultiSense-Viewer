@@ -54,7 +54,7 @@ namespace VkRender {
             auto& meshComponent = entity.getComponent<MeshComponent>();
             if (meshComponent.meshDataType() == OBJ_FILE) {
                 auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(meshComponent.meshParameters);
-                if (params->path.filename() == "disk.obj") {
+                if (entity.getName() == "Disk"){
                     auto& transformComponent = entity.getComponent<TransformComponent>();
                     transformComponent.setPosition(position);
                 }
