@@ -6,6 +6,7 @@
 #include "stb_image_write.h"
 #include <random>
 #include <glm/gtx/quaternion.hpp>
+#include <OpenImageDenoise/oidn.hpp>
 
 namespace VkRender::PathTracer {
     static void save_gradient_to_png(torch::Tensor gradient, const std::filesystem::path& filename) {
@@ -89,9 +90,44 @@ namespace VkRender::PathTracer {
         std::cout.flush();
     }
 
+    static void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height,
+                                        std::vector<float>& output) {
+        // Initialize OIDN device and commit
+        oidn::DeviceRef device = oidn::newDevice();
+        device.commit();
+        const uint32_t imageSize = width * height;
+
+        // Allocate input and output buffers for OIDN
+        oidn::BufferRef inputBuffer = device.newBuffer(imageSize * sizeof(float));
+        oidn::BufferRef outputBuffer = device.newBuffer(imageSize * sizeof(float));
+
+        // Copy input data to the device buffer
+        std::memcpy(inputBuffer.getData(), singleChannelImage, imageSize * sizeof(float));
+
+        // Create and configure the denoising filter
+        oidn::FilterRef filter = device.newFilter("RT");
+        filter.set("hdr", true);
+        filter.setImage("color", inputBuffer, oidn::Format::Float, width, height);
+        filter.setImage("output", outputBuffer, oidn::Format::Float, width, height);
+        filter.commit();
+
+        // Execute the filter
+        filter.execute();
+
+        // Check for errors from OIDN
+        const char* errorMessage;
+        if (device.getError(errorMessage) != oidn::Error::None) {
+            std::cerr << "OIDN Error: " << errorMessage << std::endl;
+            return;
+        }
+
+        // Retrieve the denoised image data
+        output.resize(imageSize);
+        std::memcpy(output.data(), outputBuffer.getData(), imageSize * sizeof(float));
+    }
 
     torch::Tensor PhotonRebuildFunction::forward(torch::autograd::AutogradContext* ctx,
-                                                 PhotonTracer::RenderSettings& settings, PhotonTracer* pathTracer,
+                                                 IterationInfo& iterationInfo, PhotonTracer* pathTracer,
                                                  torch::Tensor positions, torch::Tensor scales,
                                                  torch::Tensor normals, torch::Tensor emissions,
                                                  torch::Tensor colors,
@@ -105,7 +141,7 @@ namespace VkRender::PathTracer {
 
         // If you have non-tensor data you want in backward(), you can store
         // them as attributes:
-        ctx->saved_data["settings"] = reinterpret_cast<int64_t>(&settings); // example
+        ctx->saved_data["IterationInfo"] = reinterpret_cast<int64_t>(&iterationInfo); // example
         // or store the pointer as a raw pointer or shared pointer if you prefer
         // (but be careful with lifetimes).
 
@@ -114,11 +150,7 @@ namespace VkRender::PathTracer {
 
         // Example pseudo-code:
 
-        pathTracer->update(settings);
-
-        // Suppose the path tracer writes out to pathTracer->m_imageMemory,
-        // with shape [height * width] or [height * width * channels].
-        // We'll build a Torch tensor from that raw memory.
+        pathTracer->update(iterationInfo.renderSettings);
 
 
         // For illustration:
@@ -126,6 +158,19 @@ namespace VkRender::PathTracer {
         int64_t height =photonTracerSettings.height;
         int64_t width = photonTracerSettings.width;
         float* rawImage = pathTracer->getImage();
+
+        std::vector<float> denoisedImage;
+        if (iterationInfo.denoise) {
+            denoiseImage(rawImage, width, height, denoisedImage);
+            rawImage = denoisedImage.data();
+        }
+
+
+        // Suppose the path tracer writes out to pathTracer->m_imageMemory,
+        // with shape [height * width] or [height * width * channels].
+        // We'll build a Torch tensor from that raw memory.
+
+
         // e.g. a float[height * width]  (gray) or float[height * width * 3]
 
         // Wrap it in a Torch tensor.
@@ -157,11 +202,11 @@ namespace VkRender::PathTracer {
         auto pathTracerRaw = ctx->saved_data["pathTracer"].toInt();
         PhotonTracer* pathTracer = reinterpret_cast<PhotonTracer*>(pathTracerRaw);
         // Retrieve the path tracer pointer
-        auto settingsPtr = ctx->saved_data["settings"].toInt();
-        PhotonTracer::RenderSettings* renderSettings = reinterpret_cast<PhotonTracer::RenderSettings*>(settingsPtr);
-        save_gradient_to_png(dLoss_dRenderedImage,"gradients/gradient_" + std::to_string(pathTracer->getRenderInfo().frameID) + ".png");
+        auto settingsPtr = ctx->saved_data["IterationInfo"].toInt();
+        IterationInfo* iterationInfo = reinterpret_cast<IterationInfo*>(settingsPtr);
+        save_gradient_to_png(dLoss_dRenderedImage,"gradients/gradient_" + std::to_string(iterationInfo->iteration) + ".png");
         pathTracer->m_backwardInfo.gradientImage = dLoss_dRenderedImage.data_ptr<float>();
-        auto gradients = pathTracer->backward(*renderSettings);
+        auto gradients = pathTracer->backward(iterationInfo->renderSettings);
 
         glm::vec3 grad = *gradients.sumGradients;
 

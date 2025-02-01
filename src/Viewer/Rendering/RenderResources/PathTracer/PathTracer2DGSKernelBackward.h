@@ -190,6 +190,9 @@ namespace VkRender::PathTracer {
                 // Compute dL/de_o = dLoss * de_i/de_o
                 glm::vec3 dL_deo = dLoss * de_i_deo;
 
+                glm::mat3 R = glm::mat3(m_cameraTransform->getTransform()); // upper-left 3×3
+                glm::vec3 dL_world = R * dL_deo;
+
                 // Accumulate the gradient atomically
                 // Assuming m_gpuData.sumGradients is a glm::vec3 pointer in global memory
                 // and that atomic operations are supported for float in your environment

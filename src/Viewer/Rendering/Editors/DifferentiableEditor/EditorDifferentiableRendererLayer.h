@@ -49,6 +49,9 @@ namespace VkRender {
             ImGui::SameLine();
 
             ImGui::Checkbox("Step##Toggle", &imageUI->toggleStep);
+            ImGui::SameLine(0.0f, 10.0f);
+
+            ImGui::Checkbox("Denoise##Toggle", &imageUI->denoise);
 
 
             ImGui::End();

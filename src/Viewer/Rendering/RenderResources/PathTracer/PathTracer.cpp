@@ -102,7 +102,6 @@ namespace VkRender::PathTracer {
 
             queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * imageSize);
 
-            m_renderInformation->frameID++;
             m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
             m_renderInformation->gamma = renderSettings.gammaCorrection;
             m_renderInformation->numBounces = m_pipelineSettings.numBounces;

@@ -69,30 +69,30 @@ namespace Utils {
     DISABLE_WARNING_UNREFERENCED_FUNCTION
 
     static std::filesystem::path getShadersPath() {
-        return {"./Resources/Assets/Shaders"};
+        return {"Resources/Assets/Shaders"};
     }
 
     static std::filesystem::path getFontsPath() {
-        return {"./Resources/Assets/Fonts"};
+        return {"Resources/Assets/Fonts"};
     }
 
     static std::filesystem::path getAssetsPath() {
-        return {"./Resources/Assets/"};
+        return {"Resources/Assets"};
     }
 
     static std::filesystem::path getTexturePath() {
-        return {"./Resources/Assets/Textures"};
+        return {"Resources/Assets/Textures"};
     }
 
     static std::filesystem::path getModelsPath() {
-        return {"./Resources/Assets/Models"};
+        return {"Resources/Assets/Models"};
     }
     static std::filesystem::path getProjectsPath() {
-        return {"./Resources/Assets/Projects"};
+        return {"Resources/Assets/Projects"};
     }
 
     static std::filesystem::path getEditorProjectPath() {
-        return {"./Resources/Assets/Projects/Editor.project"};
+        return {"Resources/Assets/Projects/Editor.project"};
     }
 
     DISABLE_WARNING_POP

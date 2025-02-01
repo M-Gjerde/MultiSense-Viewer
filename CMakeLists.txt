@@ -36,7 +36,7 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     message(STATUS "[VkRenderINFO]: Setting build type to 'Release' as none was specified.")
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-else()
+else ()
     message(STATUS "[VkRenderINFO]: Build type is ${CMAKE_BUILD_TYPE}")
 
 endif ()
@@ -122,37 +122,37 @@ endif ()
 if (ENABLE_SYCL)
     message(STATUS "SYCL backend: ${SYCL_IMPLEMENTATION}")
 
-    if(SYCL_BACKEND STREQUAL "nvidia")
+    if (SYCL_BACKEND STREQUAL "nvidia")
         set(SYCL_TARGET "spir64,nvptx64-nvidia-cuda")
         message(STATUS "[VkRenderINFO]: Using NVIDIA backend for SYCL")
-    elseif(SYCL_BACKEND STREQUAL "amd")
+    elseif (SYCL_BACKEND STREQUAL "amd")
         set(SYCL_TARGET "spir64,amdgcn-amd-amdhsa")
         set(SYCL_TARGET_OPTIONS "-Xsycl-target-backend=amdgcn-amd-amdhsa --offload-arch=gfx1100")
         message(STATUS "[VkRenderINFO]: Using AMD backend for SYCL")
-    else()
+    else ()
         message(FATAL_ERROR "Invalid SYCL_BACKEND option. Choose 'nvidia' or 'amd'.")
-    endif()
+    endif ()
 
     if (SYCL_IMPLEMENTATION STREQUAL "dpcpp")
         set(CMAKE_CXX_COMPILER "/home/magnus/sycl_workspace/llvm/build/bin/clang++")
 
-        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        if (CMAKE_BUILD_TYPE STREQUAL "Release")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -O3 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
             message(STATUS "[VkRenderINFO]: Compiling using DPCPP with Optimization")
-        else()
+        else ()
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsycl -g -O0 -fsycl-targets=${SYCL_TARGET} ${SYCL_TARGET_OPTIONS}")
             message(STATUS "[VkRenderINFO]: Compiling using DPCPP with Debug flags")
-        endif()
+        endif ()
 
         message(STATUS "[VkRenderINFO]: SYCL DPC++ support enabled. Compiler: ${CMAKE_CXX_COMPILER} Flags: ${CMAKE_CXX_FLAGS}")
 
     elseif (SYCL_IMPLEMENTATION STREQUAL "adaptivecpp")
         # Find the AdaptiveCpp package
-        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        if (CMAKE_BUILD_TYPE STREQUAL "Release")
             set(ACPP_TARGETS "generic")
-        else()
+        else ()
             set(ACPP_TARGETS "omp")
-        endif()
+        endif ()
         target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
         target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
 
@@ -162,11 +162,11 @@ if (ENABLE_SYCL)
         message(STATUS "[VkRenderINFO]: Using AdaptiveCpp with targets: ${ACPP_TARGETS} to project name ${PROJECT_NAME}")
         # Add sycl to target using AdaptiveCpp's helper
         add_sycl_to_target(TARGET ${PROJECT_NAME} TARGETS ${ACPP_TARGETS})
-        if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g )
+        if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g)
             #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
             message(STATUS "[VkRenderINFO]: Compiling using AdaptiveCpp without optimization")
-        endif()
+        endif ()
     else ()
         message(FATAL_ERROR "[VkRenderERROR]: Unknown SYCL backend. Choose either 'dpcpp' or 'adaptivecpp'.")
     endif ()
@@ -314,12 +314,12 @@ if (ENABLE_SYCL)
     )
     list(APPEND SOURCE_FILES ${SYCL_SOURCES})
     message(STATUS "[VkRenderINFO]: SYCL: Adding Gaussian Renderer to source")
-else()
+else ()
     message(STATUS "[VkRenderINFO]: Skipped Adding SYCL Sources")
 endif ()# Add SYCL-specific files
 
 if (${ENABLE_PYTORCH})
-    set (DIFF_RENDER_SOURCES
+    set(DIFF_RENDER_SOURCES
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildModule.cpp
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildFunction.cpp
             src/Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.cpp
@@ -327,7 +327,7 @@ if (${ENABLE_PYTORCH})
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})
 
     message(STATUS "[VkRenderINFO]: SYCL: Adding Pytorch differential Renderer to source")
-endif()
+endif ()
 
 # Add proprietary GigE-Vision module
 if (PROPRIETARY_GIGEVISION_MODULE)
@@ -344,8 +344,21 @@ add_custom_command(
         DEPENDS ${ASSETS}
         COMMENT "Copying assets..."
 )
-add_custom_target(copy_assets ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Resources/Assets)
 
+#Custom command and target to copy assets if they have changed
+file(GLOB ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/models-repository/simple_dataset/*")
+add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Resources/models-repository/simple_dataset ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
+        DEPENDS ${ASSETS}
+        COMMENT "Copying assets..."
+)
+# Add custom target to copy both assets
+add_custom_target(copy_assets ALL
+        DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/Resources/Assets
+        ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
+)
 # Build configurations for different platforms
 if (UNIX)
     # Linux-specific settings

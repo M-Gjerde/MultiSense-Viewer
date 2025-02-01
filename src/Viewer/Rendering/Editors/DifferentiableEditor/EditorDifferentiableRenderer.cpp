@@ -74,7 +74,10 @@ namespace VkRender {
 
 
             // Load the YAML file
-            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
+            std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "render_info.yaml";
+
+
+            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
             //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
@@ -130,7 +133,7 @@ namespace VkRender {
                 // We pass in the parameters of our module (or custom parameter list)
                 m_photonRebuildModule->parameters(),
                 // Then define the Adam options, e.g. learning rate = 1e-3
-                torch::optim::AdamOptions(0.05f)
+                torch::optim::AdamOptions(0.1f)
             );
         }
 
@@ -168,9 +171,12 @@ namespace VkRender {
             m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
             m_photonRebuildModule->uploadSceneFromTensor(m_context->activeScene());
             // Upload path tracer with the new parameters
-
+            PathTracer::IterationInfo pathTracerIterationInfo;
+            pathTracerIterationInfo.renderSettings = m_renderSettings;
+            pathTracerIterationInfo.iteration = m_stepIteration;
+            pathTracerIterationInfo.denoise = imageUI->denoise;
             // Forward pass (autograd-compatible)
-            m_accumulatedTensor = m_photonRebuildModule->forward(m_renderSettings);
+            m_accumulatedTensor = m_photonRebuildModule->forward(pathTracerIterationInfo);
             m_numAccumulated++;
 
             // Optionally retrieve the float* for real-time display
@@ -196,10 +202,13 @@ namespace VkRender {
             // Load the target tensor
 
             std::vector<std::filesystem::path> filePaths{
-                "/home/magnus/datasets/PathTracingGS/active/Camera1.pfm",
-                "/home/magnus/datasets/PathTracingGS/active/Camera2.pfm",
-                "/home/magnus/datasets/PathTracingGS/active/Camera3.pfm"
+                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera1.pfm",
+                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera2.pfm",
+                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera3.pfm"
             };
+
+            ;
+
             Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
                                              filePaths[activeCameraIndex].string());
             //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm";

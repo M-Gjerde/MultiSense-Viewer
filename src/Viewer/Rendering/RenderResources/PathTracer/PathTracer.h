@@ -18,6 +18,8 @@
 namespace VkRender::PathTracer {
 #ifdef SYCL_ENABLED
 
+
+
     class PhotonTracer {
     public:
         struct RenderSettings {
@@ -127,6 +129,13 @@ namespace VkRender::PathTracer {
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform){}
     };
 #endif
+
+
+    struct IterationInfo {
+        PathTracer::PhotonTracer::RenderSettings renderSettings;
+        uint32_t iteration = 0;
+        bool denoise = false;
+    };
 }
 
 

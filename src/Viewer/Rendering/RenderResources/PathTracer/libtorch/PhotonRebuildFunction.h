@@ -6,11 +6,9 @@
 
 #include <torch/torch.h>
 #include <vector>
-#include <memory>
 
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
-#include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
-#include "Viewer/Scenes/Scene.h"
+
 
 namespace VkRender::PathTracer {
     /**
@@ -32,7 +30,7 @@ namespace VkRender::PathTracer {
         static torch::Tensor forward(
             torch::autograd::AutogradContext* ctx,
             // Non-tensor arguments can also be captured by custom means:
-            PhotonTracer::RenderSettings& settings,
+            IterationInfo& settings,
             PhotonTracer* pathTracer,
             torch::Tensor positions,
             torch::Tensor scales,

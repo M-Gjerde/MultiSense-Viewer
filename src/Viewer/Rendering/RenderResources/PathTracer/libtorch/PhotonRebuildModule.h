@@ -18,8 +18,9 @@ namespace VkRender::PathTracer {
         PhotonRebuildModule(PhotonTracer* rt, std::weak_ptr<Scene> scene);
         ~PhotonRebuildModule();
 
+
         // forward() will trigger a ray trace and return an image tensor
-        torch::Tensor forward(PhotonTracer::RenderSettings& settings);
+        torch::Tensor forward(IterationInfo i);
 
         float* getRenderedImage();
         void freeData();
@@ -33,7 +34,7 @@ namespace VkRender::PathTracer {
     private:
         PhotonTracer* m_photonRebuild;
         void uploadFromScene(std::weak_ptr<Scene> scene);
-
+        torch::Tensor m_outputTensor;  // Store the output tenso
     };
 
 }

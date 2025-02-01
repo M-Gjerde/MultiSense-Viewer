@@ -13,6 +13,8 @@ namespace VkRender {
         bool reloadRenderer = false;
         bool step = false;
         bool toggleStep = false;
+
+        bool denoise = false;
         // Constructor that copies everything from base EditorUI
         EditorDifferentiableRendererLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };

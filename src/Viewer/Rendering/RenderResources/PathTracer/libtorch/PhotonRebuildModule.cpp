@@ -21,14 +21,14 @@ namespace VkRender::PathTracer {
     }
 
     torch::Tensor
-    PhotonRebuildModule::forward(PhotonTracer::RenderSettings& settings) {
+    PhotonRebuildModule::forward(IterationInfo info) {
         // 1) Call PhotonTracer::update(...) or any function you want to do the actual path tracing
         //    In your case:  rt_->update(...);
 
 
         // Simply call the custom autograd function
         auto result = PhotonRebuildFunction::apply(
-            settings,
+            info,
             m_photonRebuild,
             m_tensorData.positions,
             m_tensorData.scales,
@@ -38,12 +38,18 @@ namespace VkRender::PathTracer {
             m_tensorData.specular,
             m_tensorData.diffuse
         );
+
+        m_outputTensor = result.clone();  // Clone to ensure ownership
+
         return result;
     }
 
     float* PhotonRebuildModule::getRenderedImage() {
-        return m_photonRebuild->getImage();
-    }
+        if (m_outputTensor.defined()) {
+            return m_outputTensor.data_ptr<float>();  // Get a float pointer to the tensor data
+        }
+        return nullptr;
+        }
 
     void PhotonRebuildModule::freeData() {
         if (m_data.gaussianInputAssembly) {
