@@ -120,10 +120,11 @@ namespace VkRender::PathTracer {
         // with shape [height * width] or [height * width * channels].
         // We'll build a Torch tensor from that raw memory.
 
-        /*
+
         // For illustration:
-        int64_t height = pathTracer->m_height;
-        int64_t width = pathTracer->m_width;
+        const PhotonTracer::PipelineSettings& photonTracerSettings = pathTracer->getPipelineSettings();
+        int64_t height =photonTracerSettings.height;
+        int64_t width = photonTracerSettings.width;
         float* rawImage = pathTracer->getImage();
         // e.g. a float[height * width]  (gray) or float[height * width * 3]
 
@@ -135,8 +136,6 @@ namespace VkRender::PathTracer {
 
         // Return the rendered image
         return output;
-        */
-        return torch::Tensor();
     }
 
 
@@ -159,21 +158,17 @@ namespace VkRender::PathTracer {
         PhotonTracer* pathTracer = reinterpret_cast<PhotonTracer*>(pathTracerRaw);
         // Retrieve the path tracer pointer
         auto settingsPtr = ctx->saved_data["settings"].toInt();
-        /*
-        PhotonTracer::Settings* settings = reinterpret_cast<PhotonTracer::Settings*>(settingsPtr);
-
-        // We'll do a trivial zero gradient for demonstration
-        save_gradient_to_png(dLoss_dRenderedImage,"gradients/gradient_" + std::to_string(pathTracer->m_renderInformation->frameID) + ".png");
-
-
+        PhotonTracer::RenderSettings* renderSettings = reinterpret_cast<PhotonTracer::RenderSettings*>(settingsPtr);
+        save_gradient_to_png(dLoss_dRenderedImage,"gradients/gradient_" + std::to_string(pathTracer->getRenderInfo().frameID) + ".png");
         pathTracer->m_backwardInfo.gradientImage = dLoss_dRenderedImage.data_ptr<float>();
+        auto gradients = pathTracer->backward(*renderSettings);
 
-        auto gradients = pathTracer->backward(*settings);
         glm::vec3 grad = *gradients.sumGradients;
 
         float grad_x = grad.x;
         float grad_y = grad.y;
         float grad_z = grad.z;
+        auto grad_positions = torch::zeros_like(positions);
 
         auto gradPosA = grad_positions.accessor<float, 2>();
         for (int i = 0; i < grad_positions.size(0); ++i) {
@@ -181,8 +176,6 @@ namespace VkRender::PathTracer {
             gradPosA[i][1] = grad_y;
             gradPosA[i][2] = grad_z;
         }
-*/
-        auto grad_positions = torch::zeros_like(positions);
 
         // Return them in the same order as forward inputs
         return {

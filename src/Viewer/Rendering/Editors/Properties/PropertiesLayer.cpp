@@ -31,10 +31,10 @@ namespace VkRender {
         m_selectionContext = Entity(); // reset selectioncontext
     }
 
-    bool PropertiesLayer::drawVec3Control(const std::string &label, glm::vec3 &values, float resetValue = 0.0f,
+    bool PropertiesLayer::drawVec3Control(const std::string& label, glm::vec3& values, float resetValue = 0.0f,
                                           float speed = 1.0f, float columnWidth = 100.0f) {
         bool valueChanged = false;
-        ImGuiIO &io = ImGui::GetIO();
+        ImGuiIO& io = ImGui::GetIO();
         auto boldFont = io.Fonts->Fonts[0];
 
         ImGui::PushID(label.c_str());
@@ -110,10 +110,10 @@ namespace VkRender {
         return valueChanged;
     }
 
-    bool PropertiesLayer::drawVec2Control(const std::string &label, glm::vec2 &values, float resetValue = 0.0f,
+    bool PropertiesLayer::drawVec2Control(const std::string& label, glm::vec2& values, float resetValue = 0.0f,
                                           float speed = 1.0f, float columnWidth = 100.0f) {
         bool valueChanged = false;
-        ImGuiIO &io = ImGui::GetIO();
+        ImGuiIO& io = ImGui::GetIO();
         auto boldFont = io.Fonts->Fonts[0];
 
         ImGui::PushID(label.c_str());
@@ -172,10 +172,10 @@ namespace VkRender {
         return valueChanged;
     }
 
-    bool PropertiesLayer::drawFloatControl(const std::string &label, float &value, float resetValue = 0.0f,
+    bool PropertiesLayer::drawFloatControl(const std::string& label, float& value, float resetValue = 0.0f,
                                            float speed = 1.0f, float columnWidth = 100.0f) {
         bool valueChanged = false;
-        ImGuiIO &io = ImGui::GetIO();
+        ImGuiIO& io = ImGui::GetIO();
         auto boldFont = io.Fonts->Fonts[0];
 
         ImGui::PushID(label.c_str());
@@ -191,9 +191,9 @@ namespace VkRender {
         float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
         ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5f, 0.5f, 0.5f, 1.0f});        // Gray
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5f, 0.5f, 0.5f, 1.0f}); // Gray
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4{0.6f, 0.6f, 0.6f, 1.0f}); // Lighter gray
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.4f, 0.4f, 0.4f, 1.0f});  // Darker gray
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4{0.4f, 0.4f, 0.4f, 1.0f}); // Darker gray
         ImGui::PushFont(boldFont);
         if (ImGui::Button("R", buttonSize)) {
             value = resetValue;
@@ -216,19 +216,19 @@ namespace VkRender {
         return valueChanged;
     }
 
-    template<typename T, typename UIFunction>
-    void PropertiesLayer::drawComponent(const std::string &componentName, Entity entity, UIFunction uiFunction) {
+    template <typename T, typename UIFunction>
+    void PropertiesLayer::drawComponent(const std::string& componentName, Entity entity, UIFunction uiFunction) {
         const ImGuiTreeNodeFlags treeNodeFlags =
-                ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth |
-                ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap;
+            ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_SpanAvailWidth |
+            ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_AllowOverlap;
         if (entity.hasComponent<T>()) {
-            auto &component = entity.getComponent<T>();
+            auto& component = entity.getComponent<T>();
             ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
 
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
             float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
             ImGui::Separator();
-            bool open = ImGui::TreeNodeEx((void *) typeid(T).hash_code(), treeNodeFlags, "%s", componentName.c_str());
+            bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, "%s", componentName.c_str());
             ImGui::PopStyleVar();
             ImGui::SameLine(contentRegionAvailable.x - lineHeight * 0.5f);
 
@@ -271,7 +271,7 @@ namespace VkRender {
             ImGui::EndPopup();
         }
 
-        drawComponent<TransformComponent>("Transform", entity, [](TransformComponent &component) {
+        drawComponent<TransformComponent>("Transform", entity, [](TransformComponent& component) {
             bool paramsChanged = false;
             component.setMoving(paramsChanged);
 
@@ -283,14 +283,29 @@ namespace VkRender {
             if (paramsChanged) {
                 component.setMoving(paramsChanged);
                 component.updateFromEulerRotation();
-
             }
         });
-        drawComponent<CameraComponent>("Camera", entity, [this](CameraComponent &component) {
+        drawComponent<CameraComponent>("Camera", entity, [this, entity](CameraComponent& component) {
             //drawFloatControl("Field of View", component.camera->fov(), 1.0f);
             bool paramsChanged = false;
 
-            paramsChanged |= ImGui::Checkbox("Render scene from viewpoint", &component.renderFromViewpoint());
+            paramsChanged |= ImGui::Checkbox("Render scene from viewpoint", &component.isActiveCamera());
+            if (paramsChanged && component.isActiveCamera()) {
+                // The user has just activated this camera.
+                // Iterate over all camera components in the scene.
+                auto view = m_context->activeScene()->getRegistry().view<CameraComponent>();
+                for (auto entityID : view) {
+                    Entity localEntity(entityID, m_context->activeScene().get());
+                    // Skip the current entity (the one the user just toggled)
+                    if (localEntity == entity)
+                        continue;
+                    auto& otherCameraComponent = localEntity.getComponent<CameraComponent>();
+                    // Deactivate any camera that is not the current one.
+                    if (otherCameraComponent.isActiveCamera()) {
+                        otherCameraComponent.isActiveCamera() = false;
+                    }
+                }
+            }
 
             paramsChanged |= ImGui::Checkbox("Flip Y", &component.cameraSettings.flipY);
             ImGui::SameLine();
@@ -299,7 +314,7 @@ namespace VkRender {
             static const auto allCameraTypes = CameraComponent::getAllCameraTypes();
             static const auto cameraTypeStrings = []() {
                 std::vector<std::string> strings;
-                for (const auto &type: allCameraTypes) {
+                for (const auto& type : allCameraTypes) {
                     strings.push_back(CameraComponent::cameraTypeToString(type));
                 }
                 return strings;
@@ -310,8 +325,8 @@ namespace VkRender {
 
             // Get the index of the current camera type
             int currentIndex = std::distance(
-                    cameraTypeStrings.begin(),
-                    std::find(cameraTypeStrings.begin(), cameraTypeStrings.end(), currentCameraTypeStr)
+                cameraTypeStrings.begin(),
+                std::find(cameraTypeStrings.begin(), cameraTypeStrings.end(), currentCameraTypeStr)
             );
 
             // ImGui combo box
@@ -333,63 +348,64 @@ namespace VkRender {
 
 
             switch (component.cameraType) {
+            case CameraComponent::PERSPECTIVE:
+                paramsChanged |= ImGui::SliderFloat("Field of View", &component.baseCameraParameters.fov, 5.0f,
+                                                    180.0f);
+                paramsChanged |= ImGui::SliderFloat("Aspect Ratio", &component.baseCameraParameters.aspect, 0.1f,
+                                                    10.0f);
+                paramsChanged |= ImGui::SliderFloat("Near Plane", &component.baseCameraParameters.near, 0.01f,
+                                                    10.0f);
+                paramsChanged |= ImGui::SliderFloat("Far Plane", &component.baseCameraParameters.far, 1.0f,
+                                                    1000.0f);
 
-                case CameraComponent::PERSPECTIVE:
-                    paramsChanged |= ImGui::SliderFloat("Field of View", &component.baseCameraParameters.fov, 5.0f,
-                                                        180.0f);
-                    paramsChanged |= ImGui::SliderFloat("Aspect Ratio", &component.baseCameraParameters.aspect, 0.1f,
-                                                        10.0f);
-                    paramsChanged |= ImGui::SliderFloat("Near Plane", &component.baseCameraParameters.near, 0.01f,
-                                                        10.0f);
-                    paramsChanged |= ImGui::SliderFloat("Far Plane", &component.baseCameraParameters.far, 1.0f,
-                                                        1000.0f);
+                break;
+            case CameraComponent::PINHOLE:
+                paramsChanged |= ImGui::SliderFloat("Width", &component.pinholeParameters.width, 1.0, 4096, "%.0f");
+                paramsChanged |= ImGui::SliderFloat("Height", &component.pinholeParameters.height, 1.0f, 4096.0f,
+                                                    "%.0f");
 
-                    break;
-                case CameraComponent::PINHOLE:
-                    paramsChanged |= ImGui::SliderFloat("Width", &component.pinholeParameters.width, 1.0, 4096, "%.0f");
-                    paramsChanged |= ImGui::SliderFloat("Height", &component.pinholeParameters.height, 1.0f, 4096.0f,
-                                                        "%.0f");
+                paramsChanged |= ImGui::SliderFloat("Fx", &component.pinholeParameters.fx, 1.0f, 4096.0f);
+                paramsChanged |= ImGui::SliderFloat("Fy", &component.pinholeParameters.fy, 1.0f, 4096.0f);
+                paramsChanged |= ImGui::SliderFloat("Cx", &component.pinholeParameters.cx, 1.0f, 4096.0f);
+                paramsChanged |= ImGui::SliderFloat("Cy", &component.pinholeParameters.cy, 1.0f, 4096.0f);
+                paramsChanged |= ImGui::SliderFloat("Focal Length", &component.pinholeParameters.focalLength, 1.0f,
+                                                    100.0f);
+                paramsChanged |= ImGui::SliderFloat("Aperture", &component.pinholeParameters.fNumber, 0.0f, 32.0f);
 
-                    paramsChanged |= ImGui::SliderFloat("Fx", &component.pinholeParameters.fx, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Fy", &component.pinholeParameters.fy, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Cx", &component.pinholeParameters.cx, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Cy", &component.pinholeParameters.cy, 1.0f, 4096.0f);
-                    paramsChanged |= ImGui::SliderFloat("Focal Length", &component.pinholeParameters.focalLength, 1.0f,
-                                                        100.0f);
-                    paramsChanged |= ImGui::SliderFloat("Aperture", &component.pinholeParameters.fNumber, 0.0f, 32.0f);
-
-                    if (ImGui::Button("Set from viewport")) {
-                        auto &ci = m_context->getViewport()->getCreateInfo();
-                        component.pinholeParameters.width = ci.width;
-                        component.pinholeParameters.height = ci.height;
-                        component.pinholeParameters.cx = ci.width / 2;
-                        component.pinholeParameters.cy = ci.height / 2;
-                        paramsChanged = true;
-                    }
-                    break;
-                case CameraComponent::ARCBALL:
-                    break;
+                if (ImGui::Button("Set from viewport")) {
+                    auto& ci = m_context->getViewport()->getCreateInfo();
+                    component.pinholeParameters.width = ci.width;
+                    component.pinholeParameters.height = ci.height;
+                    component.pinholeParameters.cx = ci.width / 2;
+                    component.pinholeParameters.cy = ci.height / 2;
+                    paramsChanged = true;
+                }
+                break;
+            case CameraComponent::ARCBALL:
+                break;
             }
 
-            component.resetUpdateState(); // TODO not a nice way of ensuring single frame updates from camera properties. Can we make this less error-prone? Relying on paramsChanged variable and  m_updateTrigger in cameraComponent struct
+            component.resetUpdateState();
+            // TODO not a nice way of ensuring single frame updates from camera properties. Can we make this less error-prone? Relying on paramsChanged variable and  m_updateTrigger in cameraComponent struct
             if (paramsChanged) {
                 component.updateParametersChanged();
             }
             component.camera->updateProjectionMatrix();
         });
 
-        drawComponent<MeshComponent>("Mesh", entity, [this, &entity](MeshComponent &component) {
+        drawComponent<MeshComponent>("Mesh", entity, [this, &entity](MeshComponent& component) {
             // Mesh Type Selection
             int currentMeshType = component.meshDataType();
             // Create the combo and check for interaction
             // Polygon Mode Control
             ImGui::Text("Polygon Mode:");
-            const char *polygonModes[] = {"Line", "Fill"};
+            const char* polygonModes[] = {"Line", "Fill"};
             int currentMode = (component.polygonMode() == VK_POLYGON_MODE_LINE) ? 0 : 1;
             if (ImGui::Combo("Polygon Mode", &currentMode, polygonModes, IM_ARRAYSIZE(polygonModes))) {
                 if (currentMode == 0) {
                     component.polygonMode() = VK_POLYGON_MODE_LINE;
-                } else {
+                }
+                else {
                     component.polygonMode() = VK_POLYGON_MODE_FILL;
                 }
                 m_context->activeScene()->onComponentUpdated(entity, component);
@@ -409,29 +425,29 @@ namespace VkRender {
 
                         // Trigger behavior when a new type is selected
                         switch (component.meshDataType()) {
-                            case MeshDataType::OBJ_FILE:
+                        case MeshDataType::OBJ_FILE:
 
-                                EditorUtils::openImportFileDialog("Wavefront", {".obj"}, LayerUtils::OBJ_FILE,
-                                                                  &m_loadFileFuture);
-                                break;
+                            EditorUtils::openImportFileDialog("Wavefront", {".obj"}, LayerUtils::OBJ_FILE,
+                                                              &m_loadFileFuture);
+                            break;
 
-                            case MeshDataType::PLY_FILE:
+                        case MeshDataType::PLY_FILE:
 
-                                EditorUtils::openImportFileDialog("Stanford .PLY", {".ply"}, LayerUtils::PLY_MESH,
-                                                                  &m_loadFileFuture);
-                                break;
-                            case MeshDataType::CYLINDER:
-                                component.meshParameters = std::make_shared<CylinderMeshParameters>();
-                                break;
-                            case MeshDataType::CAMERA_GIZMO_PINHOLE:
-                                component.meshParameters = std::make_shared<CameraGizmoPinholeMeshParameters>();
-                                break;
-                            case MeshDataType::CAMERA_GIZMO_PERSPECTIVE:
-                                component.meshParameters = std::make_shared<CameraGizmoPerspectiveMeshParameters>();
-                                break;
-                            default:
-                                Log::Logger::getInstance()->error("Unknown mesh type!");
-                                break;
+                            EditorUtils::openImportFileDialog("Stanford .PLY", {".ply"}, LayerUtils::PLY_MESH,
+                                                              &m_loadFileFuture);
+                            break;
+                        case MeshDataType::CYLINDER:
+                            component.meshParameters = std::make_shared<CylinderMeshParameters>();
+                            break;
+                        case MeshDataType::CAMERA_GIZMO_PINHOLE:
+                            component.meshParameters = std::make_shared<CameraGizmoPinholeMeshParameters>();
+                            break;
+                        case MeshDataType::CAMERA_GIZMO_PERSPECTIVE:
+                            component.meshParameters = std::make_shared<CameraGizmoPerspectiveMeshParameters>();
+                            break;
+                        default:
+                            Log::Logger::getInstance()->error("Unknown mesh type!");
+                            break;
                         }
                     }
 
@@ -446,91 +462,87 @@ namespace VkRender {
 
             // Display different input fields based on mesh type
             switch (component.meshDataType()) {
-                case OBJ_FILE: {
-                    auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(component.meshParameters);
-                    if (params) {
-                        ImGui::Text("Mesh File:");
-                        ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
-                    }
-
+            case OBJ_FILE: {
+                auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(component.meshParameters);
+                if (params) {
+                    ImGui::Text("Mesh File:");
+                    ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
                 }
-                    break;
-                case PLY_FILE: {
-                    auto params = std::dynamic_pointer_cast<PLYFileMeshParameters>(component.meshParameters);
-                    if (params) {
-                        ImGui::Text("Mesh File:");
-                        ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
+            }
+            break;
+            case PLY_FILE: {
+                auto params = std::dynamic_pointer_cast<PLYFileMeshParameters>(component.meshParameters);
+                if (params) {
+                    ImGui::Text("Mesh File:");
+                    ImGui::Text("%s", params->path.empty() ? "" : params->path.c_str());
+                }
+            }
+            break;
+
+            case MeshDataType::CYLINDER: {
+                auto cylinderParams = std::dynamic_pointer_cast<CylinderMeshParameters>(component.meshParameters);
+                if (cylinderParams) {
+                    bool paramsChanged = false;
+                    paramsChanged |= drawVec3Control("Origin", cylinderParams->origin);
+                    paramsChanged |= drawVec3Control("Direction", cylinderParams->direction);
+                    paramsChanged |= ImGui::SliderFloat("Magnitude", &cylinderParams->magnitude, 0.0f, 100.0f);
+                    paramsChanged |= ImGui::SliderFloat("Radius", &cylinderParams->radius, 0.001f, 0.1f);
+                    if (paramsChanged) {
+                        component.updateMeshData = true;
                     }
                 }
-                    break;
+                break;
+            }
+                ImGui::Dummy(ImVec2(5.0f, 5.0f));
 
-                case MeshDataType::CYLINDER: {
-                    auto cylinderParams = std::dynamic_pointer_cast<CylinderMeshParameters>(component.meshParameters);
-                    if (cylinderParams) {
-                        bool paramsChanged = false;
-                        paramsChanged |= drawVec3Control("Origin", cylinderParams->origin);
-                        paramsChanged |= drawVec3Control("Direction", cylinderParams->direction);
-                        paramsChanged |= ImGui::SliderFloat("Magnitude", &cylinderParams->magnitude, 0.0f, 100.0f);
-                        paramsChanged |= ImGui::SliderFloat("Radius", &cylinderParams->radius, 0.001f, 0.1f);
-                        if (paramsChanged) {
+            case MeshDataType::CAMERA_GIZMO_PINHOLE: {
+                if (entity.hasComponent<CameraComponent>()) {
+                    auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPinholeMeshParameters>(
+                        component.meshParameters);
+                    if (cameraGizmoParams) {
+                        auto& cameraParams = entity.getComponent<CameraComponent>().pinholeParameters;
+                        // Update focal point and check if it has changed
+                        if (cameraGizmoParams->parameters != cameraParams) {
+                            cameraGizmoParams->parameters = cameraParams;
                             component.updateMeshData = true;
                         }
                     }
-                    break;
                 }
-                    ImGui::Dummy(ImVec2(5.0f, 5.0f));
-
-                case MeshDataType::CAMERA_GIZMO_PINHOLE: {
-                    if (entity.hasComponent<CameraComponent>()) {
-                        auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPinholeMeshParameters>(
-                                component.meshParameters);
-                        if (cameraGizmoParams) {
-                            auto &cameraParams = entity.getComponent<CameraComponent>().pinholeParameters;
-                            // Update focal point and check if it has changed
-                            if (cameraGizmoParams->parameters != cameraParams) {
-                                cameraGizmoParams->parameters = cameraParams;
-                                component.updateMeshData = true;
-                            }
-                        }
-                    } else {
-
-                        if (ImGui::Button("Add a camera component!")) {
-                            entity.addComponent<CameraComponent>();
-                        }
-
+                else {
+                    if (ImGui::Button("Add a camera component!")) {
+                        entity.addComponent<CameraComponent>();
                     }
-                    break;
+                }
+                break;
 
-                    case MeshDataType::CAMERA_GIZMO_PERSPECTIVE: {
-                        if (entity.hasComponent<CameraComponent>()) {
-                            auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPerspectiveMeshParameters>(
-                                    component.meshParameters);
-                            if (cameraGizmoParams) {
-                                auto &cameraParams = entity.getComponent<CameraComponent>().baseCameraParameters;
-                                // Update focal point and check if it has changed
-                                if (cameraGizmoParams->parameters != cameraParams) {
-                                    cameraGizmoParams->parameters = cameraParams;
-                                    component.updateMeshData = true;
-                                }
-                            }
-                        } else {
-
-                            if (ImGui::Button("Add a camera component!")) {
-                                entity.addComponent<CameraComponent>();
-                            }
-
+            case MeshDataType::CAMERA_GIZMO_PERSPECTIVE: {
+                if (entity.hasComponent<CameraComponent>()) {
+                    auto cameraGizmoParams = std::dynamic_pointer_cast<CameraGizmoPerspectiveMeshParameters>(
+                        component.meshParameters);
+                    if (cameraGizmoParams) {
+                        auto& cameraParams = entity.getComponent<CameraComponent>().baseCameraParameters;
+                        // Update focal point and check if it has changed
+                        if (cameraGizmoParams->parameters != cameraParams) {
+                            cameraGizmoParams->parameters = cameraParams;
+                            component.updateMeshData = true;
                         }
                     }
-                    break;
                 }
-                default:
-                    break;
+                else {
+                    if (ImGui::Button("Add a camera component!")) {
+                        entity.addComponent<CameraComponent>();
+                    }
+                }
             }
-
+            break;
+            }
+            default:
+                break;
+            }
         });
 
 
-        drawComponent<TagComponent>("Tag", entity, [this](auto &component) {
+        drawComponent<TagComponent>("Tag", entity, [this](auto& component) {
             ImGui::Text("Entity Name:");
             ImGui::SameLine();
             // Define a buffer large enough to hold the tag's content
@@ -548,7 +560,7 @@ namespace VkRender {
             }
         });
 
-        drawComponent<MaterialComponent>("Material", entity, [this, entity](MaterialComponent &component) {
+        drawComponent<MaterialComponent>("Material", entity, [this, entity](MaterialComponent& component) {
             ImGui::Text("Material Properties");
 
             // Base Color Control
@@ -604,7 +616,7 @@ namespace VkRender {
             }
             // Notify scene that material component has been updated
         });
-        drawComponent<GaussianComponent2DGS>("Gaussian Model", entity, [this](GaussianComponent2DGS &component) {
+        drawComponent<GaussianComponent2DGS>("Gaussian Model", entity, [this](GaussianComponent2DGS& component) {
             ImGui::Text("Gaussian Model Properties");
 
             // Display the number of Gaussians
@@ -680,7 +692,7 @@ namespace VkRender {
             // For large numbers of Gaussians, show a single "selected" Gaussian
             // ----------------------------------------------------------------
 
-            static int selectedGaussianIndex = 0;  // or persist somewhere, e.g. as a class member
+            static int selectedGaussianIndex = 0; // or persist somewhere, e.g. as a class member
 
             // Ensure valid range
             if (selectedGaussianIndex < 0) selectedGaussianIndex = 0;
@@ -730,9 +742,9 @@ namespace VkRender {
                 ImGui::Text("Appearance Properties");
                 update |= drawFloatControl("Opacity", component.opacities[i], 0.0f, 0.1f);
                 update |= drawFloatControl("Emission", component.emissions[i], 0.0f, 0.1f);
-                update |= drawFloatControl("Colors",   component.colors[i],    1.0f, 0.1f);
-                update |= drawFloatControl("Diffuse",  component.diffuse[i],   0.5f, 0.1f);
-                update |= drawFloatControl("Specular", component.specular[i],  0.5f, 0.1f);
+                update |= drawFloatControl("Colors", component.colors[i], 1.0f, 0.1f);
+                update |= drawFloatControl("Diffuse", component.diffuse[i], 0.5f, 0.1f);
+                update |= drawFloatControl("Specular", component.specular[i], 0.5f, 0.1f);
                 update |= drawFloatControl("PhongExp", component.phongExponents[i], 32.0f, 1.0f);
 
                 ImGui::Spacing();
@@ -754,10 +766,9 @@ namespace VkRender {
                     selectedGaussianIndex = (int)i;
                 }
             }
-
         });
 
-        drawComponent<GaussianComponent>("Gaussian Model", entity, [this](auto &component) {
+        drawComponent<GaussianComponent>("Gaussian Model", entity, [this](auto& component) {
             ImGui::Text("Gaussian Model Properties");
 
             // Display the number of Gaussians
@@ -820,8 +831,7 @@ namespace VkRender {
         });
 
 
-        drawComponent<GroupComponent>("Group", entity, [this](auto &component) {
-
+        drawComponent<GroupComponent>("Group", entity, [this](auto& component) {
         });
     }
 
@@ -833,8 +843,8 @@ namespace VkRender {
         ImVec2 window_size = ImVec2(m_editor->ui()->width, m_editor->ui()->height); // Size (width, height)
         // Set window flags to remove decorations
         ImGuiWindowFlags window_flags =
-                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
-                ImGuiWindowFlags_NoBringToFrontOnFocus;
+            ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoBringToFrontOnFocus;
 
         // Set next window position and size
         ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always);
@@ -864,8 +874,8 @@ namespace VkRender {
     void PropertiesLayer::onDetach() {
     }
 
-    template<typename T>
-    void PropertiesLayer::displayAddComponentEntry(const std::string &entryName) {
+    template <typename T>
+    void PropertiesLayer::displayAddComponentEntry(const std::string& entryName) {
         if (!m_selectionContext.hasComponent<T>()) {
             if (ImGui::MenuItem(entryName.c_str())) {
                 m_selectionContext.addComponent<T>();
@@ -875,47 +885,48 @@ namespace VkRender {
     }
 
     void
-    PropertiesLayer::handleSelectedFileOrFolder(const LayerUtils::LoadFileInfo &loadFileInfo) {
+    PropertiesLayer::handleSelectedFileOrFolder(const LayerUtils::LoadFileInfo& loadFileInfo) {
         if (!loadFileInfo.path.empty()) {
             switch (loadFileInfo.filetype) {
-                case LayerUtils::TEXTURE_FILE: {
-                    auto &materialComponent = m_selectionContext.getComponent<MaterialComponent>();
-                    materialComponent.albedoTexturePath = loadFileInfo.path;
-                    m_context->activeScene()->onComponentUpdated(m_selectionContext, materialComponent);
+            case LayerUtils::TEXTURE_FILE: {
+                auto& materialComponent = m_selectionContext.getComponent<MaterialComponent>();
+                materialComponent.albedoTexturePath = loadFileInfo.path;
+                m_context->activeScene()->onComponentUpdated(m_selectionContext, materialComponent);
+            }
+            break;
+            case LayerUtils::OBJ_FILE:
+                // Load into the active scene
+                if (m_selectionContext.hasComponent<MeshComponent>()) {
+                    auto& meshComponent = m_selectionContext.getComponent<MeshComponent>();
+                    meshComponent.meshParameters = std::make_shared<OBJFileMeshParameters>(loadFileInfo.path);
                 }
-                    break;
-                case LayerUtils::OBJ_FILE:
-                    // Load into the active scene
-                    if (m_selectionContext.hasComponent<MeshComponent>()) {
-                        auto &meshComponent = m_selectionContext.getComponent<MeshComponent>();
-                        meshComponent.meshParameters = std::make_shared<OBJFileMeshParameters>(loadFileInfo.path);
-                    }
 
-                    break;
-                case LayerUtils::PLY_3DGS: {
-                    if (m_selectionContext.hasComponent<GaussianComponent2DGS>()) {
-                        auto &comp = m_selectionContext.getComponent<GaussianComponent2DGS>();
-                        comp.addGaussiansFromFile(loadFileInfo.path);
-                    }
+                break;
+            case LayerUtils::PLY_3DGS: {
+                if (m_selectionContext.hasComponent<GaussianComponent2DGS>()) {
+                    auto& comp = m_selectionContext.getComponent<GaussianComponent2DGS>();
+                    comp.addGaussiansFromFile(loadFileInfo.path);
                 }
-                    break;
-                case LayerUtils::PLY_MESH:
-                    if (m_selectionContext.hasComponent<MeshComponent>()) {
-                        auto &meshComponent = m_selectionContext.getComponent<MeshComponent>();
-                        meshComponent.meshParameters = std::make_shared<PLYFileMeshParameters>(loadFileInfo.path);
-                    }
-                    break;
-                default:
-                    Log::Logger::getInstance()->warning("Not implemented yet");
-                    break;
+            }
+            break;
+            case LayerUtils::PLY_MESH:
+                if (m_selectionContext.hasComponent<MeshComponent>()) {
+                    auto& meshComponent = m_selectionContext.getComponent<MeshComponent>();
+                    meshComponent.meshParameters = std::make_shared<PLYFileMeshParameters>(loadFileInfo.path);
+                }
+                break;
+            default:
+                Log::Logger::getInstance()->warning("Not implemented yet");
+                break;
             }
 
             // Copy the selected file path to wherever it's needed
-            auto &opts = ApplicationConfig::getInstance().getUserSetting();
+            auto& opts = ApplicationConfig::getInstance().getUserSetting();
             opts.lastOpenedImportModelFolderPath = loadFileInfo.path;
             // Additional processing of the file can be done here
             Log::Logger::getInstance()->info("File selected: {}", loadFileInfo.path.filename().string());
-        } else {
+        }
+        else {
             Log::Logger::getInstance()->warning("No file selected.");
         }
     }

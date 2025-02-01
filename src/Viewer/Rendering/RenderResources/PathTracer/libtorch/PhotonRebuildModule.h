@@ -25,6 +25,7 @@ namespace VkRender::PathTracer {
         void freeData();
 
         void uploadPathTracerFromTensor();
+        void uploadSceneFromTensor(std::shared_ptr<Scene> scene);
 
         GPUData m_data; // Todo rename
         GPUDataTensors m_tensorData;

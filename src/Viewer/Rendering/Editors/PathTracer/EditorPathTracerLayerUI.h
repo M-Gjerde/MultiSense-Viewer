@@ -11,7 +11,7 @@ namespace VkRender {
 
     struct EditorPathTracerLayerUI : EditorUI {
 
-        bool renderFromViewpoint = false;
+        bool useSceneCamera = false;
 
         bool uploadScene = false;
         bool render = false;

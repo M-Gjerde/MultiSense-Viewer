@@ -88,9 +88,8 @@ namespace VkRender {
             }
             m_updateTrigger = true;
         }
-        bool render = false;
 
-        bool &renderFromViewpoint() { return render; }
+        bool &isActiveCamera() { return m_activeCamera; }
 
         void resetUpdateState() {
             m_updateTrigger = false;
@@ -100,6 +99,8 @@ namespace VkRender {
 
     private:
         bool m_updateTrigger = true;
+        bool m_activeCamera = false;
+
     };
 }
 #endif //CAMERACOMPONENT_H

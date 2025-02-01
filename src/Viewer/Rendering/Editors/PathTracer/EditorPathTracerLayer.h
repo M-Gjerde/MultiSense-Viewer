@@ -45,11 +45,13 @@ namespace VkRender {
 
             auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editor->ui());
 
-            ImGui::Checkbox("Active camera", &imageUI->renderFromViewpoint);
-            ImGui::SameLine();
-
             imageUI->resetPathTracer = ImGui::Button("Reset");
             ImGui::SameLine();
+
+
+            ImGui::Checkbox("Scene Camera", &imageUI->useSceneCamera);
+            ImGui::SameLine();
+
 
             imageUI->render = ImGui::Button("Render");
             ImGui::SameLine();

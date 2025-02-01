@@ -43,7 +43,6 @@ namespace VkRender {
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
 
         void onMouseMove(const MouseButtons &mouse) override;
-        void onPipelineReload() override;
         void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output);
 
         void onFileDrop(const std::filesystem::path &path) override;
@@ -69,6 +68,11 @@ namespace VkRender {
         bool m_movedCamera = false;
         std::shared_ptr<Scene> m_activeScene;
         void updateActiveCamera();
+
+        // temp TODO remove and find another solution
+        uint32_t m_currentPipelineWidth = 0;
+        uint32_t m_currentPipelineHeight = 0;
+        CameraComponent* m_previousSceneCamera = nullptr;
     };
 }
 #endif //MULTISENSE_VIEWER_EDITORPATHTRACER_H

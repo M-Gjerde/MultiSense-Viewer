@@ -26,6 +26,11 @@ namespace VkRender {
     class EditorDifferentiableRenderer : public Editor {
     public:
         EditorDifferentiableRenderer() = delete;
+        ~EditorDifferentiableRenderer() {
+            // Make sure path tracer gets destroyed before the SYCL device
+            m_pathTracer.reset();
+            m_syclDevice.reset();
+        }
 
         explicit EditorDifferentiableRenderer(EditorCreateInfo &createInfo, UUID uuid);
 
@@ -60,9 +65,13 @@ namespace VkRender {
         std::unique_ptr<torch::optim::Adam> m_optimizer;  // Or any other optimizer in <torch/optim.h>
         torch::Tensor m_accumulatedTensor = torch::Tensor();
         uint32_t m_numAccumulated = 0;
+        std::unique_ptr<SyclDeviceSelector> m_syclDevice;
 
         PathTracer::PhotonTracer::RenderSettings m_renderSettings;
-
+        uint32_t m_currentPipelineWidth = 0;
+        uint32_t m_currentPipelineHeight = 0;
+        CameraComponent* m_previousSceneCamera = nullptr;
+        uint32_t m_stepIteration = 0;
     };
 }
 #endif //MULTISENSE_VIEWER_EDITOR_DIFFRENTIABLE_RENDERER

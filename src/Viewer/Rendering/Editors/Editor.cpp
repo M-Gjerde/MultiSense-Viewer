@@ -292,12 +292,6 @@ namespace VkRender {
         m_ui->x = m_createInfo.x;
         m_ui->y = m_createInfo.y;
 
-        /*
-        if (m_ui->reloadPipeline)
-            onPipelineReload();
-
-         */
-
         m_guiManager->update();
         onUpdate();
     }

@@ -55,6 +55,80 @@ namespace VkRender::PathTracer {
     void PhotonRebuildModule::uploadPathTracerFromTensor() {
         m_photonRebuild->uploadGaussiansFromTensors(m_tensorData);
     }
+
+void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
+    // Get views of all the 2DGS Gaussian components in the scene.
+    auto gaussianView = scene->getRegistry().view<GaussianComponent2DGS>();
+
+    // Get CPU copies of our tensors (if they aren’t already on CPU)
+    auto positionsTensor = m_tensorData.positions.cpu();
+    auto scalesTensor    = m_tensorData.scales.cpu();
+    auto normalsTensor   = m_tensorData.normals.cpu();
+    auto emissionsTensor = m_tensorData.emissions.cpu();
+    auto colorsTensor    = m_tensorData.colors.cpu();
+    auto specularTensor  = m_tensorData.specular.cpu();
+    auto diffuseTensor   = m_tensorData.diffuse.cpu();
+
+    // Assume that the first dimension of each tensor is the number of gaussians.
+    int numGaussians = positionsTensor.size(0);
+
+    // Pointers to the raw data.
+    // (These assume that the tensors are contiguous and of type float.)
+    float* posPtr    = positionsTensor.data_ptr<float>();   // shape: [numGaussians, 3]
+    float* scalePtr  = scalesTensor.data_ptr<float>();        // shape: [numGaussians, 2]
+    float* normPtr   = normalsTensor.data_ptr<float>();       // shape: [numGaussians, 3]
+    float* emissPtr  = emissionsTensor.data_ptr<float>();     // shape: [numGaussians]
+    float* colorPtr  = colorsTensor.data_ptr<float>();        // shape: [numGaussians]
+    float* specPtr   = specularTensor.data_ptr<float>();      // shape: [numGaussians]
+    float* diffPtr   = diffuseTensor.data_ptr<float>();       // shape: [numGaussians]
+
+    // For each GaussianComponent2DGS in our scene, update its vectors with the tensor data.
+    // (Often in an ECS there is only one global component of a given type,
+    //  but if there are multiple, they will all be updated identically.)
+    for (auto entityID : gaussianView) {
+        auto entity = Entity(entityID, scene.get());
+        auto &comp = entity.getComponent<GaussianComponent2DGS>();
+
+        // Resize the vectors to hold data for all gaussians.
+        comp.positions.resize(numGaussians);
+        comp.scales.resize(numGaussians);
+        comp.normals.resize(numGaussians);
+        comp.emissions.resize(numGaussians);
+        comp.colors.resize(numGaussians);
+        comp.specular.resize(numGaussians);
+        comp.diffuse.resize(numGaussians);
+        // Note: If opacities or phongExponents should also be updated,
+        // add them here and ensure the corresponding tensors exist.
+
+        // Copy the data from the tensors to the component's vectors.
+        for (int i = 0; i < numGaussians; i++) {
+            // Update positions (each is 3 floats)
+            comp.positions[i] = glm::vec3(
+                posPtr[i * 3 + 0],
+                posPtr[i * 3 + 1],
+                posPtr[i * 3 + 2]
+            );
+            // Update scales (each is 2 floats)
+            comp.scales[i] = glm::vec2(
+                scalePtr[i * 2 + 0],
+                scalePtr[i * 2 + 1]
+            );
+            // Update normals (each is 3 floats)
+            comp.normals[i] = glm::vec3(
+                normPtr[i * 3 + 0],
+                normPtr[i * 3 + 1],
+                normPtr[i * 3 + 2]
+            );
+            // Update the other properties (each assumed to be a single float per gaussian)
+            comp.emissions[i] = emissPtr[i];
+            comp.colors[i]    = colorPtr[i];
+            comp.specular[i]  = specPtr[i];
+            comp.diffuse[i]   = diffPtr[i];
+        }
+    }
+}
+
+
     void PhotonRebuildModule::uploadFromScene(std::weak_ptr<Scene> scene) {
         freeData();
         auto scenePtr = scene.lock();

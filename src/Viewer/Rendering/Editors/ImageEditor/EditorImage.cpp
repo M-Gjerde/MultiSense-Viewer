@@ -58,10 +58,6 @@ namespace VkRender {
     }
 
 
-    void EditorImage::onPipelineReload() {
-    }
-
-
     void EditorImage::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorImageUI>(m_ui);
         auto frameIndex = m_context->currentFrameIndex();

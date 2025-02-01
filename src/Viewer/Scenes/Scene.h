@@ -41,6 +41,8 @@ namespace VkRender {
         void destroyEntityRecursively(Entity entity);
         bool isDescendantOf(Entity entity, Entity potentialAncestor);
 
+        CameraComponent* getActiveCamera();
+
         template<class T>
         void onComponentUpdated(Entity entity, T &component);
         template<typename T>

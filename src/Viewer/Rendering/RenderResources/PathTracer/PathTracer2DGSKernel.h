@@ -47,6 +47,7 @@ namespace VkRender::PathTracer {
             float emissionPower;
             sampleGaussianPositionAndNormal(entityID, gaussianID, photonID, emitPosLocal, emitNormalLocal, emissionPower);
             // Get the model transform matrix for the emissive entity
+
             // 2) Sample emission direction
             glm::vec3 rayDir = sampleCosineWeightedHemisphere(emitNormalLocal, photonID);
             float photonFlux = emissionPower; // or you can store a color as a vec3 if needed
@@ -59,7 +60,6 @@ namespace VkRender::PathTracer {
                 glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
 
             castContributionRay(rayOrigin, cameraPlaneNormalWorld, apertureRadius, photonID, gaussianID, photonFlux);
-
             // 3) Multi-bounce loop
             for (uint32_t bounce = 0; bounce < m_gpuData.renderInformation->numBounces; ++bounce) {
                 // A) Intersect with the scene
@@ -162,9 +162,9 @@ namespace VkRender::PathTracer {
                     castContributionRay(rayOrigin, cameraPlaneNormalWorld, apertureRadius, photonID, gaussianID, photonFlux);
                 }
                 else {
-                    // No hit; photon escapes the scene
                     return;
                 }
+
             } // end for bounces
 
             // If we exit here, we used up all bounces w/o hitting sensor
@@ -172,10 +172,14 @@ namespace VkRender::PathTracer {
 
         void castContributionRay(const glm::vec3& rayOrigin, const glm::vec3& cameraPlaneNormalWorld, float apertureRadius, size_t photonID, size_t gaussianID, float photonFlux) const {
             // Calculate direct lighting
+
+            glm::vec3 apertureHitPoint;
+
             glm::vec3 directLightingDir = sampleDirectionTowardAperture(
                 rayOrigin,
                 m_cameraTransform->getPosition(), // center of aperture
                 cameraPlaneNormalWorld, // might be -X if your camera faces X, or -Z, etc.
+                apertureHitPoint,
                 apertureRadius,
                 photonID
             );
@@ -204,7 +208,22 @@ namespace VkRender::PathTracer {
                     float d = glm::length(cameraHitPointWorld);
                     float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
                     float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / glm::max(0.1f, cosTheta);
-                    accumulateOnSensor(photonID, cameraHitPointWorld, photonFlux * scaleFactor);
+
+                    //
+                    // 1. Transform the hit point from world space to camera space
+                    glm::mat4 worldToCamera = glm::inverse(m_cameraTransform->getTransform());
+                    glm::vec4 hitPointCam4 = worldToCamera * glm::vec4(cameraHitPointWorld, 1.0f);
+                    glm::vec3 hitPointCam = hitPointCam4 / hitPointCam4.w;
+
+                    accumulateOnSensor(photonID, hitPointCam, photonFlux * scaleFactor);
+
+                    m_gpuDataOutput[photonID].emissionOrigin = rayOrigin;
+                    m_gpuDataOutput[photonID].emissionDirection = directLightingDir;
+                    m_gpuDataOutput[photonID].hitCamera = cameraHit;
+                    m_gpuDataOutput[photonID].emissionDirectionLength = closest_t;
+                    m_gpuDataOutput[photonID].apertureHitPoint = apertureHitPoint;
+                    m_gpuDataOutput[photonID].cameraHitPointLocal = hitPointCam;
+
                 }
             }
         }
@@ -277,66 +296,6 @@ namespace VkRender::PathTracer {
         }
 
 
-        bool geometryIntersection(size_t lightEntityIdx, const glm::vec3& rayOrigin, const glm::vec3& rayDir,
-                                  size_t& hitEntity, float& closest_t, glm::vec3& hitPointWorld,
-                                  glm::vec3& hitNormalWorld) const {
-            bool hit = false;
-            for (uint32_t entityIdx = 0; entityIdx < m_gpuData.numEntities; ++entityIdx) {
-                // Transform ray to local space
-                if (entityIdx == lightEntityIdx)
-                    continue;
-
-                const char* entityTag = m_gpuData.tagComponents[entityIdx].getTagForKernel();
-
-                glm::mat4 entityTransform = m_gpuData.transforms[entityIdx].getTransform();
-                glm::mat4 invEntityTransform = glm::inverse(entityTransform);
-
-                glm::vec3 localRayOrigin = glm::vec3(invEntityTransform * glm::vec4(rayOrigin, 1.0f));
-                glm::vec3 localRayDir = glm::normalize(glm::vec3(invEntityTransform * glm::vec4(rayDir, 0.0f)));
-
-                // Figure out index range for this entity
-                uint32_t startIndex = m_gpuData.indexOffsets[entityIdx];
-                uint32_t endIndex = (entityIdx + 1 < m_gpuData.numEntities)
-                                        ? m_gpuData.indexOffsets[entityIdx + 1]
-                                        : m_gpuData.totalIndices;
-
-                if (endIndex <= startIndex) {
-                    continue; // no triangles
-                }
-
-                size_t entityIndexCount = endIndex - startIndex;
-                size_t triangleCount = entityIndexCount / 3;
-
-                // For each triangle in this entity
-                for (size_t t = 0; t < triangleCount; ++t) {
-                    uint32_t i0 = m_gpuData.indices[startIndex + t * 3 + 0];
-                    uint32_t i1 = m_gpuData.indices[startIndex + t * 3 + 1];
-                    uint32_t i2 = m_gpuData.indices[startIndex + t * 3 + 2];
-
-                    const glm::vec3& aLocal = m_gpuData.vertices[i0].position;
-                    const glm::vec3& bLocal = m_gpuData.vertices[i1].position;
-                    const glm::vec3& cLocal = m_gpuData.vertices[i2].position;
-
-                    glm::vec3 localHit(0.f);
-                    if (rayTriangleIntersect(localRayOrigin, localRayDir, aLocal, bLocal, cLocal, localHit)) {
-                        glm::vec3 worldHit = glm::vec3(entityTransform * glm::vec4(localHit, 1.0f));
-                        float dist = glm::distance(rayOrigin, worldHit);
-                        if (dist < closest_t && dist > 1e-3f) {
-                            closest_t = dist;
-                            hitEntity = entityIdx;
-                            hitPointWorld = worldHit;
-                            hit = true;
-                            // compute normal in world space
-                            glm::vec3 nLocal = glm::cross(bLocal - aLocal, cLocal - aLocal);
-                            glm::vec3 nWorld = glm::mat3(glm::transpose(glm::inverse(entityTransform))) * nLocal;
-                            hitNormalWorld = glm::normalize(nWorld);
-                        }
-                    }
-                }
-            }
-            return hit;
-        }
-
         glm::vec3 samplePointOnDisk(size_t photonID,
                                     const glm::vec3& center,
                                     const glm::vec3& normal,
@@ -367,12 +326,13 @@ namespace VkRender::PathTracer {
             const glm::vec3& lightPos,
             const glm::vec3& apertureCenter,
             const glm::vec3& apertureNormal,
+            glm::vec3& apertureHitpoint,
             float apertureRadius,
             uint64_t photonID) const {
             // pick random point on the lens
-            glm::vec3 lensHitPoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
+            apertureHitpoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
             // direction from light to lens point
-            glm::vec3 dir = lensHitPoint - lightPos;
+            glm::vec3 dir = apertureHitpoint - lightPos;
             return normalize(dir);
         }
 
@@ -407,16 +367,9 @@ namespace VkRender::PathTracer {
             }
             glm::vec3 intersectionPoint = rayOriginWorld + t * rayDirWorld;
 
-            float hitx = intersectionPoint.x;
-            float hity = intersectionPoint.y;
-            float hitz = intersectionPoint.z;
-
-            glm::vec3 intersectionCamSpace = glm::vec3(
-                glm::inverse(entityTransform) * glm::vec4(intersectionPoint, 1.0f));
-
-            float hitCx = intersectionCamSpace.x;
-            float hitCy = intersectionCamSpace.y;
-            float hitCz = intersectionCamSpace.z;
+            glm::mat4 view = glm::inverse(entityTransform);
+            glm::vec4 intersectionPointCamera = view * glm::vec4(intersectionPoint, 1.0f);
+            glm::vec3 intersectionCamSpace = glm::vec3(intersectionPointCamera) / intersectionPointCamera.w;
 
             // Sensor plane bounds in camera space
             float halfW = (m_camera->parameters().width * 0.5f) / m_camera->parameters().fx;
@@ -442,52 +395,23 @@ namespace VkRender::PathTracer {
         // ---------------------------------------------------------------------
         //  accumulateOnSensor
         // ---------------------------------------------------------------------
-        void accumulateOnSensor(size_t photonID, const glm::vec3& hitPointWorld, float photonFlux) const {
-            //
-            // 1. Transform the hit point from world space to camera space
-            //
-            // m_cameraTransform is presumably a component holding the camera's world matrix.
-            // We typically need the inverse of that matrix to go from world -> camera space.
-            glm::mat4 worldToCamera = glm::inverse(m_cameraTransform->getTransform());
-            glm::vec4 hitPointCam = worldToCamera * glm::vec4(hitPointWorld, 1.0f);
-            float xWorld = hitPointWorld.x;
-            float yWorld = hitPointWorld.y;
-            float zWorld = hitPointWorld.z;
-
+        void accumulateOnSensor(size_t photonID, const glm::vec3& hitPointCam, float photonFlux) const {
             // 2. Project to the image plane using pinhole intrinsics:
             // Important: Z_cam should be > 0 for a point in front of the camera.
             //
-            float Xc_m = hitPointCam.x;
-            float Yc_m = hitPointCam.y;
-            float Zc_m = hitPointCam.z;
 
-            // Convert to mm:
-            float Xc_mm = Xc_m * 1000.0f;
-            float Yc_mm = Yc_m * 1000.0f;
-            float Zc_mm = Zc_m * 1000.0f; // If needed for consistent usage
-
-            if (Zc_m <= 0.0f) {
-                return; // Behind the camera
-            }
-
-
-            float xSensor_mm = m_camera->parameters().focalLength * (Xc_mm / Zc_mm);
-            float ySensor_mm = m_camera->parameters().focalLength * (Yc_mm / Zc_mm);
-
-            float xPitchSize = ((m_camera->parameters().focalLength) / m_camera->parameters().fx);
-            float yPitchSize = ((m_camera->parameters().focalLength) / m_camera->parameters().fy);
-
-            float xPixel = (xSensor_mm / xPitchSize) + m_camera->parameters().cx;
-            float yPixel = (ySensor_mm / yPitchSize) + m_camera->parameters().cy;
-
-
-            //float xPixel = m_camera->parameters().fx * (Xc_m / Zc_m) + m_camera->parameters().cx;
-            //float yPixel = m_camera->parameters().fy * (Yc_m / Zc_m) + m_camera->parameters().cy;
-
-
+            // Camera intrinsics
+            float fx = m_camera->parameters().fx;
+            float fy = m_camera->parameters().fy;
+            float cx = m_camera->parameters().cx;
+            float cy = m_camera->parameters().cy;
+            float X = hitPointCam.x;
+            float Y = hitPointCam.y;
+            float Z = hitPointCam.z;
+            float xPixel = (fx * X / Z) + cx;
+            float yPixel = (fy * Y / Z) + cy;
             int px = static_cast<int>(std::round(xPixel));
             int py = static_cast<int>(std::round(yPixel));
-
 
             //
             // 4. Check bounds. If inside the image plane, accumulate flux
@@ -514,21 +438,6 @@ namespace VkRender::PathTracer {
             }
         }
 
-
-        // ---------------------------------------------------------
-        //  checkPinholeIntersection
-        // ---------------------------------------------------------
-        bool checkPinholeIntersection(const glm::vec3& rayOrigin,
-                                      const glm::vec3& rayDir,
-                                      const glm::vec3& pinholeCenter,
-                                      float pinholeRadius,
-                                      glm::vec3& outClosestPt,
-                                      float& outT) const {
-            glm::vec3 pinholeNormal = glm::vec3(-1, 0, 0);
-            return intersectDisk(pinholeNormal, pinholeCenter, pinholeRadius, rayOrigin, rayDir, outClosestPt, outT);
-
-            return false;
-        }
 
         // ---------------------------------------------------------------------
         //  Helper: sample an emissive gaussian object
@@ -630,75 +539,6 @@ namespace VkRender::PathTracer {
             emissionPower = P_total * weight;
         }
 
-        static bool rayTriangleIntersect(
-            glm::vec3& ray_origin,
-            glm::vec3& ray_dir,
-            const glm::vec3& a,
-            const glm::vec3& b,
-            const glm::vec3& c,
-            glm::vec3& out_intersection) {
-            float epsilon = 1e-7f;
-
-            glm::vec3 edge1 = b - a;
-            glm::vec3 edge2 = c - a;
-            glm::vec3 h = glm::cross(ray_dir, edge2);
-            float det = glm::dot(edge1, h);
-
-            // If det is near zero, ray is parallel to triangle
-            if (det > -epsilon && det < epsilon)
-                return false;
-
-            float inv_det = 1.0f / det;
-            glm::vec3 s = ray_origin - a;
-            float u = inv_det * glm::dot(s, h);
-            if (u < 0.0f || u > 1.0f)
-                return false;
-
-            glm::vec3 q = glm::cross(s, edge1);
-            float v = inv_det * glm::dot(ray_dir, q);
-            if (v < 0.0f || (u + v) > 1.0f)
-                return false;
-
-            float t = inv_det * glm::dot(edge2, q);
-            if (t > epsilon) {
-                out_intersection = ray_origin + ray_dir * t;
-                return true;
-            }
-
-            return false;
-        }
-
-        // ---------------------------------------------------------
-        // Intersection with plane
-        // ---------------------------------------------------------
-        bool intersectPlane(const glm::vec3& planeNormal,
-                            const glm::vec3& planePos,
-                            const glm::vec3& rayOrigin,
-                            const glm::vec3& rayDir,
-                            float& t) const {
-            float denom = glm::dot(planeNormal, rayDir);
-            if (fabs(denom) > 1e-6f) {
-                glm::vec3 p0l0 = planePos - rayOrigin;
-                t = glm::dot(p0l0, planeNormal) / denom;
-                return (t >= 0.f);
-            }
-            return false;
-        }
-
-        bool intersectDisk(const glm::vec3& normal, const glm::vec3& center, const float& radius,
-                           const glm::vec3& rayOrigin, const glm::vec3& rayDir, glm::vec3& outP,
-                           float& t) const {
-            if (intersectPlane(normal, center, rayOrigin, rayDir, t)) {
-                outP = rayOrigin + rayDir * t; // Calculate intersection point
-                glm::vec3 v = outP - center; // Vector from disk center to intersection point
-                float d2 = glm::dot(v, v); // Squared distance from disk center to intersection point
-                // return (sqrtf(d2) <= radius); // Direct distance comparison (less efficient)
-                // The optimized method (using precomputed radius squared):
-                return d2 <= radius * radius; // Compare squared distances (more efficient)
-            }
-
-            return false;
-        }
 
 
         // ---------------------------------------------------------------------
@@ -717,7 +557,7 @@ namespace VkRender::PathTracer {
 
 
         // Constructs an orthonormal basis (T, B, N) given a normal N.
-        inline void buildTangentBasis(const glm::vec3& N, glm::vec3& T, glm::vec3& B) const {
+        static void buildTangentBasis(const glm::vec3& N, glm::vec3& T, glm::vec3& B) {
             // Any vector not collinear with N will do for "temp"
             glm::vec3 temp = (fabs(N.x) > 0.9f) ? glm::vec3(0, 1, 0) : glm::vec3(1, 0, 0);
 

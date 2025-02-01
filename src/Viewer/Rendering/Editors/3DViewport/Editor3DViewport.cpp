@@ -322,7 +322,7 @@ namespace VkRender {
                 Entity entity(e, m_activeScene.get());
                 auto &cameraComponent = entity.getComponent<CameraComponent>();
 
-                if (cameraComponent.renderFromViewpoint()) {
+                if (cameraComponent.isActiveCamera()) {
                     // Use the first camera found that can render from viewpoint
                     sceneCameraToUse = &cameraComponent;
                     break;

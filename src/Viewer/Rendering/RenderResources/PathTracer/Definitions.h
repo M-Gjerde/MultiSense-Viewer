@@ -116,12 +116,13 @@ namespace VkRender::PathTracer {
     // Stored per photon
     struct GPUDataOutput {
         // Direct lighting parameters
-        bool hit;
-        glm::vec3 emissionOrigin;          // eo
-        glm::vec3 emissionDirection;       // ed
-        glm::vec3 apertureHitPoint;        // a
-        float emissionDirectionLength;     // etmin
-        glm::vec3 cameraHitPointLocal;     // p
+        bool hitCamera = false;
+        float emissionDirectionLength = 0.0f;     // etmin
+
+        glm::vec3 emissionOrigin = glm::vec3(0.0f);          // eo
+        glm::vec3 emissionDirection = glm::vec3(0.0f);       // ed
+        glm::vec3 apertureHitPoint = glm::vec3(0.0f);        // a
+        glm::vec3 cameraHitPointLocal = glm::vec3(0.0f);     // p
 
     };
 

@@ -11,16 +11,17 @@ namespace VkRender::PathTracer {
     class LightTracerKernelBackward {
     public:
         LightTracerKernelBackward(GPUData gpuData,
-                          TransformComponent cameraPose,
-                          PinholeCamera* camera,
                           GPUDataOutput* gpuDataOutput,
                           PCG32* rng)
-            : m_gpuData(gpuData), m_cameraTransform(cameraPose), m_camera(camera), m_gpuDataOutput(gpuDataOutput), m_rng(rng) {
+            : m_gpuData(gpuData), m_gpuDataOutput(gpuDataOutput), m_rng(rng) {
+            m_cameraTransform = m_gpuData.cameraTransform;
+            m_camera = m_gpuData.pinholeCamera;
+
         }
 
         void operator()(sycl::item<1> item) const {
             size_t photonID = item.get_linear_id();
-            if (photonID >= m_numPhotons) {
+            if (photonID >= m_gpuData.renderInformation->totalPhotons) {
                 return;
             }
             // Each thread traces one photon.
@@ -31,21 +32,18 @@ namespace VkRender::PathTracer {
         GPUData m_gpuData{};
         GPUDataOutput* m_gpuDataOutput{};
 
-        uint32_t m_numPhotons{};
-        uint32_t m_maxBounces = 5; // e.g. 5, 8, or 10
-
         PCG32* m_rng;
-        TransformComponent m_cameraTransform{};
+        TransformComponent* m_cameraTransform{};
         PinholeCamera* m_camera{};
 
         // ---------------------------------------------------------
         // Single Photon Trace (Multi-Bounce)
         // ---------------------------------------------------------
         void traceOnePhoton(size_t photonID) const {
-            auto cameraTransform = m_cameraTransform.getTransform();
+            auto cameraTransform = m_cameraTransform->getTransform();
             glm::mat4 worldToCamera = glm::inverse(cameraTransform);
             glm::vec3 cameraNormal = glm::normalize(glm::mat3(cameraTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
-            glm::vec3 pinholePosition = m_cameraTransform.getPosition();
+            glm::vec3 pinholePosition = m_cameraTransform->getPosition();
             glm::vec3 cameraPlanePointWorld = glm::vec3(cameraTransform *glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
 
             glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[0].position;
@@ -71,7 +69,6 @@ namespace VkRender::PathTracer {
             float px = hitCam.x;
             float py = hitCam.y;
             float pz = hitCam.z;
-
             float xPixel = (fx * px / pz) + cx;
             float yPixel = (fy * py / pz) + cy;
             int pxInt = std::round(xPixel);
@@ -306,7 +303,7 @@ namespace VkRender::PathTracer {
         ) const {
             // 1) Transform to camera space
 
-            glm::mat4 entityTransform = m_cameraTransform.getTransform();
+            glm::mat4 entityTransform = m_cameraTransform->getTransform();
             // Camera plane normal in world space
             glm::vec3 cameraPlaneNormalWorld = glm::normalize(
                 glm::mat3(entityTransform) * glm::vec3(0.0f, 0.0f, -1.0f));

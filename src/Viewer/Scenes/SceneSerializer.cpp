@@ -217,7 +217,7 @@ namespace VkRender {
             out << YAML::Key << "CameraType";
             out << YAML::Value << CameraComponent::cameraTypeToString(camera.cameraType);
             out << YAML::Key << "RenderFromViewpoint";
-            out << YAML::Value << camera.renderFromViewpoint();
+            out << YAML::Value << camera.isActiveCamera();
             out << YAML::Key << "FlipX";
             out << YAML::Value << camera.cameraSettings.flipX;
             out << YAML::Key << "FlipY";
@@ -503,7 +503,7 @@ namespace VkRender {
                     }
                     // Deserialize CameraType
                     if (cameraComponent["RenderFromViewpoint"]) {
-                        camera.render = cameraComponent["RenderFromViewpoint"].as<bool>();
+                        camera.isActiveCamera() = cameraComponent["RenderFromViewpoint"].as<bool>();
                     }
                     // Deserialize CameraType
                     if (cameraComponent["FlipX"]) {

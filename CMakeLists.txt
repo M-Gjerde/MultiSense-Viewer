@@ -55,6 +55,8 @@ if (ENABLE_PYTORCH)
 
     message(STATUS "[VkRenderINFO]: Attempting to find LibTorch")
     set(hipblas-common_DIR /opt/rocm-6.3.1/lib/cmake/hipblas-common)
+    set(CMAKE_CUDA_ARCHITECTURES 89)
+
     find_package(Torch REQUIRED HINTS
             /home/magnus/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124/libtorch
             /home/magnus-desktop/libraries/libtorch-cxx11-abi-shared-with-deps-2.5.1+rocm6.2/libtorch
@@ -91,7 +93,6 @@ if (PYTORCH_AVAILABLE)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
         set(CMAKE_CUDA_EXTENSIONS OFF)
 
-        set(CMAKE_CUDA_ARCHITECTURES 89)
 
         message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
         target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)

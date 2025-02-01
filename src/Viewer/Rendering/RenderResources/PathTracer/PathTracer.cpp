@@ -25,10 +25,13 @@ namespace VkRender::PathTracer {
         m_backwardInfo.gradients = new glm::vec3[pipelineSettings.photonCount];
         m_backwardInfo.sumGradients = new glm::vec3();
         m_renderInformation = std::make_unique<RenderInformation>();
-
+        pipelineSettings.queue.wait();
         prepareImageAndInfoBuffers();
         uploadVertexData(scene);
         uploadGaussianData(scene);
+        pipelineSettings.queue.wait();
+
+        Log::Logger::getInstance()->info("PathTracer created, Propterties: PhotonCount: {}, Bounces: {}, Image Size: {}x{}", m_pipelineSettings.photonCount, m_pipelineSettings.numBounces, m_pipelineSettings.width, m_pipelineSettings.height);
     }
 
     RenderInformation PhotonTracer::getRenderInfo() {
@@ -90,24 +93,27 @@ namespace VkRender::PathTracer {
         }
     }
 
-    PhotonTracer::BackwardInfo PhotonTracer::backward(RenderSettings& settings) {
-        /*
+    PhotonTracer::BackwardInfo PhotonTracer::backward(RenderSettings& renderSettings) {
+
         try {
-            auto& queue = m_selector.getQueue();
-            uint64_t simulatePhotonCount = renderSettings.photonCount;
+            auto& queue = m_pipelineSettings.queue;
+            uint64_t simulatePhotonCount = m_pipelineSettings.photonCount;
+            uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
 
-            queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * m_width * m_height);
+            queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * imageSize);
 
-            m_renderInformation->totalPhotons += simulatePhotonCount;
+            m_renderInformation->frameID++;
+            m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
             m_renderInformation->gamma = renderSettings.gammaCorrection;
-            m_renderInformation->numBounces = renderSettings.numBounces;
+            m_renderInformation->numBounces = m_pipelineSettings.numBounces;
             queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
-            queue.memcpy(m_gpu.pinholeCamera, &m_camera, sizeof(PinholeCamera));
+            queue.memcpy(m_gpu.pinholeCamera, &renderSettings.camera, sizeof(PinholeCamera));
+            queue.memcpy(m_gpu.cameraTransform, &renderSettings.cameraTransform, sizeof(TransformComponent));
 
             sycl::range<1> globalRange(simulatePhotonCount);
             queue.submit([&](sycl::handler& cgh) {
                 // Capture GPUData, etc. by value or reference as needed
-                LightTracerKernelBackward kernel(m_gpu, m_cameraTransform, m_gpu.pinholeCamera, m_gpuDataOutput, m_pcg32);
+                LightTracerKernelBackward kernel(m_gpu, m_gpuDataOutput, m_pcg32);
                 cgh.parallel_for(globalRange, kernel);
             });
 
@@ -120,7 +126,7 @@ namespace VkRender::PathTracer {
             std::cerr << "Exception: " << e.what() << std::endl;
         }
         return m_backwardInfo;
-    */
+
     }
 
     void PhotonTracer::resetImage() {
@@ -171,6 +177,12 @@ namespace VkRender::PathTracer {
         m_gpu.pinholeCamera = sycl::malloc_device<PinholeCamera>(1, queue);
         m_gpu.cameraTransform = sycl::malloc_device<TransformComponent>(1, queue);
 
+        m_gpuDataOutput = sycl::malloc_device<GPUDataOutput>(simulatePhotonCount, queue);
+        GPUDataOutput output{};
+        queue.fill(m_gpuDataOutput, output, simulatePhotonCount).wait();
+
+
+        queue.wait();
     }
 
 
@@ -248,15 +260,17 @@ namespace VkRender::PathTracer {
             m_gpuDataOutput = nullptr;
         }
         queue.wait();
+        Log::Logger::getInstance()->info("Freeing Path tracer GPU/SYCL resources");
     }
 
 
     void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors& data) {
-        /*
+
 #ifdef DIFF_RENDERER_ENABLED
         freeResources();
         prepareImageAndInfoBuffers();
-        auto& queue = m_selector.getQueue();
+
+        auto& queue = m_pipelineSettings.queue;
         // 2) Move Tensors to CPU (if they aren't already) so we can extract values
         //    (SYCL can't just copy directly from a PyTorch CUDA device pointer.)
         //    If data is already on CPU, this .cpu() will be basically a no-op.
@@ -344,8 +358,9 @@ namespace VkRender::PathTracer {
         m_gpu.sumGradients = sycl::malloc_device<glm::vec3>(1, queue);
         queue.fill(m_gpu.sumGradients, glm::vec3(0.0f), 1);
 
-        m_gpu.gradientImage = sycl::malloc_device<float>(m_width * m_height, queue);
-        queue.fill(m_gpu.gradientImage, 0.0f, m_width * m_height);
+        uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
+        m_gpu.gradientImage = sycl::malloc_device<float>(imageSize, queue);
+        queue.fill(m_gpu.gradientImage, 0.0f, imageSize);
 
         // 9) Set number of gaussians
         m_gpu.numGaussians = N;
@@ -354,7 +369,7 @@ namespace VkRender::PathTracer {
         // Log
         Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
 #endif
-*/
+
     }
 
     void PhotonTracer::uploadGaussianData(std::shared_ptr<Scene>& scene) {
@@ -473,26 +488,42 @@ namespace VkRender::PathTracer {
             }
             currentIndexOffset += meshData->indices.size();
         }
-        // Upload vertex data to GPU
+        // Upload vertex data to GPU // Split each assignment for debug purposes
         auto& queue = m_pipelineSettings.queue;
         m_gpu.vertices = sycl::malloc_device<InputAssembly>(vertexData.size(), queue);
         queue.memcpy(m_gpu.vertices, vertexData.data(), vertexData.size() * sizeof(InputAssembly));
+        queue.wait();
+
         // Upload index data to GPU
         m_gpu.indices = sycl::malloc_device<uint32_t>(indices.size(), queue);
         queue.memcpy(m_gpu.indices, indices.data(), indices.size() * sizeof(uint32_t));
+        queue.wait();
+
         // Upload transform matrices to GPU
         m_gpu.transforms = sycl::malloc_device<TransformComponent>(transformMatrices.size(), queue);
         queue.memcpy(m_gpu.transforms, transformMatrices.data(), transformMatrices.size() * sizeof(TransformComponent));
+        queue.wait();
+
+        // Upload material data to GPU
         m_gpu.materials = sycl::malloc_device<MaterialComponent>(materials.size(), queue);
         queue.memcpy(m_gpu.materials, materials.data(), materials.size() * sizeof(MaterialComponent));
+        queue.wait();
+
+        // Upload tag components to GPU
         m_gpu.tagComponents = sycl::malloc_device<TagComponent>(tagComponents.size(), queue);
         queue.memcpy(m_gpu.tagComponents, tagComponents.data(), tagComponents.size() * sizeof(TagComponent));
-        // Upload offsets (if necessary for rendering)
+        queue.wait();
+
+        // Upload vertex offsets to GPU (if necessary for rendering)
         m_gpu.vertexOffsets = sycl::malloc_device<uint32_t>(vertexOffsets.size(), queue);
         queue.memcpy(m_gpu.vertexOffsets, vertexOffsets.data(), vertexOffsets.size() * sizeof(uint32_t));
+        queue.wait();
+
+        // Upload index offsets to GPU
         m_gpu.indexOffsets = sycl::malloc_device<uint32_t>(indexOffsets.size(), queue);
         queue.memcpy(m_gpu.indexOffsets, indexOffsets.data(), indexOffsets.size() * sizeof(uint32_t));
         queue.wait();
+
 
         m_gpu.totalVertices = currentVertexOffset; // Number of entities for rendering
         m_gpu.totalIndices = currentIndexOffset; // Number of entities for rendering
@@ -521,7 +552,7 @@ namespace VkRender::PathTracer {
             Entity entity(e, m_scene.get());
             auto &transform = entity.getComponent<TransformComponent>();
             auto camera = std::dynamic_pointer_cast<PinholeCamera>(entity.getComponent<CameraComponent>().camera);
-            if (!camera || entity.getComponent<CameraComponent>().renderFromViewpoint())
+            if (!camera || entity.getComponent<CameraComponent>().isActiveCamera())
                 continue;
             float fx = camera->m_fx;
             float fy = camera->m_fy;

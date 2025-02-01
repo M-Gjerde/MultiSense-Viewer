@@ -22,15 +22,61 @@ namespace VkRender {
 
     void Scene::update() {
 
-        auto view = m_registry.view<CameraComponent>();
-        for (auto e: view) {
+        auto cameraView = m_registry.view<CameraComponent>();
+        for (auto e: cameraView) {
             auto entity = Entity(e, this);
             auto cameraComponent = entity.getComponent<CameraComponent>();
             auto &transform = entity.getComponent<TransformComponent>();
             cameraComponent.camera->updateViewMatrix(transform.getTransform());
             cameraComponent.camera->updateProjectionMatrix();
+
+            if (entity.hasComponent<MaterialComponent>()) {
+                auto &material = entity.getComponent<MaterialComponent>();
+                if (cameraComponent.isActiveCamera()) {
+                    material.albedo = glm::vec4(1.0f, 1.0f, 0.0f, 1.0f);
+                } else {
+                    material.albedo = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+                }
+            }
         }
 
+        glm::vec3 position(0.0f);
+        auto gaussianView = m_registry.view<GaussianComponent2DGS>();
+        for (auto e: gaussianView) {
+            auto entity = Entity(e, this);
+            auto &gaussianComponent = entity.getComponent<GaussianComponent2DGS>();
+            position = gaussianComponent.positions.front();
+        }
+
+        auto meshView = m_registry.view<MeshComponent>();
+        for (auto e: meshView) {
+            auto entity = Entity(e, this);
+            auto& meshComponent = entity.getComponent<MeshComponent>();
+            if (meshComponent.meshDataType() == OBJ_FILE) {
+                auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(meshComponent.meshParameters);
+                if (params->path.filename() == "disk.obj") {
+                    auto& transformComponent = entity.getComponent<TransformComponent>();
+                    transformComponent.setPosition(position);
+                }
+            }
+        }
+
+    }
+
+
+    CameraComponent* Scene::getActiveCamera() {
+        auto view = m_registry.view<CameraComponent>();
+        CameraComponent* activeCamera = nullptr;
+        // First pass: iterate through all cameras.
+        // Keep updating activeCamera so that the last camera found with isActiveCamera() true wins.
+        for (auto entityID : view) {
+            Entity entity(entityID, this);
+            auto& cameraComponent = entity.getComponent<CameraComponent>();
+            if (cameraComponent.isActiveCamera()) {
+                activeCamera = &cameraComponent;
+            }
+        }
+        return activeCamera;
     }
 
     void Scene::deleteAllEntities() {
@@ -136,6 +182,7 @@ namespace VkRender {
         }
         return false;
     }
+
 
     void Scene::notifyComponentRemoval(Entity entity) {
         // Check for each component type, and remove if the entity has the component

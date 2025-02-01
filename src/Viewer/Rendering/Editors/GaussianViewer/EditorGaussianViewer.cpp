@@ -71,13 +71,13 @@ namespace VkRender {
         auto &e = m_context->getSelectedEntity();
         if (e && e.hasComponent<CameraComponent>()) {
             auto &camera = e.getComponent<CameraComponent>();
-            if (camera.renderFromViewpoint()) {
-                // If the selected entity has a camera with renderFromViewpoint, use it
+            if (camera.isActiveCamera()) {
+                // If the selected entity has a camera with isActiveCamera, use it
                 //gaussianRenderer3D.setActiveCamera(camera.camera);
                 m_lastActiveCamera = &camera; // Update the last active camera
             }
-        } else if (m_lastActiveCamera && m_lastActiveCamera->renderFromViewpoint()) {
-            // Use the last active camera if it still has renderFromViewpoint enabled
+        } else if (m_lastActiveCamera && m_lastActiveCamera->isActiveCamera()) {
+            // Use the last active camera if it still has isActiveCamera enabled
             //gaussianRenderer3D.setActiveCamera(m_lastActiveCamera->camera);
         }
 

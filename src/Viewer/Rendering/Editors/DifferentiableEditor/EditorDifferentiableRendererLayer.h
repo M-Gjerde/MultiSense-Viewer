@@ -45,29 +45,10 @@ namespace VkRender {
             imageUI->reloadRenderer = ImGui::Button("Reload");
             ImGui::SameLine();
 
-            imageUI->uploadScene = ImGui::Button("Upload");
-            ImGui::SameLine();
-
             imageUI->step = ImGui::Button("Step");
             ImGui::SameLine();
 
-            imageUI->backprop = ImGui::Button("Backprop");
-            ImGui::SameLine();
-
             ImGui::Checkbox("Step##Toggle", &imageUI->toggleStep);
-            ImGui::SameLine();
-
-            ImGui::Checkbox("Accumulate##Toggle", &imageUI->checkStartAccumulation);
-            ImGui::SameLine(); // Dropdown for selecting render kernel
-
-            const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
-            imageUI->switchKernelDevice = false;
-            ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections,
-                             IM_ARRAYSIZE(selections))) {
-                imageUI->switchKernelDevice = true;
-            }
-            imageUI->kernelDevice = selections[imageUI->selectedDeviceIndex];
 
 
             ImGui::End();

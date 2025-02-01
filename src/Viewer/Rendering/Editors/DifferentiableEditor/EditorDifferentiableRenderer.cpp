@@ -36,6 +36,7 @@ namespace VkRender {
         m_activeSceneCamera = std::make_shared<ArcballCamera>();
         m_activeSceneCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
 
+        m_syclDevice = std::make_unique<SyclDeviceSelector>(SyclDeviceSelector::DeviceType::CPU);
     }
 
     void EditorDifferentiableRenderer::onEditorResize() {
@@ -49,33 +50,124 @@ namespace VkRender {
 
 
     void EditorDifferentiableRenderer::onUpdate() {
-        return;
         auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
-        if (imageUI->reloadRenderer) {
-            initializeDifferentiableRenderer();
-        }
 
-        if (!m_photonRebuildModule)
+        auto sceneCamera = m_activeScene->getActiveCamera();
+        auto cameraView = m_context->activeScene()->getRegistry().view<CameraComponent>();
+
+        if (!sceneCamera)
             return;
 
-        if (imageUI->uploadScene) {
-            m_photonRebuildModule->uploadPathTracerFromTensor();
+        uint32_t newWidth = sceneCamera->pinholeParameters.width;
+        uint32_t newHeight = sceneCamera->pinholeParameters.height;
+
+        // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
+        bool resolutionChanged = (newWidth != m_currentPipelineWidth || newHeight != m_currentPipelineHeight);
+        if (imageUI->reloadRenderer || resolutionChanged) {
+            Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
+            // Store the new resolution for next frame's comparison
+            m_currentPipelineWidth = newWidth;
+            m_currentPipelineHeight = newHeight;
+            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
+                                                                        m_currentPipelineWidth,
+                                                                        m_currentPipelineHeight);
+
+
+            // Load the YAML file
+            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
+            //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
+            if (std::filesystem::exists(filePath)) {
+                YAML::Node config = YAML::LoadFile(filePath);
+                // Retrieve values from YAML nodes
+                auto gamma = config["Gamma"].as<double>();
+                auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
+                auto photonsEmitted = config["PhotonsEmitted"].as<uint64_t>();
+                auto frameCount = config["FrameCount"].as<uint32_t>();
+                auto photonBounceCount = config["PhotonBounceCount"].as<uint32_t>();
+
+                // Print them out (or use them in your application)
+                std::cout << "Gamma: " << gamma << std::endl;
+                std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
+                std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
+                std::cout << "FrameCount: " << frameCount << std::endl;
+                pipelineSettings.photonCount = photonsEmitted;
+                pipelineSettings.numBounces = photonBounceCount;
+                m_renderSettings.gammaCorrection = gamma;
+            }
+            else {
+                Log::Logger::getInstance()->warning("Did not load params from dataset folder");
+            }
+
+            // Create a new path tracer pipeline
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
+            float editorAspect = static_cast<float>(m_createInfo.width) /
+                static_cast<float>(m_createInfo.height);
+            float sceneCameraAspect = static_cast<float>(m_currentPipelineWidth) /
+                static_cast<float>(m_currentPipelineHeight);
+
+            float scaleX = 1.0f, scaleY = 1.0f;
+            if (editorAspect > sceneCameraAspect) {
+                scaleX = sceneCameraAspect / editorAspect;
+            }
+            else {
+                scaleY = editorAspect / sceneCameraAspect;
+            }
+            m_meshInstances.reset();
+            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+
+            // Create a new color texture with the same (possibly updated) dimensions
+            m_colorTexture = EditorUtils::createEmptyTexture(
+                m_currentPipelineWidth,
+                m_currentPipelineHeight,
+                VK_FORMAT_R8G8B8A8_UNORM,
+                m_context
+            );
+
+            m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
+                m_pathTracer.get(), m_context->activeScene());
+
+            m_optimizer = std::make_unique<torch::optim::Adam>(
+                // We pass in the parameters of our module (or custom parameter list)
+                m_photonRebuildModule->parameters(),
+                // Then define the Adam options, e.g. learning rate = 1e-3
+                torch::optim::AdamOptions(0.05f)
+            );
         }
 
-        if (imageUI->switchKernelDevice) {
-            //PathTracer::PhotonTracer::Settings settings;
-            //settings.kernelDevice = imageUI->kernelDevice;
-            //m_pathTracer->setExecutionDevice(settings);
-            //m_pathTracer->upload(m_context->activeScene());
-        }
 
         // ----------------------------------------------------------
         // 1. Possibly accumulate forward passes
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
+            // Store camera entities (assuming there are exactly two cameras)
+            std::vector<Entity> cameraEntities;
+            for (auto e : cameraView) {
+                cameraEntities.emplace_back(e, m_context->activeScene().get());
+            }
+
+            // Ensure we have exactly two cameras to alternate between
+            std::sort(cameraEntities.begin(), cameraEntities.end(), [](Entity& a, Entity& b) {
+                return a.getName() < b.getName();
+            });
+
+            // Alternating logic based on m_stepIteration
+            size_t activeCameraIndex = m_stepIteration % 3;
+            auto& cameraComponent = cameraEntities[activeCameraIndex].getComponent<CameraComponent>();
+            sceneCamera = &cameraComponent;
+            Log::Logger::getInstance()->info("Selecting Camera: {}", cameraEntities[activeCameraIndex].getName());
+
+
             // Prepare path tracer forward settings
+            // Use the actual scene camera (pinhole) from your scene
+            m_renderSettings.camera = *sceneCamera->getPinholeCamera();
+            m_renderSettings.cameraTransform = TransformComponent(sceneCamera->getPinholeCamera()->matrices.transform);
+            if (m_previousSceneCamera != sceneCamera)
+                m_pathTracer->resetImage();
+            m_previousSceneCamera = sceneCamera;
 
             m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
+            m_photonRebuildModule->uploadSceneFromTensor(m_context->activeScene());
+            // Upload path tracer with the new parameters
 
             // Forward pass (autograd-compatible)
             m_accumulatedTensor = m_photonRebuildModule->forward(m_renderSettings);
@@ -100,25 +192,22 @@ namespace VkRender {
                 convertedImage[i * 4 + 3] = 255;
             }
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
-        }
 
-        // ----------------------------------------------------------
-        // 2. Backprop only once after enough forwards
-        // ----------------------------------------------------------
-        // e.g. if the user toggled a "finalize accumulation & train" button
-        // or you simply want to backprop once after some number of passes
-        if ((imageUI->backprop || imageUI->toggleStep) && m_accumulatedTensor.defined() && m_numAccumulated > 0) {
-            // If you want the average instead of the sum, do so here:
-            // Create or load your target tensor (matching shape)
-            // For demonstration, just zero:
-            int width = m_accumulatedTensor.size(1);
-            int height = m_accumulatedTensor.size(0);
             // Load the target tensor
-            torch::Tensor targetTensor = loadPFM("/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm",
-                                                 width, height);
+
+            std::vector<std::filesystem::path> filePaths{
+                "/home/magnus/datasets/PathTracingGS/active/Camera1.pfm",
+                "/home/magnus/datasets/PathTracingGS/active/Camera2.pfm",
+                "/home/magnus/datasets/PathTracingGS/active/Camera3.pfm"
+            };
+            Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
+                                             filePaths[activeCameraIndex].string());
+            //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm";
+
+            torch::Tensor targetTensor = loadPFM(filePaths[activeCameraIndex], width, height);
 
             // Compute loss
-            auto loss = torch::mean(torch::pow(targetTensor-m_accumulatedTensor, 2));
+            auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
 
             // Backward
             loss.backward();
@@ -149,14 +238,14 @@ namespace VkRender {
                     << std::endl;
 
                 Log::Logger::getInstance()->info("eo Gradient: ({},{},{})",
-                    gradPositions[0][0].item<float>(),
-                    gradPositions[0][1].item<float>(),
-                    gradPositions[0][2].item<float>());
+                                                 gradPositions[0][0].item<float>(),
+                                                 gradPositions[0][1].item<float>(),
+                                                 gradPositions[0][2].item<float>());
 
                 Log::Logger::getInstance()->info("e0 Position: ({},{},{})",
-                    positions[0][0].item<float>(),
-                    positions[0][1].item<float>(),
-                    positions[0][2].item<float>());
+                                                 positions[0][0].item<float>(),
+                                                 positions[0][1].item<float>(),
+                                                 positions[0][2].item<float>());
             }
             // Optimizer step
             m_optimizer->step();
@@ -164,6 +253,7 @@ namespace VkRender {
             m_accumulatedTensor = torch::Tensor();
             m_numAccumulated = 0;
             m_optimizer->zero_grad(); // Clear old gradients
+            m_stepIteration++;
         }
     }
 
@@ -280,80 +370,6 @@ namespace VkRender {
         }
     }
 
-
-    void EditorDifferentiableRenderer::initializeDifferentiableRenderer() {
-        auto view = m_activeScene->getRegistry().view<CameraComponent>();
-        for (auto e : view) {
-            Entity entity(e, m_activeScene.get());
-            auto& cameraComponent = entity.getComponent<CameraComponent>();
-
-            if (cameraComponent.renderFromViewpoint() && cameraComponent.cameraType ==
-                CameraComponent::CameraType::PINHOLE) {
-                // Use the first camera found that can render from viewpoint
-                auto sceneCamera = cameraComponent.getPinholeCamera();
-
-                float textureAspect = static_cast<float>(sceneCamera->parameters().width) / static_cast<float>(
-                    sceneCamera->parameters().height);
-                float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
-                // Calculate scaling factors
-                float scaleX = 1.0f, scaleY = 1.0f;
-                if (editorAspect > textureAspect) {
-                    scaleX = textureAspect / editorAspect;
-                }
-                else {
-                    scaleY = editorAspect / textureAspect;
-                }
-                m_meshInstances.reset();
-                m_meshInstances = nullptr;
-                m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-                float width = sceneCamera->parameters().width;
-                float height = sceneCamera->parameters().height;
-
-                /*
-                m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
-                m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
-
-                m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
-                */
-                //m_pathTracer->setActiveCamera(cameraComponent.getPinholeCamera(),&entity.getComponent<TransformComponent>());
-                //m_pathTracer->upload(m_activeScene);
-                m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
-                    m_pathTracer.get(), m_context->activeScene());
-
-                m_optimizer = std::make_unique<torch::optim::Adam>(
-                    // We pass in the parameters of our module (or custom parameter list)
-                    m_photonRebuildModule->parameters(),
-                    // Then define the Adam options, e.g. learning rate = 1e-3
-                    torch::optim::AdamOptions(0.1)
-                );
-
-                // Load the YAML file
-                std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
-                if (std::filesystem::exists(filePath)) {
-                    YAML::Node config = YAML::LoadFile(filePath);
-                    // Retrieve values from YAML nodes
-                    auto gamma = config["Gamma"].as<double>();
-                    auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
-                    auto photonsEmitted = config["PhotonsEmitted"].as<uint64_t>();
-                    auto frameCount = config["FrameCount"].as<uint32_t>();
-                    auto photonBounceCount = config["PhotonBounceCount"].as<uint32_t>();
-
-                    // Print them out (or use them in your application)
-                    std::cout << "Gamma: " << gamma << std::endl;
-                    std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
-                    std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
-                    std::cout << "FrameCount: " << frameCount << std::endl;
-
-                    m_renderSettings.gammaCorrection = gamma;
-                }
-                else {
-
-                    Log::Logger::getInstance()->warning("Did not load params from dataset folder");
-                }
-                break;
-            }
-        }
-    }
 
     torch::Tensor EditorDifferentiableRenderer::loadPFM(const std::string& filename, int expectedWidth,
                                                         int expectedHeight) {

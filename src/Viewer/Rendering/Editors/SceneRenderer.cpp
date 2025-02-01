@@ -247,7 +247,7 @@ namespace VkRender {
 
             if (meshData->isDynamic) {
                 key.vertexShaderName = "CameraGizmo.vert";
-                key.fragmentShaderName = "default.frag";
+                key.fragmentShaderName = "defaultTexture.frag";
                 key.vertexInputBindingDescriptions.clear();
                 key.vertexInputAttributes.clear();
                 key.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;

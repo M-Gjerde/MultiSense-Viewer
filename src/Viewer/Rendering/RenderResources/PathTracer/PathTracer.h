@@ -26,8 +26,6 @@ namespace VkRender::PathTracer {
 
             KernelType kernelType = KERNEL_PATH_TRACER_2DGS;
 
-            // Device and execution settings
-            bool clearImageMemory = false;
             // Render settings
             float gammaCorrection = 2.2f;
             bool changed = false;
@@ -66,15 +64,19 @@ namespace VkRender::PathTracer {
         ~PhotonTracer();
 
 
-
+        const PipelineSettings& getPipelineSettings() {
+            return m_pipelineSettings;
+        }
         void uploadGaussiansFromTensors(GPUDataTensors& data);
+
+
+        BackwardInfo m_backwardInfo; // TODO make private once we figure out the strucutre of this.
 
     private:
         PipelineSettings m_pipelineSettings;
 
         Application* m_context;
         std::unique_ptr<RenderInformation> m_renderInformation;
-        BackwardInfo m_backwardInfo;
 
         float* m_imageMemory = nullptr;
 

@@ -13,25 +13,6 @@ namespace VkRender {
         bool reloadRenderer = false;
         bool step = false;
         bool toggleStep = false;
-        bool backprop = false;
-        bool uploadScene = false;
-
-        bool checkStartAccumulation = true;
-
-        std::string kernelDevice = "";
-        int selectedDeviceIndex = 0;
-        bool switchKernelDevice = false;
-
-        // Old
-        bool renderFromViewpoint = false;
-        bool saveImage = false;
-        bool denoise = false;
-
-        // Render settings
-        int photonCount = 1e4;
-        int numBounces = 32;
-        float gammaCorrection = 3.5f;
-
         // Constructor that copies everything from base EditorUI
         EditorDifferentiableRendererLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };

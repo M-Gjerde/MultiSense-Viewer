@@ -37,7 +37,6 @@ namespace VkRender {
         ~EditorImage() override = default;
 
         void onMouseMove(const MouseButtons &mouse) override;
-        void onPipelineReload() override;
 
         void onFileDrop(const std::filesystem::path &path) override;
 
