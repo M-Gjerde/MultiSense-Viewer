@@ -24,9 +24,11 @@ UsageMonitor::UsageMonitor() {
     // Connect to CRL server
     server = std::make_unique<VkRender::ServerConnection>(config.getAnonymousIdentifier(), config.getServerInfo());
 
+    /*
     getAppVersionRemoteFuture = std::async(std::launch::async, [&]() {
         return server->getLatestApplicationVersionRemote();
     });
+    */
 
 }
 

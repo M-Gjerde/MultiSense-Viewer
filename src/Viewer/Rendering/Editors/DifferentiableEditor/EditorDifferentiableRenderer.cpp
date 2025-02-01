@@ -35,6 +35,7 @@ namespace VkRender {
 
         m_activeSceneCamera = std::make_shared<ArcballCamera>();
         m_activeSceneCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
+
     }
 
     void EditorDifferentiableRenderer::onEditorResize() {
@@ -43,11 +44,12 @@ namespace VkRender {
 
     void EditorDifferentiableRenderer::onSceneLoad(std::shared_ptr<Scene> scene) {
         m_activeScene = scene;
-        initializeDifferentiableRenderer();
+        //initializeDifferentiableRenderer();
     }
 
 
     void EditorDifferentiableRenderer::onUpdate() {
+        return;
         auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
         if (imageUI->reloadRenderer) {
             initializeDifferentiableRenderer();
@@ -61,10 +63,10 @@ namespace VkRender {
         }
 
         if (imageUI->switchKernelDevice) {
-            PathTracer::PhotonTracer::Settings settings;
-            settings.kernelDevice = imageUI->kernelDevice;
-            m_pathTracer->setExecutionDevice(settings);
-            m_pathTracer->upload(m_context->activeScene());
+            //PathTracer::PhotonTracer::Settings settings;
+            //settings.kernelDevice = imageUI->kernelDevice;
+            //m_pathTracer->setExecutionDevice(settings);
+            //m_pathTracer->upload(m_context->activeScene());
         }
 
         // ----------------------------------------------------------
@@ -306,13 +308,15 @@ namespace VkRender {
                 m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
                 float width = sceneCamera->parameters().width;
                 float height = sceneCamera->parameters().height;
+
+                /*
                 m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
                 m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
-                m_pathTracer->setActiveCamera(cameraComponent.getPinholeCamera(),
-                                              &entity.getComponent<TransformComponent>());
-                m_pathTracer->upload(m_activeScene);
+                */
+                //m_pathTracer->setActiveCamera(cameraComponent.getPinholeCamera(),&entity.getComponent<TransformComponent>());
+                //m_pathTracer->upload(m_activeScene);
                 m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
                     m_pathTracer.get(), m_context->activeScene());
 
@@ -339,16 +343,11 @@ namespace VkRender {
                     std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
                     std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
                     std::cout << "FrameCount: " << frameCount << std::endl;
-                    m_renderSettings.photonCount = photonsEmitted;
-                    m_renderSettings.numBounces = photonBounceCount;
+
                     m_renderSettings.gammaCorrection = gamma;
-                    m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
                 }
                 else {
-                    m_renderSettings.photonCount = 10000;
-                    m_renderSettings.numBounces = 32;
-                    m_renderSettings.gammaCorrection = 3.0f;
-                    m_renderSettings.kernelType = PathTracer::KERNEL_PATH_TRACER_2DGS;
+
                     Log::Logger::getInstance()->warning("Did not load params from dataset folder");
                 }
                 break;

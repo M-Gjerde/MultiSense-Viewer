@@ -23,6 +23,11 @@ namespace VkRender {
     class EditorPathTracer : public Editor {
     public:
         EditorPathTracer() = delete;
+        ~EditorPathTracer() {
+            // Make sure path tracer gets destroyed before the SYCL device
+            m_pathTracer.reset();
+            m_syclDevice.reset();
+        }
 
         explicit EditorPathTracer(EditorCreateInfo &createInfo, UUID uuid);
 
@@ -33,11 +38,13 @@ namespace VkRender {
                 std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
                 uint32_t frameIndex);
         void bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command);
+        void saveImage();
 
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
 
         void onMouseMove(const MouseButtons &mouse) override;
         void onPipelineReload() override;
+        void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output);
 
         void onFileDrop(const std::filesystem::path &path) override;
 
@@ -54,6 +61,7 @@ namespace VkRender {
         std::shared_ptr<VulkanTexture2D> m_colorTexture;
 
         std::unique_ptr<PathTracer::PhotonTracer> m_pathTracer;
+        std::unique_ptr<SyclDeviceSelector> m_syclDevice;
 
         std::shared_ptr<ArcballCamera> m_editorCamera;
         CameraComponent* m_lastActiveCamera = nullptr;

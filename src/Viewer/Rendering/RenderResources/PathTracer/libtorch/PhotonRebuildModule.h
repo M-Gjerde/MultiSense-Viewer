@@ -19,7 +19,7 @@ namespace VkRender::PathTracer {
         ~PhotonRebuildModule();
 
         // forward() will trigger a ray trace and return an image tensor
-        torch::Tensor forward(PhotonTracer::Settings& settings);
+        torch::Tensor forward(PhotonTracer::RenderSettings& settings);
 
         float* getRenderedImage();
         void freeData();

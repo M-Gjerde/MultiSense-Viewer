@@ -167,7 +167,7 @@ namespace VkRender {
         // Selection menu
         std::string type;
         EditorType selectedType;
-        bool changed = false;
+        bool newEditorTypeRequested = false;
 
         // assign some random background colors
         EditorUI() {

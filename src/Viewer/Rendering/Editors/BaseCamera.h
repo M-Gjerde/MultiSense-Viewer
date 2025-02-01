@@ -48,6 +48,7 @@ namespace VkRender {
         }
 
         struct Matrices {
+            glm::mat4 transform = glm::mat4(1.0f);
             glm::mat4 view = glm::mat4(1.0f);
             glm::mat4 projection = glm::mat4(1.0f);
             glm::vec3 position = glm::vec3(0.0f);
@@ -62,11 +63,13 @@ namespace VkRender {
             // The view matrix is typically the inverse of the camera's world transform
             matrices.position = glm::vec3(worldTransform[3]); // Convert vec4 to vec3 (drop the w component)
             matrices.view = glm::inverse(worldTransform);
+            matrices.transform = worldTransform;
         }
         virtual void updateViewMatrix(TransformComponent& trans) {
             // The view matrix is typically the inverse of the camera's world transform
             matrices.position = trans.getPosition(); // Convert vec4 to vec3 (drop the w component)
             matrices.view = glm::inverse(trans.getTransform());
+            matrices.transform = trans.getTransform();
         }
 
         virtual void updateProjectionMatrix() {

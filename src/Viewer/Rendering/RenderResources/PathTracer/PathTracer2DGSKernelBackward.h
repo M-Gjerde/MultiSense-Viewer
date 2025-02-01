@@ -11,13 +11,11 @@ namespace VkRender::PathTracer {
     class LightTracerKernelBackward {
     public:
         LightTracerKernelBackward(GPUData gpuData,
-                                  uint32_t numPhotons,
-                                  TransformComponent cameraPose,
-                                  PinholeCamera* camera,
-                                  uint32_t maxBounces,
-                                  PCG32* rng)
-            : m_gpuData(gpuData), m_numPhotons(numPhotons), m_cameraTransform(cameraPose), m_camera(camera),
-              m_maxBounces(maxBounces), m_rng(rng) {
+                          TransformComponent cameraPose,
+                          PinholeCamera* camera,
+                          GPUDataOutput* gpuDataOutput,
+                          PCG32* rng)
+            : m_gpuData(gpuData), m_cameraTransform(cameraPose), m_camera(camera), m_gpuDataOutput(gpuDataOutput), m_rng(rng) {
         }
 
         void operator()(sycl::item<1> item) const {
@@ -31,6 +29,8 @@ namespace VkRender::PathTracer {
 
     private:
         GPUData m_gpuData{};
+        GPUDataOutput* m_gpuDataOutput{};
+
         uint32_t m_numPhotons{};
         uint32_t m_maxBounces = 5; // e.g. 5, 8, or 10
 
@@ -44,59 +44,25 @@ namespace VkRender::PathTracer {
         void traceOnePhoton(size_t photonID) const {
             auto cameraTransform = m_cameraTransform.getTransform();
             glm::mat4 worldToCamera = glm::inverse(cameraTransform);
-
-            // Camera plane normal in world space
-            glm::vec3 cameraNormal = glm::normalize(
-                glm::mat3(cameraTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
+            glm::vec3 cameraNormal = glm::normalize(glm::mat3(cameraTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
             glm::vec3 pinholePosition = m_cameraTransform.getPosition();
-
-            glm::vec3 cameraPlanePointWorld = glm::vec3(
-                cameraTransform *
-                glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
+            glm::vec3 cameraPlanePointWorld = glm::vec3(cameraTransform *glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)); // A point on the plane
 
             glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[0].position;
             glm::vec3 gaussianNormal = m_gpuData.gaussianInputAssembly[0].normal;
             glm::vec2 gaussianScale = m_gpuData.gaussianInputAssembly[0].scale;
-            glm::vec3 emissionOrigin, emissionDir;
             float emissionPower = m_gpuData.gaussianInputAssembly[0].emission;
-            sampleGaussianPositionAndNormal(gaussianPosition, gaussianNormal, gaussianScale, photonID,
-                                            emissionOrigin,
-                                            emissionDir, emissionPower);
             //emissionOrigin = gaussianPosition;
-            float apertureDiameter = (10.0 / 4.0) / 1000;
+            float apertureDiameter = (m_camera->m_parameters.focalLength / m_camera->m_parameters.fNumber) / 1000;
             float apertureRadius = apertureDiameter * 0.5f;
 
-            float e0x = emissionOrigin.x;
-            float e0y = emissionOrigin.y;
-            float e0z = emissionOrigin.z;
-            float ep = emissionPower;
-
-
-            glm::vec3 apertureHitPoint;
-
-            glm::vec3 emissionDirection = sampleDirectionTowardAperture(
-                emissionOrigin, pinholePosition, cameraNormal,
-                apertureRadius, apertureHitPoint, photonID);
-
-            //glm::vec3 emissionDirection = glm::normalize(pinholePosition - emissionOrigin);
-            //glm::vec3 apertureHitPoint = pinholePosition;
-            float e_tmin = FLT_MAX;
-            float cosAngleHit = 0.0f;
-            glm::vec3 cameraHitPointWorld(0.0f);
-            checkCameraPlaneIntersection(emissionOrigin, emissionDirection,
-                                         cameraHitPointWorld, e_tmin, cosAngleHit);
-
             // For clarity, rename e_o = emissionOrigin, e_d = apertureSampleDir
-            glm::vec3 e_o = emissionOrigin;
-            glm::vec3 e_d = emissionDirection;
-            glm::vec3 a = apertureHitPoint;
+            glm::vec3 e_o = m_gpuDataOutput[photonID].emissionOrigin;
+            glm::vec3 e_d = m_gpuDataOutput[photonID].emissionDirection;
+            glm::vec3 a =   m_gpuDataOutput[photonID].apertureHitPoint;
+            glm::vec3 hitCam =   m_gpuDataOutput[photonID].cameraHitPointLocal;
+            float etmin = m_gpuDataOutput[photonID].emissionDirectionLength;
 
-            glm::vec3 hitCam = e_o + e_tmin * e_d;
-            // Then your camera transform / projection to pixel
-            // (some steps might differ if you do them in camera space first)
-            glm::mat4 cameraToWorld = m_cameraTransform.getTransform();
-            glm::vec4 hitCam4 = worldToCamera * glm::vec4(hitCam, 1.0f);
-            hitCam = glm::vec3(hitCam4) / hitCam4.w;
             // Camera intrinsics
             float fx = m_camera->parameters().fx;
             float fy = m_camera->parameters().fy;
@@ -158,7 +124,7 @@ namespace VkRender::PathTracer {
                 // Compute second term: (∂e_tmin / ∂e_o) * e_d (3x3 * 3x1 = 3x3)
                 dp_de_o += glm::outerProduct(e_d, etmin_de_o);
                 // Compute third term: e_tmin * (∂e_d / ∂e_o)  (scalar * 3x3 = 3x3)
-                dp_de_o += e_tmin * Jed_eo;
+                dp_de_o += etmin * Jed_eo;
                 // 2.4) Derivatives for the pinhole projection
                 // (d) project p -> (u,v).  Then chain:
                 //     d(u,v)/de_o = J_{(u,v),p} * dp/de_o

@@ -61,7 +61,7 @@ namespace VkRender {
         torch::Tensor m_accumulatedTensor = torch::Tensor();
         uint32_t m_numAccumulated = 0;
 
-        PathTracer::PhotonTracer::Settings m_renderSettings;
+        PathTracer::PhotonTracer::RenderSettings m_renderSettings;
 
     };
 }

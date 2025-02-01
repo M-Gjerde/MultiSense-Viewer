@@ -28,7 +28,9 @@ namespace VkRender {
         bool switchKernelDevice = false;
 
         int photonCount = 1e4;
-        int numBounces = 32;
+        int numBounces = 1;
+
+        bool resetPathTracer = false;
 
         struct ShaderSelection {
             int someVariable = 0;

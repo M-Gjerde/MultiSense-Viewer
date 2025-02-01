@@ -76,7 +76,6 @@ namespace VkRender {
         }
 
 
-
     private:
         TransformComponent m_transform;
     };

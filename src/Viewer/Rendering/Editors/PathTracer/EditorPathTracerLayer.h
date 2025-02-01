@@ -13,35 +13,29 @@
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayerUI.h"
 
 namespace VkRender {
-
-
     class EditorPathTracerLayer : public Layer {
-
     public:
         /** Called once upon this object creation**/
         void onAttach() override {
-
         }
 
         /** Called after frame has finished rendered **/
         void onFinishedRender() override {
-
         }
 
 
         /** Called once per frame **/
         void onUIRender() override {
-
             // Set window position and size
             // Set window position and size
-            ImVec2 window_pos = ImVec2( m_editor->ui()->layoutConstants.uiXOffset, 0.0f); // Position (x, y)
+            ImVec2 window_pos = ImVec2(m_editor->ui()->layoutConstants.uiXOffset, 0.0f); // Position (x, y)
             ImVec2 window_size = ImVec2(m_editor->ui()->width - window_pos.x,
                                         m_editor->ui()->height - window_pos.y); // Size (width, height)
 
             // Set window flags to remove decorations
             ImGuiWindowFlags window_flags =
-                    ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
-                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground;
+                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus |
+                ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBackground;
 
             // Set next window position and size
             ImGui::SetNextWindowPos(window_pos, ImGuiCond_Always);
@@ -54,7 +48,7 @@ namespace VkRender {
             ImGui::Checkbox("Active camera", &imageUI->renderFromViewpoint);
             ImGui::SameLine();
 
-            imageUI->uploadScene = ImGui::Button("UploadScene");
+            imageUI->resetPathTracer = ImGui::Button("Reset");
             ImGui::SameLine();
 
             imageUI->render = ImGui::Button("Render");
@@ -76,17 +70,19 @@ namespace VkRender {
             }
             // Render ImGui combo box
             ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Render Kernel", &imageUI->selectedKernelIndex, kernels, PathTracer::KERNEL_TYPE_COUNT)) {
+            if (ImGui::Combo("##Render Kernel", &imageUI->selectedKernelIndex, kernels,
+                             PathTracer::KERNEL_TYPE_COUNT)) {
                 // Update the kernel based on selection
             }
             imageUI->kernel = static_cast<PathTracer::KernelType>(imageUI->selectedKernelIndex);
 
 
-            ImGui::SameLine();            // Dropdown for selecting render kernel
-            const char* selections[] = { "CPU", "GPU" }; // TODO This should come from selectSyclDevices
+            ImGui::SameLine(); // Dropdown for selecting render kernel
+            const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
             imageUI->switchKernelDevice = false;
             ImGui::SetNextItemWidth(100.0f);
-            if (ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections, IM_ARRAYSIZE(selections))) {
+            if (ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections,
+                             IM_ARRAYSIZE(selections))) {
                 imageUI->switchKernelDevice = true;
             }
             imageUI->kernelDevice = selections[imageUI->selectedDeviceIndex];
@@ -94,21 +90,19 @@ namespace VkRender {
             ImGui::SameLine();
 
             imageUI->clearImageMemory = ImGui::Button("Clear image memory");
-            if (imageUI->clearImageMemory){
-                imageUI->render = true;
-            }
 
             const int sliderMin = 1000;
             const int sliderMax = 10000000;
 
             ImGui::SetNextItemWidth(150);
-            if (ImGui::SliderInt("PhotonCount", &imageUI->photonCount, sliderMin, sliderMax, "%d", ImGuiSliderFlags_Logarithmic)) {
+            if (ImGui::SliderInt("PhotonCount", &imageUI->photonCount, sliderMin, sliderMax, "%d",
+                                 ImGuiSliderFlags_Logarithmic)) {
                 // Normalize to the nearest 10,000 and ensure it's at least 1000
                 imageUI->photonCount = std::max((imageUI->photonCount + 5000) / 10000 * 10000, sliderMin);
             }
             ImGui::SameLine();
             ImGui::SetNextItemWidth(100);
-            if(ImGui::SliderInt("Light Bounces", &imageUI->numBounces, 1, 100)){
+            if (ImGui::SliderInt("Light Bounces", &imageUI->numBounces, 1, 100)) {
                 imageUI->clearImageMemory = true;
             };
             ImGui::SameLine();
@@ -120,12 +114,10 @@ namespace VkRender {
 
 
             ImGui::End();
-
         }
 
         /** Called once upon this object destruction **/
         void onDetach() override {
-
         }
     };
 }

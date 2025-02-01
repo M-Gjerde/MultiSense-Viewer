@@ -32,7 +32,7 @@ namespace VkRender::PathTracer {
         static torch::Tensor forward(
             torch::autograd::AutogradContext* ctx,
             // Non-tensor arguments can also be captured by custom means:
-            PhotonTracer::Settings& settings,
+            PhotonTracer::RenderSettings& settings,
             PhotonTracer* pathTracer,
             torch::Tensor positions,
             torch::Tensor scales,

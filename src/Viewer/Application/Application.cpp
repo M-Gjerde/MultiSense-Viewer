@@ -312,7 +312,7 @@ namespace VkRender {
     void Application::updateEditors() {
         // Reorder Editors elements according to UI
         for (auto& editor : m_editors) {
-            if (editor->ui()->changed) {
+            if (editor->ui()->newEditorTypeRequested) {
                 // Set a new one
                 Log::Logger::getInstance()->info("New Editor requested");
                 auto& ci = editor->getCreateInfo();

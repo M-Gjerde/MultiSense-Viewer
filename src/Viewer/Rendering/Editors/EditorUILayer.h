@@ -38,16 +38,16 @@ namespace VkRender {
 
             std::vector<EditorType> items = getSelectableEditorTypes();
             static int item_current_idx = 0; // Here we store our current item index
-            m_editor->ui()->changed = false;
+            m_editor->ui()->newEditorTypeRequested = false;
 
-            m_editor->ui()->changed = false;
+            m_editor->ui()->newEditorTypeRequested = false;
             if (ImGui::BeginPopup("EditorSelectionPopup")) {
                 ImGui::SeparatorText("Editor Types");
                 for (int i = 0; i < items.size(); i++) {
                     if (ImGui::Selectable(editorTypeToString(items[i]).c_str())) {
                         item_current_idx = i;
                         m_editor->ui()->selectedType = items[item_current_idx];
-                        m_editor->ui()->changed = true;
+                        m_editor->ui()->newEditorTypeRequested = true;
                     }
                 }
                 ImGui::MenuItem("Console", nullptr, &m_editor->ui()->showDebugWindow);

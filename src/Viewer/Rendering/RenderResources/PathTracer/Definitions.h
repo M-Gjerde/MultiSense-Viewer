@@ -75,13 +75,12 @@ namespace VkRender::PathTracer {
         float phongExponent; // Shininess exponent
     };
 
+    // TODO possibly redundant
     struct RenderInformation {
         uint64_t photonsAccumulated = 0;
         uint64_t totalPhotons = 0;
-
-        float gamma = 2.2f;
-
-        uint32_t numBounces = 32;
+        float gamma = 0.0f;
+        uint32_t numBounces = 0;
         uint32_t frameID = 0;
 
     };
@@ -108,9 +107,22 @@ namespace VkRender::PathTracer {
         float * gradientImage = nullptr;
 
         float* imageMemory = nullptr;
-        float* contribution = nullptr;
 
+        PinholeCamera* pinholeCamera = nullptr;
+        TransformComponent* cameraTransform = nullptr;
         RenderInformation* renderInformation = nullptr;
+    };
+
+    // Stored per photon
+    struct GPUDataOutput {
+        // Direct lighting parameters
+        bool hit;
+        glm::vec3 emissionOrigin;          // eo
+        glm::vec3 emissionDirection;       // ed
+        glm::vec3 apertureHitPoint;        // a
+        float emissionDirectionLength;     // etmin
+        glm::vec3 cameraHitPointLocal;     // p
+
     };
 
 

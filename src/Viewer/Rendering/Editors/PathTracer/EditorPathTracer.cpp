@@ -38,7 +38,7 @@ namespace VkRender {
         m_editorCamera = std::make_shared<ArcballCamera>();
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
 
-
+        m_syclDevice = std::make_unique<SyclDeviceSelector>(SyclDeviceSelector::DeviceType::CPU);
     }
 
     void EditorPathTracer::onEditorResize() {
@@ -56,6 +56,7 @@ namespace VkRender {
 
 
 
+        /*
         if (m_lastActiveCamera) {
             auto camera = m_lastActiveCamera->getPinholeCamera();
             float textureAspect = static_cast<float>(camera->parameters().width) / static_cast<float>(camera->parameters().height);
@@ -89,6 +90,7 @@ namespace VkRender {
             m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
 
         }
+        */
     }
 
     void EditorPathTracer::onFileDrop(const std::filesystem::path& path) {
@@ -106,7 +108,18 @@ namespace VkRender {
         m_editorCamera = std::make_shared<ArcballCamera>(
                 static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
+        m_meshInstances.reset();
+        m_meshInstances = nullptr;
+        m_meshInstances = EditorUtils::setupMesh(m_context);
+        TransformComponent transformComponent;
+        transformComponent.setPosition(m_editorCamera->matrices.position);
+        transformComponent.setRotationQuaternion(glm::quat_cast(glm::inverse(m_editorCamera->matrices.view)));
+        PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(), m_createInfo.width, m_createInfo.height);
+        m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
+        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        m_lastActiveCamera = nullptr;
 
+        /*
         if (m_lastActiveCamera) {
             auto camera = m_lastActiveCamera->getPinholeCamera();
             float textureAspect = static_cast<float>(camera->parameters().width) / static_cast<float>(camera->parameters().height);
@@ -138,36 +151,26 @@ namespace VkRender {
             m_pathTracer->setActiveCamera(transformComponent, m_createInfo.width, m_createInfo.height);
             m_lastActiveCamera = nullptr;
         }
+        */
     }
 
 
     void EditorPathTracer::onPipelineReload() {
     }
 
-    // Example function for single-channel to 3-channel expansion
-    std::vector<float> expandTo3Channels(const float* singleChannelImage, uint32_t width, uint32_t height) {
-        std::vector<float> rgbImage(width * height * 3);
-        for (uint32_t i = 0; i < width * height; ++i) {
-            rgbImage[i * 3 + 0] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // R
-            rgbImage[i * 3 + 1] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // G
-            rgbImage[i * 3 + 2] = static_cast<uint8_t>(std::clamp(singleChannelImage[i], 0.0f, 1.0f)); // B
-        }
-        return rgbImage;
-    }
 
-    void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output) {
+    void EditorPathTracer::denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output) {
 #ifdef SYCL_ENABLED
-
-        // Expand single-channel image to 3 channels
-        // Initialize OIDN
+        // Initialize OIDN device and commit
         oidn::DeviceRef device = oidn::newDevice();
         device.commit();
-        uint32_t imageSize = width * height;
-        // Allocate input and output buffers
+        const uint32_t imageSize = width * height;
+
+        // Allocate input and output buffers for OIDN
         oidn::BufferRef inputBuffer = device.newBuffer(imageSize * sizeof(float));
         oidn::BufferRef outputBuffer = device.newBuffer(imageSize * sizeof(float));
 
-        // Copy input data to OIDN buffer
+        // Copy input data to the device buffer
         std::memcpy(inputBuffer.getData(), singleChannelImage, imageSize * sizeof(float));
 
         // Create and configure the denoising filter
@@ -180,194 +183,106 @@ namespace VkRender {
         // Execute the filter
         filter.execute();
 
-        // Check for errors
+        // Check for errors from OIDN
         const char* errorMessage;
         if (device.getError(errorMessage) != oidn::Error::None) {
             std::cerr << "OIDN Error: " << errorMessage << std::endl;
             return;
         }
-/*
-        // Retrieve and normalize the denoised image
-        const float* outputBufferData = static_cast<const float*>(outputBuffer.getData());
-        // Find min and max values
-        float minVal = std::numeric_limits<float>::max();
-        float maxVal = std::numeric_limits<float>::lowest();
-        for (uint32_t i = 0; i < imageSize; ++i) {
-            minVal = std::min(minVal, outputBufferData[i]);
-            maxVal = std::max(maxVal, outputBufferData[i]);
-        }
 
-        // Normalize and copy to output
+        // Retrieve the denoised image data
         output.resize(imageSize);
-        float range = maxVal - minVal;
-        for (uint32_t i = 0; i < imageSize; ++i) {
-            output[i] = (outputBufferData[i] - minVal) / range;
-        }
-        */
-
-        // Retrieve the denoised image
-        output.resize(imageSize);
-        std::memcpy(output.data(), outputBuffer.getData(), output.size() * sizeof(float));
+        std::memcpy(output.data(), outputBuffer.getData(), imageSize * sizeof(float));
 #endif
-
     }
 
     void EditorPathTracer::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
-        m_activeScene = m_context->activeScene();
 
-        updateActiveCamera();
-
-        auto frameIndex = m_context->currentFrameIndex();
-
-        void* data;
-        vkMapMemory(m_context->vkDevice().m_LogicalDevice,
-                    m_shaderSelectionBuffer[frameIndex]->m_memory, 0, sizeof(EditorPathTracerLayerUI::ShaderSelection), 0, &data);
-        memcpy(data, &imageUI->shaderSelection, sizeof(EditorPathTracerLayerUI::ShaderSelection));
-        vkUnmapMemory(m_context->vkDevice().m_LogicalDevice, m_shaderSelectionBuffer[frameIndex]->m_memory);
-
-        if (imageUI->uploadScene) {
-            m_pathTracer->upload(m_context->activeScene());
+        if (imageUI->resetPathTracer) {
+            uint32_t width = m_createInfo.width;
+            uint32_t height = m_createInfo.height;
+            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(), width, height);
+            pipelineSettings.photonCount = imageUI->photonCount;
+            pipelineSettings.numBounces = imageUI->numBounces;
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
+            m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
         }
 
-        if (imageUI->switchKernelDevice) {
-            PathTracer::PhotonTracer::Settings settings;
-            settings.kernelDevice = imageUI->kernelDevice;
-            m_pathTracer->setExecutionDevice(settings);
-            m_pathTracer->upload(m_context->activeScene());
+        if (m_movedCamera) {
+            m_pathTracer->resetImage();
         }
 
         if (imageUI->render || imageUI->toggleRendering) {
-            PathTracer::PhotonTracer::Settings settings;
-            settings.clearImageMemory = imageUI->clearImageMemory;
-            settings.kernelType = imageUI->kernel;
-            settings.kernelDevice = imageUI->kernelDevice;
-            settings.photonCount = imageUI->photonCount;
-            settings.numBounces = imageUI->numBounces;
-            settings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
+            // Construct pinhole camera from
+            PinholeParameters pinholeParameters;
+            SharedCameraSettings cameraSettings;
+            pinholeParameters.width = m_createInfo.width;
+            pinholeParameters.height = m_createInfo.height;
+            pinholeParameters.cx = m_createInfo.width / 2;
+            pinholeParameters.cy = m_createInfo.height / 2;
+            pinholeParameters.fx = 600.0f;
+            pinholeParameters.fy = 600.0f;
+            PinholeCamera camera = PinholeCamera(cameraSettings, pinholeParameters);
+            PathTracer::PhotonTracer::RenderSettings renderSettings;
+            renderSettings.clearImageMemory = imageUI->clearImageMemory;
+            renderSettings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
+            renderSettings.cameraTransform = TransformComponent(m_editorCamera->matrices.transform);
+            renderSettings.camera = camera;
 
-            m_pathTracer->update(settings);
+
+            m_pathTracer->update(renderSettings);
             float* image = m_pathTracer->getImage();
             if (image) {
-                uint32_t width = m_colorTexture->width();
-                uint32_t height = m_colorTexture->height();
-                // Handle denoising if enabled
-                std::vector<uint8_t> convertedImage(width * height * 4); // 4 channels: RGBA
+                const uint32_t width  = m_colorTexture->width();
+                const uint32_t height = m_colorTexture->height();
+                const size_t totalPixels = static_cast<size_t>(width) * height;
 
+                // Prepare a container for the final image (after optional denoising)
+                const float* finalImage = image;
+                std::vector<float> denoisedImage; // only used if denoising is enabled
+
+                // Denoise if requested; otherwise, use the original image directly.
                 if (imageUI->denoise) {
-                    std::vector<float> denoisedImage;
                     denoiseImage(image, width, height, denoisedImage);
-                    for (uint32_t i = 0; i < width * height; ++i) {
-                        float r = denoisedImage[i]; // Assuming grayscale in the red channel
-
-                        convertedImage[i * 4 + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // R
-                        convertedImage[i * 4 + 1] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // G
-                        convertedImage[i * 4 + 2] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // B
-                        convertedImage[i * 4 + 3] = 255; // A (fully opaque)
+                    // Use the denoised data if the denoising call was successful.
+                    if (!denoisedImage.empty()) {
+                        finalImage = denoisedImage.data();
                     }
-
-                } else {
-                    for (uint32_t i = 0; i < width * height; ++i) {
-                        float r = image[i]; // Assuming grayscale in the red channel
-                        convertedImage[i * 4 + 0] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // R
-                        convertedImage[i * 4 + 1] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // G
-                        convertedImage[i * 4 + 2] = static_cast<uint8_t>(std::clamp(r, 0.0f, 1.0f) * 255.0f); // B
-                        convertedImage[i * 4 + 3] = 255; // A (fully opaque)
-                    }
+                }
+                // Allocate the converted image buffer (RGBA: 4 channels per pixel)
+                std::vector<uint8_t> convertedImage(totalPixels * 4);
+                // Convert the final image from float [0, 1] to 8-bit RGBA.
+                // We assume a grayscale image is stored in the red channel.
+                for (size_t i = 0; i < totalPixels; ++i) {
+                    // Clamp the float value and scale to 0-255.
+                    // (Multiplication by 255.0f and conversion to uint8_t)
+                    const float clamped = std::clamp(finalImage[i], 0.0f, 1.0f);
+                    const uint8_t value = static_cast<uint8_t>(clamped * 255.0f);
+                    const size_t offset = i * 4;
+                    convertedImage[offset + 0] = value;  // R
+                    convertedImage[offset + 1] = value;  // G
+                    convertedImage[offset + 2] = value;  // B
+                    convertedImage[offset + 3] = 255;    // A (fully opaque)
                 }
                 // Upload the texture
                 m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
             }
         }
         if (imageUI->saveImage) {
-            // Save render information:
-            PathTracer::RenderInformation info = m_pathTracer->getRenderInfo();
-            // Create a YAML emitter
-            YAML::Emitter out;
-            out << YAML::BeginMap;
-            out << YAML::Key << "Gamma"                    << YAML::Value << info.gamma;
-            out << YAML::Key << "PhotonHitCount"       << YAML::Value << info.photonsAccumulated;
-            out << YAML::Key << "PhotonBounceCount"       << YAML::Value << info.numBounces;
-            out << YAML::Key << "PhotonsEmitted"       << YAML::Value << info.totalPhotons;
-            out << YAML::Key << "FrameCount"                  << YAML::Value << info.frameID; // Start from 0
-            out << YAML::EndMap;
-
-            // Write YAML content to a file
-            std::string infoFileName = "render_info.yaml";  // Change to your desired infoFileName/path
-            std::ofstream fout(infoFileName);
-            if (fout.is_open()) {
-                fout << out.c_str();
-                fout.close();
-            }
-
-            uint32_t width = m_colorTexture->width();
-            uint32_t height = m_colorTexture->height();
-            float* image = m_pathTracer->getImage();
-            std::vector<float> denoisedImage;
-
-            if (imageUI->denoise) {
-                denoiseImage(image, width, height, denoisedImage);
-                image = denoisedImage.data();
-            }
-
-
-            std::filesystem::path filename = "screenshot.pfm";
-            std::ofstream file(filename, std::ios::binary);
-
-            if (!file.is_open()) {
-                throw std::runtime_error("Failed to open file for writing: " + filename.string());
-            }
-            // Write the PFM header
-            // "PF" indicates a color image. Use "Pf" for grayscale.
-            file << "PF\n" << width << " " << height << "\n-1.0\n";
-
-            // PFM expects the data in binary format, row by row from top to bottom
-            // Assuming your m_imageMemory is in RGBA format with floats
-
-            // Allocate a temporary buffer for RGB data
-            std::vector<float> rgbData(width * height * 3);
-
-            for (uint32_t y = 0; y < height; ++y) {
-                for (uint32_t x = 0; x < width; ++x) {
-                    uint32_t pixelIndex = (y * width + x);
-                    uint32_t rgbIndex = (y * width + x) * 3;
-
-                    rgbData[rgbIndex + 0] = image[pixelIndex]; // R
-                    rgbData[rgbIndex + 1] = image[pixelIndex]; // G
-                    rgbData[rgbIndex + 2] = image[pixelIndex]; // B
-                }
-            }
-
-            // Write the RGB float data
-            file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
-
-            if (!file) {
-                throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
-            }
-
-            file.close();
-
-            std::vector<uint8_t> rgbDataPng(width * height * 3);
-
-            for (uint32_t y = 0; y < height; ++y) {
-                for (uint32_t x = 0; x < width; ++x) {
-                    uint32_t pixelIndex = (y * width + x);
-                    uint32_t rgbIndex = pixelIndex * 3;
-
-                    // Assuming image is in RGBA format with float values in range [0.0, 1.0]
-                    rgbDataPng[rgbIndex + 0] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // R
-                    rgbDataPng[rgbIndex + 1] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // G
-                    rgbDataPng[rgbIndex + 2] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // B
-                }
-            }
-
-
-            // Write the image to a PNG file
-            if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3, rgbDataPng.data(), width * 3)) {
-                throw std::runtime_error("Failed to write PNG file: " + filename.string());
-            }
-
+            saveImage();
         }
+
+
+        auto frameIndex = m_context->currentFrameIndex();
+        void* data;
+        vkMapMemory(m_context->vkDevice().m_LogicalDevice,
+                    m_shaderSelectionBuffer[frameIndex]->m_memory, 0, sizeof(EditorPathTracerLayerUI::ShaderSelection), 0, &data);
+        memcpy(data, &imageUI->shaderSelection, sizeof(EditorPathTracerLayerUI::ShaderSelection));
+        vkUnmapMemory(m_context->vkDevice().m_LogicalDevice, m_shaderSelectionBuffer[frameIndex]->m_memory);
+
+        // Reset some state variables
+        m_movedCamera = false;
     }
 
 
@@ -507,9 +422,101 @@ namespace VkRender {
     }
 
 
+    void EditorPathTracer::saveImage() {
+        auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
+
+            // Save render information:
+            PathTracer::RenderInformation info = m_pathTracer->getRenderInfo();
+            // Create a YAML emitter
+            YAML::Emitter out;
+            out << YAML::BeginMap;
+            out << YAML::Key << "Gamma"                    << YAML::Value << info.gamma;
+            out << YAML::Key << "PhotonHitCount"       << YAML::Value << info.photonsAccumulated;
+            out << YAML::Key << "PhotonBounceCount"       << YAML::Value << info.numBounces;
+            out << YAML::Key << "PhotonsEmitted"       << YAML::Value << info.totalPhotons;
+            out << YAML::Key << "FrameCount"                  << YAML::Value << info.frameID; // Start from 0
+            out << YAML::EndMap;
+
+            // Write YAML content to a file
+            std::string infoFileName = "render_info.yaml";  // Change to your desired infoFileName/path
+            std::ofstream fout(infoFileName);
+            if (fout.is_open()) {
+                fout << out.c_str();
+                fout.close();
+            }
+
+            uint32_t width = m_colorTexture->width();
+            uint32_t height = m_colorTexture->height();
+            float* image = m_pathTracer->getImage();
+            std::vector<float> denoisedImage;
+
+            if (imageUI->denoise) {
+                denoiseImage(image, width, height, denoisedImage);
+                image = denoisedImage.data();
+            }
+
+
+            std::filesystem::path filename = "screenshot.pfm";
+            std::ofstream file(filename, std::ios::binary);
+
+            if (!file.is_open()) {
+                throw std::runtime_error("Failed to open file for writing: " + filename.string());
+            }
+            // Write the PFM header
+            // "PF" indicates a color image. Use "Pf" for grayscale.
+            file << "PF\n" << width << " " << height << "\n-1.0\n";
+
+            // PFM expects the data in binary format, row by row from top to bottom
+            // Assuming your m_imageMemory is in RGBA format with floats
+
+            // Allocate a temporary buffer for RGB data
+            std::vector<float> rgbData(width * height * 3);
+
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    uint32_t pixelIndex = (y * width + x);
+                    uint32_t rgbIndex = (y * width + x) * 3;
+
+                    rgbData[rgbIndex + 0] = image[pixelIndex]; // R
+                    rgbData[rgbIndex + 1] = image[pixelIndex]; // G
+                    rgbData[rgbIndex + 2] = image[pixelIndex]; // B
+                }
+            }
+
+            // Write the RGB float data
+            file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
+
+            if (!file) {
+                throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
+            }
+
+            file.close();
+
+            std::vector<uint8_t> rgbDataPng(width * height * 3);
+
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    uint32_t pixelIndex = (y * width + x);
+                    uint32_t rgbIndex = pixelIndex * 3;
+
+                    // Assuming image is in RGBA format with float values in range [0.0, 1.0]
+                    rgbDataPng[rgbIndex + 0] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // R
+                    rgbDataPng[rgbIndex + 1] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // G
+                    rgbDataPng[rgbIndex + 2] = static_cast<uint8_t>(std::clamp(image[pixelIndex], 0.0f, 1.0f) * 255.0f); // B
+                }
+            }
+
+
+            // Write the image to a PNG file
+            if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3, rgbDataPng.data(), width * 3)) {
+                throw std::runtime_error("Failed to write PNG file: " + filename.string());
+            }
+
+    }
     void EditorPathTracer::updateActiveCamera(){
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
 
+        /*
         // By default, assume we are *not* using a scene camera this frame
         bool isSceneCameraActive = false;
         CameraComponent *sceneCameraToUse = nullptr;
@@ -612,7 +619,7 @@ namespace VkRender {
                 m_sceneRenderer->resize(ci);
 
                 onRenderSettingsChanged();
-                */
+
 
                 m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, m_activeScene, width, height);
                 m_colorTexture = EditorUtils::createEmptyTexture(width, height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
@@ -630,8 +637,9 @@ namespace VkRender {
             m_lastActiveCamera = nullptr;
         }
 
+*/
         // Store this frame's scene camera status for next frame’s comparison
-        m_wasSceneCameraActive = isSceneCameraActive;
+        //m_wasSceneCameraActive = isSceneCameraActive;
     }
 
 

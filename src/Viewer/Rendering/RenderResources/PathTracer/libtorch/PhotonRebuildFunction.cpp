@@ -91,7 +91,7 @@ namespace VkRender::PathTracer {
 
 
     torch::Tensor PhotonRebuildFunction::forward(torch::autograd::AutogradContext* ctx,
-                                                 PhotonTracer::Settings& settings, PhotonTracer* pathTracer,
+                                                 PhotonTracer::RenderSettings& settings, PhotonTracer* pathTracer,
                                                  torch::Tensor positions, torch::Tensor scales,
                                                  torch::Tensor normals, torch::Tensor emissions,
                                                  torch::Tensor colors,
@@ -120,6 +120,7 @@ namespace VkRender::PathTracer {
         // with shape [height * width] or [height * width * channels].
         // We'll build a Torch tensor from that raw memory.
 
+        /*
         // For illustration:
         int64_t height = pathTracer->m_height;
         int64_t width = pathTracer->m_width;
@@ -131,8 +132,11 @@ namespace VkRender::PathTracer {
         auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
         auto output = torch::from_blob(rawImage, {height, width}, options).clone();
 
+
         // Return the rendered image
         return output;
+        */
+        return torch::Tensor();
     }
 
 
@@ -155,6 +159,7 @@ namespace VkRender::PathTracer {
         PhotonTracer* pathTracer = reinterpret_cast<PhotonTracer*>(pathTracerRaw);
         // Retrieve the path tracer pointer
         auto settingsPtr = ctx->saved_data["settings"].toInt();
+        /*
         PhotonTracer::Settings* settings = reinterpret_cast<PhotonTracer::Settings*>(settingsPtr);
 
         // We'll do a trivial zero gradient for demonstration
@@ -170,13 +175,14 @@ namespace VkRender::PathTracer {
         float grad_y = grad.y;
         float grad_z = grad.z;
 
-        auto grad_positions = torch::zeros_like(positions);
         auto gradPosA = grad_positions.accessor<float, 2>();
         for (int i = 0; i < grad_positions.size(0); ++i) {
             gradPosA[i][0] = grad_x;
             gradPosA[i][1] = grad_y;
             gradPosA[i][2] = grad_z;
         }
+*/
+        auto grad_positions = torch::zeros_like(positions);
 
         // Return them in the same order as forward inputs
         return {

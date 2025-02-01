@@ -21,7 +21,7 @@ namespace VkRender::PathTracer {
     }
 
     torch::Tensor
-    PhotonRebuildModule::forward(PhotonTracer::Settings& settings) {
+    PhotonRebuildModule::forward(PhotonTracer::RenderSettings& settings) {
         // 1) Call PhotonTracer::update(...) or any function you want to do the actual path tracing
         //    In your case:  rt_->update(...);
 

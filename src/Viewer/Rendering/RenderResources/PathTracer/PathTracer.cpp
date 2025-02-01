@@ -14,143 +14,104 @@
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernelBackward.h"
 
 namespace VkRender::PathTracer {
-    PhotonTracer::PhotonTracer(Application* ctx, std::shared_ptr<Scene>& scene, uint32_t width, uint32_t height) :
-        m_context(ctx), m_selector(SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU)) {
-        m_width = width;
-        m_height = height;
+    PhotonTracer::PhotonTracer(Application* ctx, const PipelineSettings& pipelineSettings,
+                               std::shared_ptr<Scene>& scene) :
+        m_pipelineSettings(pipelineSettings),
+        m_context(ctx) {
         // Load the scene into gpu memory
         // Create image memory
         // Allocate host memory for RGBA image (4 floats per pixel)
-        m_imageMemory = new float[width * height * 4];
+        m_imageMemory = new float[pipelineSettings.width * pipelineSettings.height];
+        m_backwardInfo.gradients = new glm::vec3[pipelineSettings.photonCount];
+        m_backwardInfo.sumGradients = new glm::vec3();
         m_renderInformation = std::make_unique<RenderInformation>();
 
-        m_backwardInfo.gradients = new glm::vec3[500000];
-        m_backwardInfo.sumGradients = new glm::vec3();
-    }
-
-    void PhotonTracer::setExecutionDevice(Settings& settings) {
-        freeResources();
-        if (settings.kernelDevice == "CPU") {
-            m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::CPU);
-        }
-        else if (settings.kernelDevice == "GPU") {
-            m_selector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
-        }
-        m_selector.getQueue().wait();
+        prepareImageAndInfoBuffers();
+        uploadVertexData(scene);
+        uploadGaussianData(scene);
     }
 
     RenderInformation PhotonTracer::getRenderInfo() {
         return *m_renderInformation;
     }
 
-void PhotonTracer::update(Settings& settings) {
-    try {
-        if (m_cameraTransform.moved() || settings.clearImageMemory)
-            resetState();
+    void PhotonTracer::update(RenderSettings& renderSettings) {
+        try {
+            auto& queue = m_pipelineSettings.queue;
+            // Update shared GPU/CPU render information
+            m_renderInformation->frameID++;
+            m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
+            m_renderInformation->gamma = renderSettings.gammaCorrection;
+            m_renderInformation->numBounces = m_pipelineSettings.numBounces;
+            queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+            queue.memcpy(m_gpu.pinholeCamera, &renderSettings.camera, sizeof(PinholeCamera));
+            queue.memcpy(m_gpu.cameraTransform, &renderSettings.cameraTransform, sizeof(TransformComponent));
 
-        auto& queue = m_selector.getQueue();
+            // Kernel Launch
+            sycl::range<1> globalRange(m_pipelineSettings.photonCount);
 
-        // Update render information
-        m_renderInformation->frameID++;
-        uint64_t simulatePhotonCount = settings.photonCount;
+            switch (renderSettings.kernelType) {
+            case KERNEL_PATH_TRACER_2DGS:
+                if (m_gpu.numGaussians > 0) {
+                    queue.submit([&](sycl::handler& cgh) {
+                        LightTracerKernel kernel(m_gpu, m_gpuDataOutput, m_pcg32);
+                        cgh.parallel_for(globalRange, kernel);
+                    });
+                }
+                break;
+            case KERNEL_PATH_TRACER_MESH:
+                queue.submit([&](sycl::handler& cgh) {
+                    PathTracerMeshKernels kernel(m_gpu, renderSettings.cameraTransform, m_gpu.pinholeCamera, m_pcg32);
+                    cgh.parallel_for(globalRange, kernel);
+                });
+                break;
+            default:
+                // Handle unsupported kernel type if necessary
+                    break;
+            }
+            queue.wait_and_throw();
 
-        // Initialize RNGs
-        std::vector<PCG32> rng(simulatePhotonCount);
-        for (uint64_t i = 0; i < simulatePhotonCount; ++i)
-            rng[i].init(m_renderInformation->frameID, i * m_renderInformation->frameID);
+            // Retrieve updated information from GPU
+            queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
+            queue.memcpy(m_imageMemory, m_gpu.imageMemory,
+                         m_pipelineSettings.width * m_pipelineSettings.height * sizeof(float));
+            queue.wait();
 
-        // Allocate and copy RNG to GPU
-        PCG32* rngGPU = sycl::malloc_device<PCG32>(simulatePhotonCount, queue);
-        queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * simulatePhotonCount);
+            double totalM = static_cast<double>(m_renderInformation->totalPhotons) / 1e6;
+            double sensorK = static_cast<double>(m_renderInformation->photonsAccumulated) / 1000.0;
+            Log::Logger::getInstance()->info(
+                "Simulated {}M photons. About {}k photons hit the sensor",
+                totalM, sensorK);
 
-        // Update shared GPU/CPU render information
-        m_renderInformation->totalPhotons += simulatePhotonCount;
-        m_renderInformation->gamma = settings.gammaCorrection;
-        m_renderInformation->numBounces = settings.numBounces;
-
-        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
-
-        // Allocate and copy camera to GPU
-        auto* cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
-        queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
-
-        queue.wait_and_throw();
-
-        // Kernel Launch
-        sycl::range<1> globalRange(simulatePhotonCount);
-
-        if (settings.kernelType == KERNEL_PATH_TRACER_2DGS && m_gpu.numGaussians > 0) {
-            queue.submit([&](sycl::handler& cgh) {
-                LightTracerKernel kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                         settings.numBounces, rngGPU);
-                cgh.parallel_for(globalRange, kernel);
-            });
         }
-        else if (settings.kernelType == KERNEL_PATH_TRACER_MESH) {
-            queue.submit([&](sycl::handler& cgh) {
-                PathTracerMeshKernels kernel(m_gpu, m_cameraTransform, cameraGPU, rngGPU);
-                cgh.parallel_for(globalRange, kernel);
-            });
+        catch (const sycl::exception& e) {
+            Log::Logger::getInstance()->warning("Caught exception: {}", e.what());
+            std::cerr << "Exception: " << e.what() << std::endl;
         }
-        queue.wait_and_throw();
-
-        // Free device memory
-        sycl::free(cameraGPU, queue);
-        sycl::free(rngGPU, queue);
-
-        // Retrieve updated information from GPU
-        queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
-        queue.memcpy(m_imageMemory, m_gpu.imageMemory, m_width * m_height * sizeof(float)).wait();
-
-        Log::Logger::getInstance()->info(
-            "Simulated {:.3f} million photons. About {}k photons hit the sensor",
-            m_renderInformation->totalPhotons / 1e6,
-            m_renderInformation->photonsAccumulated / 1000);
     }
-    catch (const sycl::exception& e) {
-        Log::Logger::getInstance()->warning("Caught exception: {}", e.what());
-        std::cerr << "Exception: " << e.what() << std::endl;
-    }
-}
 
-
-    PhotonTracer::BackwardInfo PhotonTracer::backward(Settings& settings) {
+    PhotonTracer::BackwardInfo PhotonTracer::backward(RenderSettings& settings) {
+        /*
         try {
             auto& queue = m_selector.getQueue();
-            uint64_t simulatePhotonCount = settings.photonCount;
-
-            std::vector<PCG32> rng(simulatePhotonCount);
-            for (int i = 0; i < simulatePhotonCount; ++i)
-                rng[i].init(m_renderInformation->frameID, i * m_renderInformation->frameID);
-
-            auto rngGPU = sycl::malloc_device<PCG32>(rng.size(), queue);
-            queue.memcpy(rngGPU, rng.data(), sizeof(PCG32) * rng.size());
+            uint64_t simulatePhotonCount = renderSettings.photonCount;
 
             queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * m_width * m_height);
 
             m_renderInformation->totalPhotons += simulatePhotonCount;
-            m_renderInformation->gamma = settings.gammaCorrection;
-            m_renderInformation->numBounces = settings.numBounces;
-            /** Any shared GPU/CPU debug information must be stored before here**/
+            m_renderInformation->gamma = renderSettings.gammaCorrection;
+            m_renderInformation->numBounces = renderSettings.numBounces;
             queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
-            auto cameraGPU = sycl::malloc_device<PinholeCamera>(1, queue);
-            queue.memcpy(cameraGPU, &m_camera, sizeof(PinholeCamera));
-            queue.wait();
+            queue.memcpy(m_gpu.pinholeCamera, &m_camera, sizeof(PinholeCamera));
+
             sycl::range<1> globalRange(simulatePhotonCount);
             queue.submit([&](sycl::handler& cgh) {
                 // Capture GPUData, etc. by value or reference as needed
-                LightTracerKernelBackward kernel(m_gpu, simulatePhotonCount, m_cameraTransform, cameraGPU,
-                                         settings.numBounces,
-                                         rngGPU); // TODO set numBounces from renderInformation instead
+                LightTracerKernelBackward kernel(m_gpu, m_cameraTransform, m_gpu.pinholeCamera, m_gpuDataOutput, m_pcg32);
                 cgh.parallel_for(globalRange, kernel);
             });
 
             queue.wait_and_throw();
-            sycl::free(cameraGPU, queue);
-            sycl::free(rngGPU, queue);
-            /** Any shared GPU/CPU debug information must be stored after here**/
-            //queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
-
             queue.memcpy(m_backwardInfo.gradients, m_gpu.gradients, simulatePhotonCount * sizeof(glm::vec3));
             queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients,  sizeof(glm::vec3));
             queue.wait();
@@ -159,106 +120,139 @@ void PhotonTracer::update(Settings& settings) {
             std::cerr << "Exception: " << e.what() << std::endl;
         }
         return m_backwardInfo;
+    */
     }
 
-    void PhotonTracer::resetState() {
-        m_selector.getQueue().fill(m_gpu.imageMemory, static_cast<float>(0), m_width * m_height).wait();
+    void PhotonTracer::resetImage() {
+        auto& queue = m_pipelineSettings.queue;
+        queue.fill(m_gpu.imageMemory, static_cast<float>(0),
+                   m_pipelineSettings.width * m_pipelineSettings.height).wait();
         m_renderInformation->frameID = 0;
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
-        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).
-                   wait();
+        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).wait();
     }
 
     void PhotonTracer::prepareImageAndInfoBuffers() {
+        uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
+        auto& queue = m_pipelineSettings.queue;
         // Allocate device memory for RGBA image (4 floats per pixel)
-        m_gpu.imageMemory = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
+        m_gpu.imageMemory = sycl::malloc_device<float>(imageSize, queue);
         if (!m_gpu.imageMemory) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-        m_gpu.contribution = sycl::malloc_device<float>(m_width * m_height, m_selector.getQueue());
-        if (!m_gpu.contribution) {
-            throw std::runtime_error("Device memory allocation failed.");
-        }
-        m_gpu.renderInformation = sycl::malloc_device<RenderInformation>(1, m_selector.getQueue());
+
+        m_gpu.renderInformation = sycl::malloc_device<RenderInformation>(1, queue);
         if (!m_gpu.renderInformation) {
             throw std::runtime_error("Device memory allocation failed.");
         }
-        m_selector.getQueue().memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
+        queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
         // Initialize device memory to 0
-        m_selector.getQueue().fill(m_gpu.imageMemory, 0.0f, m_width * m_height).wait();
+        queue.fill(m_gpu.imageMemory, 0.0f, imageSize).wait();
         // Initialize host memory to 0
-        std::fill(m_imageMemory, m_imageMemory + (m_width * m_height * sizeof(float)), 0.0f);
-        Log::Logger::getInstance()->info("Prepared Path Tracer SYCL image. Image dimensions are: {}x{}", m_width,
-                                         m_height);
+        std::fill(m_imageMemory, m_imageMemory + imageSize, 0.0f);
+
+        // Initialize RNGs
+        // Generate a random seed using std::random_device.
+        size_t simulatePhotonCount = m_pipelineSettings.photonCount;
+        // Seed a fast PRNG using std::random_device only once
+        std::random_device rd;
+        std::mt19937_64 engine(rd());
+        std::uniform_int_distribution<uint64_t> dist;
+
+        std::vector<PCG32> rng(simulatePhotonCount);
+        for (uint64_t i = 0; i < simulatePhotonCount; ++i) {
+            uint64_t randomNumber = dist(engine);
+            rng[i].init(randomNumber, i);
+        }
+        // Allocate and copy RNG to GPU
+        m_pcg32 = sycl::malloc_device<PCG32>(simulatePhotonCount, queue);
+        queue.memcpy(m_pcg32, rng.data(), sizeof(PCG32) * simulatePhotonCount);
+        m_gpu.pinholeCamera = sycl::malloc_device<PinholeCamera>(1, queue);
+        m_gpu.cameraTransform = sycl::malloc_device<TransformComponent>(1, queue);
+
     }
 
-    void PhotonTracer::upload(std::weak_ptr<Scene> scene) {
-        prepareImageAndInfoBuffers();
-        uploadVertexData(scene);
-        uploadGaussianData(scene);
-    }
 
     void PhotonTracer::freeResources() {
-        m_selector.getQueue().wait();
+        auto& queue = m_pipelineSettings.queue;
+        queue.wait();
         if (m_gpu.imageMemory) {
-            sycl::free(m_gpu.imageMemory, m_selector.getQueue());
+            sycl::free(m_gpu.imageMemory, queue);
             m_gpu.imageMemory = nullptr;
         }
-        if (m_gpu.contribution) {
-            sycl::free(m_gpu.contribution, m_selector.getQueue());
-            m_gpu.contribution = nullptr;
-        }
         if (m_gpu.vertices) {
-            sycl::free(m_gpu.vertices, m_selector.getQueue());
+            sycl::free(m_gpu.vertices, queue);
             m_gpu.vertices = nullptr;
         }
         if (m_gpu.indices) {
-            sycl::free(m_gpu.indices, m_selector.getQueue());
+            sycl::free(m_gpu.indices, queue);
             m_gpu.indices = nullptr;
         }
         if (m_gpu.indexOffsets) {
-            sycl::free(m_gpu.indexOffsets, m_selector.getQueue());
+            sycl::free(m_gpu.indexOffsets, queue);
             m_gpu.indexOffsets = nullptr;
         }
         if (m_gpu.vertexOffsets) {
-            sycl::free(m_gpu.vertexOffsets, m_selector.getQueue());
+            sycl::free(m_gpu.vertexOffsets, queue);
             m_gpu.vertexOffsets = nullptr;
         }
         if (m_gpu.transforms) {
-            sycl::free(m_gpu.transforms, m_selector.getQueue());
+            sycl::free(m_gpu.transforms, queue);
             m_gpu.transforms = nullptr;
         }
         if (m_gpu.materials) {
-            sycl::free(m_gpu.materials, m_selector.getQueue());
+            sycl::free(m_gpu.materials, queue);
             m_gpu.materials = nullptr;
         }
         if (m_gpu.tagComponents) {
-            sycl::free(m_gpu.tagComponents, m_selector.getQueue());
+            sycl::free(m_gpu.tagComponents, queue);
             m_gpu.tagComponents = nullptr;
         }
         if (m_gpu.gaussianInputAssembly) {
-            sycl::free(m_gpu.gaussianInputAssembly, m_selector.getQueue());
+            sycl::free(m_gpu.gaussianInputAssembly, queue);
             m_gpu.gaussianInputAssembly = nullptr;
         }
         if (m_gpu.gradients) {
-            sycl::free(m_gpu.gradients, m_selector.getQueue());
+            sycl::free(m_gpu.gradients, queue);
             m_gpu.gradients = nullptr;
         }
         if (m_gpu.sumGradients) {
-            sycl::free(m_gpu.sumGradients, m_selector.getQueue());
+            sycl::free(m_gpu.sumGradients, queue);
             m_gpu.sumGradients = nullptr;
         }
         if (m_gpu.gradientImage) {
-            sycl::free(m_gpu.gradientImage, m_selector.getQueue());
+            sycl::free(m_gpu.gradientImage, queue);
             m_gpu.gradientImage = nullptr;
         }
 
-        m_selector.getQueue().wait();
+        if (m_gpu.pinholeCamera) {
+            sycl::free(m_gpu.pinholeCamera, queue);
+            m_gpu.pinholeCamera = nullptr;
+        }
+        if (m_gpu.cameraTransform) {
+            sycl::free(m_gpu.cameraTransform, queue);
+            m_gpu.cameraTransform = nullptr;
+        }
+        if (m_gpu.renderInformation) {
+            sycl::free(m_gpu.renderInformation, queue);
+            m_gpu.renderInformation = nullptr;
+        }
+
+        if (m_pcg32) {
+            sycl::free(m_pcg32, queue);
+            m_pcg32 = nullptr;
+        }
+        if (m_gpuDataOutput) {
+            sycl::free(m_gpuDataOutput, queue);
+            m_gpuDataOutput = nullptr;
+        }
+        queue.wait();
     }
 
 
     void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors& data) {
+        /*
 #ifdef DIFF_RENDERER_ENABLED
         freeResources();
         prepareImageAndInfoBuffers();
@@ -360,18 +354,18 @@ void PhotonTracer::update(Settings& settings) {
         // Log
         Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
 #endif
+*/
     }
 
-    void PhotonTracer::uploadGaussianData(std::weak_ptr<Scene>& scene) {
-        auto scenePtr = scene.lock();
-        auto& queue = m_selector.getQueue();
+    void PhotonTracer::uploadGaussianData(std::shared_ptr<Scene>& scene) {
+        auto& queue = m_pipelineSettings.queue;
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
-        auto& registry = scenePtr->getRegistry();
+        auto& registry = scene->getRegistry();
         // Find all entities with GaussianComponent
-        auto view = scenePtr->getRegistry().view<GaussianComponent2DGS>();
+        auto view = scene->getRegistry().view<GaussianComponent2DGS>();
         for (auto e : view) {
-            auto& component = Entity(e, scenePtr.get()).getComponent<GaussianComponent2DGS>();
+            auto& component = Entity(e, scene.get()).getComponent<GaussianComponent2DGS>();
             for (size_t i = 0; i < component.size(); ++i) {
                 GaussianInputAssembly point{};
                 point.position = component.positions[i];
@@ -385,7 +379,7 @@ void PhotonTracer::update(Settings& settings) {
                 point.phongExponent = component.phongExponents[i];
                 gaussianInputAssembly.push_back(point);
             }
-            auto& transform = Entity(e, scenePtr.get()).getComponent<TransformComponent>();
+            auto& transform = Entity(e, scene.get()).getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
         }
 
@@ -398,8 +392,7 @@ void PhotonTracer::update(Settings& settings) {
         queue.wait();
     }
 
-    void PhotonTracer::uploadVertexData(std::weak_ptr<Scene>& scene) {
-        auto scenePtr = scene.lock();
+    void PhotonTracer::uploadVertexData(std::shared_ptr<Scene>& scene) {
         std::vector<InputAssembly> vertexData;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> indexOffsets; // Offset for each entity's indices
@@ -407,12 +400,12 @@ void PhotonTracer::update(Settings& settings) {
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
         std::vector<MaterialComponent> materials; // Transformation matrices for entities
         std::vector<TagComponent> tagComponents; // Transformation matrices for entities
-        auto view = scenePtr->getRegistry().view<MeshComponent, TransformComponent>();
+        auto view = scene->getRegistry().view<MeshComponent, TransformComponent>();
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
 
         for (auto e : view) {
-            Entity entity(e, scenePtr.get());
+            Entity entity(e, scene.get());
             std::string tag = entity.getName();
             // Initialize a flag to determine if we should skip this entity
             bool skipEntity = false;
@@ -459,8 +452,8 @@ void PhotonTracer::update(Settings& settings) {
                 materials.emplace_back(material);
             }
 
-
-            std::shared_ptr<MeshData> meshData = m_meshManager.getMeshData(meshComponent);
+            MeshManager meshManager;
+            std::shared_ptr<MeshData> meshData = meshManager.getMeshData(meshComponent);
             // Store vertex offset
             vertexOffsets.push_back(currentVertexOffset);
             // Add vertex data
@@ -481,7 +474,7 @@ void PhotonTracer::update(Settings& settings) {
             currentIndexOffset += meshData->indices.size();
         }
         // Upload vertex data to GPU
-        auto& queue = m_selector.getQueue();
+        auto& queue = m_pipelineSettings.queue;
         m_gpu.vertices = sycl::malloc_device<InputAssembly>(vertexData.size(), queue);
         queue.memcpy(m_gpu.vertices, vertexData.data(), vertexData.size() * sizeof(InputAssembly));
         // Upload index data to GPU
@@ -515,94 +508,9 @@ void PhotonTracer::update(Settings& settings) {
             delete[] m_backwardInfo.gradients;
         }
         if (m_backwardInfo.sumGradients) {
-            delete[] m_backwardInfo.sumGradients;
+            delete m_backwardInfo.sumGradients;
         }
         freeResources();
-    }
-
-    void PhotonTracer::saveAsPPM(const std::filesystem::path& filename) const {
-        std::ofstream file(filename, std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("Failed to open file for writing: " + filename.string());
-        }
-
-        // Write the PPM header
-        file << "P6\n" << m_width << " " << m_height << "\n255\n";
-
-        // Write pixel data in RGB format
-        for (uint32_t y = 0; y < m_height; ++y) {
-            for (uint32_t x = 0; x < m_width; ++x) {
-                uint32_t pixelIndex = (y * m_width + x) * 4; // RGBA8: 4 bytes per pixel
-
-                // Extract R, G, B components (ignore A)
-                file.put(m_imageMemory[pixelIndex + 0]); // R
-                file.put(m_imageMemory[pixelIndex + 1]); // G
-                file.put(m_imageMemory[pixelIndex + 2]); // B
-            }
-        }
-
-        file.close();
-    }
-
-    void PhotonTracer::saveAsPFM(const std::filesystem::path& filename) const {
-        std::ofstream file(filename, std::ios::binary);
-
-        if (!file.is_open()) {
-            throw std::runtime_error("Failed to open file for writing: " + filename.string());
-        }
-
-        // Write the PFM header
-        // "PF" indicates a color image. Use "Pf" for grayscale.
-        file << "PF\n" << m_width << " " << m_height << "\n-1.0\n";
-
-        // PFM expects the data in binary format, row by row from top to bottom
-        // Assuming your m_imageMemory is in RGBA format with floats
-
-        // Allocate a temporary buffer for RGB data
-        std::vector<float> rgbData(m_width * m_height * 3);
-
-        for (uint32_t y = 0; y < m_height; ++y) {
-            for (uint32_t x = 0; x < m_width; ++x) {
-                uint32_t pixelIndex = (y * m_width + x); // RGBA: 4 floats per pixel
-                uint32_t rgbIndex = (y * m_width + x) * 3;
-
-                rgbData[rgbIndex + 0] = m_imageMemory[pixelIndex]; // R
-                rgbData[rgbIndex + 1] = m_imageMemory[pixelIndex]; // G
-                rgbData[rgbIndex + 2] = m_imageMemory[pixelIndex]; // B
-            }
-        }
-
-        // Write the RGB float data
-        file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
-
-        if (!file) {
-            throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
-        }
-
-        file.close();
-    }
-
-    // For editorCamera
-    void PhotonTracer::setActiveCamera(const TransformComponent& transformComponent, float width, float height) {
-        PinholeParameters pinholeParameters;
-        SharedCameraSettings cameraSettings;
-        pinholeParameters.width = width;
-        pinholeParameters.height = height;
-        pinholeParameters.cx = width / 2;
-        pinholeParameters.cy = height / 2;
-        pinholeParameters.fx = 600.0f;
-        pinholeParameters.fy = 600.0f;
-        PinholeCamera camera = PinholeCamera(cameraSettings, pinholeParameters);
-        m_camera = std::move(camera);
-        m_cameraTransform = transformComponent;
-    }
-
-    // For pinhole scene camera
-    void PhotonTracer::setActiveCamera(const std::shared_ptr<PinholeCamera>& camera,
-                                       const TransformComponent* cameraTransform) {
-        m_camera = *camera;
-        m_cameraTransform = *cameraTransform;
     }
 
 
