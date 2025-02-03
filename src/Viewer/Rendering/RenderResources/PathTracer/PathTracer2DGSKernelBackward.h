@@ -81,8 +81,71 @@ namespace VkRender::PathTracer {
                              static_cast<int>(m_camera->parameters().height),
                              xPixel, yPixel);
 
-            if (pxInt >= 0 && pxInt < (int)m_camera->parameters().width &&
-                pyInt >= 0 && pyInt < (int)m_camera->parameters().height) {
+if (pxInt >= 0 && pxInt < (int)m_camera->parameters().width &&
+    pyInt >= 0 && pyInt < (int)m_camera->parameters().height) {
+
+    glm::vec3 f    = cameraPlanePointWorld;        // e.g., defined in your camera parameters
+    glm::vec3 f_n  = cameraNormal;    // e.g., (0,0,1) if the focal plane faces +Z
+
+
+    // Get the Gaussian emitter parameters.
+    float sigma = m_gpuData.gaussianInputAssembly[0].scale.x; // assume uniform sigma
+    float emissionPower = m_gpuData.gaussianInputAssembly[0].emission; // overall emission power
+    glm::vec3 e_c = gaussianPosition;  // center of the Gaussian emitter (optimized parameter)
+
+    // Compute the Gaussian intensity.
+    glm::vec3 delta = e_o - e_c;
+    float delta_norm_sq = glm::dot(delta, delta);
+    float e_i = emissionPower * std::exp(-delta_norm_sq / (2.0f * sigma * sigma));
+
+    // Compute derivative of the Gaussian intensity with respect to the sampled position e_o.
+    // Note: de_i/de_o = e_i * (e_c - e_o) / sigma^2.
+    glm::vec3 de_i_deo = (e_i / (sigma * sigma)) * (e_c - e_o);
+
+    // Now compute the derivative of t_min with respect to e_o.
+    // Let v = a - e_o and recompute the aperture sample direction:
+    glm::vec3 v = a - e_o;
+    float v_norm = glm::length(v);
+    glm::vec3 e_d_new = v / v_norm; // recomputed normalized direction
+    float N = glm::dot(f - e_o, f_n);    // numerator: (f - e_o) · f_n
+    float D = glm::dot(e_d_new, f_n);      // denominator: e_d · f_n
+    // Compute derivative dtmin/deo (a vec3) via the quotient rule:
+    // dtmin/deo = { - D * f_n + N * [ f_n/v_norm - v*(dot(v, f_n))/(v_norm^3) ] } / (D*D)
+    glm::vec3 term1 = -D * f_n;
+    glm::vec3 term2 = N * ((f_n / v_norm) - (v * (glm::dot(v, f_n)) / (v_norm * v_norm * v_norm)));
+    glm::vec3 dtmin_deo = (term1 + term2) / (D * D);
+
+    // The intersection point on the focal plane is p = e_o + t_min * e_d.
+    // Differentiating p with respect to e_o gives an extra term: dp/de_o_extra = e_d * (dtmin/deo).
+    // (In a full implementation, you would also include t_min * (de_d/de_o).)
+    // Here, for simplicity, we approximate the extra derivative as:
+    glm::vec3 dp_deo_extra = e_d_new * dtmin_deo.x; // using the x-component as a proxy scalar.
+    // (In a rigorous implementation, one would combine the full vector dtmin_deo with the Jacobian of the projection.)
+
+    // Now, combine the derivative contributions.
+    // Previously, we computed dL/de_o = dLoss * de_i/de_o.
+    // We add the extra term from the path-length differentiation:
+    glm::vec3 dL_deo = dLoss * de_i_deo; // from the Gaussian intensity
+    glm::vec3 dL_extra = dLoss * dp_deo_extra; // extra contribution from dtmin/deo
+    glm::vec3 dL_deo_total = dL_deo + dL_extra;
+
+    // Convert the gradient from camera (local) space to world space.
+    glm::mat3 R = glm::mat3(m_cameraTransform->getTransform()); // upper-left 3×3
+    glm::vec3 dL_world = R * dL_deo_total;
+
+    // Atomically accumulate the gradient.
+    sycl::atomic_ref<float, sycl::memory_order::relaxed,
+                       sycl::memory_scope::device,
+                       sycl::access::address_space::global_space>
+        sum_x(m_gpuData.sumGradients->x),
+        sum_y(m_gpuData.sumGradients->y),
+        sum_z(m_gpuData.sumGradients->z);
+    sum_x.fetch_add(dL_world.x);
+    sum_y.fetch_add(dL_world.y);
+    sum_z.fetch_add(dL_world.z);
+}
+        }
+                /*
                 // Example: add the emission to that pixel
                 // ...
                 // Now do the backward pass to accumulate ∂L/∂e_o:
@@ -176,44 +239,7 @@ namespace VkRender::PathTracer {
                 // or you might choose to handle them separately:
                 //glm::vec3 dL_deo = dU_deo * dLoss * emissionPower;
 
-
-                float sigma = m_gpuData.gaussianInputAssembly[0].scale.x; // Assuming uniform sigma
-                emissionPower = m_gpuData.gaussianInputAssembly[0].emission; // Assuming uniform sigma
-                glm::vec3 e_c = gaussianPosition;
-                glm::vec3 delta = e_o - e_c;
-                float delta_norm_sq = glm::dot(delta, delta);
-                float e_i = emissionPower * std::exp(-delta_norm_sq / (2.0f * sigma * sigma));
-
-                // Compute derivative de_i/de_o
-                glm::vec3 de_i_deo = (e_i / (sigma * sigma)) * delta; // (e_o - e_c) already
-
-                // Compute dL/de_o = dLoss * de_i/de_o
-                glm::vec3 dL_deo = dLoss * de_i_deo;
-
-                glm::mat3 R = glm::mat3(m_cameraTransform->getTransform()); // upper-left 3×3
-                glm::vec3 dL_world = R * dL_deo;
-
-                // Accumulate the gradient atomically
-                // Assuming m_gpuData.sumGradients is a glm::vec3 pointer in global memory
-                // and that atomic operations are supported for float in your environment
-                // Note: SYCL may require specific handling for atomic operations on vec types
-                // Here, we'll assume separate atomic operations for each component
-
-                // Atomic references for each gradient component
-                sycl::atomic_ref<float, sycl::memory_order::relaxed,
-                                 sycl::memory_scope::device,
-                                 sycl::access::address_space::global_space>
-                    sum_x(m_gpuData.sumGradients->x),
-                    sum_y(m_gpuData.sumGradients->y),
-                    sum_z(m_gpuData.sumGradients->z);
-
-                // Atomically accumulate gradients
-                sum_x.fetch_add(dL_deo.x);
-                sum_y.fetch_add(dL_deo.y);
-                sum_z.fetch_add(dL_deo.z);
-            }
-        }
-
+                */
         glm::mat2x3 multiply2x3_3x3(const glm::mat2x3& A, const glm::mat3& B) const {
             glm::mat2x3 result;
             // Manual matrix multiplication
