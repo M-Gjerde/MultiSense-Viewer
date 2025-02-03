@@ -34,10 +34,6 @@ namespace VkRender::PathTracer {
         Log::Logger::getInstance()->info("PathTracer created, Propterties: PhotonCount: {}, Bounces: {}, Image Size: {}x{}", m_pipelineSettings.photonCount, m_pipelineSettings.numBounces, m_pipelineSettings.width, m_pipelineSettings.height);
     }
 
-    RenderInformation PhotonTracer::getRenderInfo() {
-        return *m_renderInformation;
-    }
-
     void PhotonTracer::update(RenderSettings& renderSettings) {
         try {
             auto& queue = m_pipelineSettings.queue;

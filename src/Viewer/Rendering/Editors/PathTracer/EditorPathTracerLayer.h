@@ -114,6 +114,10 @@ namespace VkRender {
             ImGui::SameLine();
             imageUI->saveImage = ImGui::Button("Save");
 
+            // new row
+            EditorPathTracer* editor = static_cast<EditorPathTracer*>(m_editor);
+            ImGui::Text("Frame Number: %u", editor->getRenderInformation().frameID);
+
 
             ImGui::End();
         }

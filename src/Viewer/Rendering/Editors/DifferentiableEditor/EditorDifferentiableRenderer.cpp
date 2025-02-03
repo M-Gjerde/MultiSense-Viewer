@@ -78,8 +78,8 @@ namespace VkRender {
 
 
 
-            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/3_views/render_info.yaml";
-            //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
+            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/3_views/render_info.yaml";
+            std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
                 // Retrieve values from YAML nodes
@@ -94,9 +94,10 @@ namespace VkRender {
                 std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
                 std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
                 std::cout << "FrameCount: " << frameCount << std::endl;
-                pipelineSettings.photonCount = photonsEmitted;
+                pipelineSettings.photonCount = photonsEmitted / frameCount;
                 pipelineSettings.numBounces = photonBounceCount;
                 m_renderSettings.gammaCorrection = gamma;
+                m_renderSettings.numFrames = frameCount;
             }
             else {
                 Log::Logger::getInstance()->warning("Did not load params from dataset folder");
@@ -140,7 +141,7 @@ namespace VkRender {
 
 
         // ----------------------------------------------------------
-        // 1. Possibly accumulate forward passes
+        // 1. Accumulate forward passes
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Store camera entities (assuming there are exactly two cameras)
@@ -169,8 +170,11 @@ namespace VkRender {
                 m_pathTracer->resetImage();
             m_previousSceneCamera = sceneCamera;
 
-            m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
-            m_photonRebuildModule->uploadSceneFromTensor(m_context->activeScene());
+            if (m_numAccumulated == 0) {
+                m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
+                m_photonRebuildModule->uploadSceneFromTensor(m_context->activeScene());
+            }
+
             // Upload path tracer with the new parameters
             PathTracer::IterationInfo pathTracerIterationInfo;
             pathTracerIterationInfo.renderSettings = m_renderSettings;
@@ -200,72 +204,83 @@ namespace VkRender {
             }
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
 
-            // Load the target tensor
+            // Backpropagate -- OPTIMIZATION STEP --
 
-            std::vector<std::filesystem::path> filePaths{
-                "/home/magnus/datasets/PathTracingGS/3_views/Camera1.pfm",
-                "/home/magnus/datasets/PathTracingGS/3_views/Camera2.pfm",
-                "/home/magnus/datasets/PathTracingGS/3_views/Camera3.pfm"
-            };;
+            if (m_numAccumulated >= m_renderSettings.numFrames) {
+                // Load the target tensor
 
-            Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
-                                             filePaths[activeCameraIndex].string());
-            //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm";
+                /*
+                std::vector<std::filesystem::path> filePaths{
+                    "/home/magnus/datasets/PathTracingGS/3_views/Camera1.pfm",
+                    "/home/magnus/datasets/PathTracingGS/3_views/Camera2.pfm",
+                    "/home/magnus/datasets/PathTracingGS/3_views/Camera3.pfm"
+                };
+                */
+                std::vector<std::filesystem::path> filePaths{
+                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera1.pfm",
+                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera2.pfm",
+                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera3.pfm"
+                };;
 
-            torch::Tensor targetTensor = loadPFM(filePaths[activeCameraIndex], width, height);
+                Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
+                                                 filePaths[activeCameraIndex].string());
+                //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm";
 
-            // Compute loss
-            auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
+                torch::Tensor targetTensor = loadPFM(filePaths[activeCameraIndex], width, height);
 
-            // Backward
-            loss.backward();
+                // Compute loss
+                auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
 
-            // Example debug prints
-            std::cout << "Loss: " << loss.item<float>() << std::endl;
-            Log::Logger::getInstance()->info("Loss: {}", loss.item<float>());
-            // Gradient checks: positions, scales, normals
-            // (Make sure you've actually registered these as parameters in your module!)
-            auto positions = m_photonRebuildModule->m_tensorData.positions;
+                // Backward
+                loss.backward();
 
-            auto gradPositions = m_photonRebuildModule->m_tensorData.positions.grad();
-            auto gradScales = m_photonRebuildModule->m_tensorData.scales.grad();
-            auto gradNormals = m_photonRebuildModule->m_tensorData.normals.grad();
+                // Example debug prints
+                std::cout << "Loss: " << loss.item<float>() << std::endl;
+                Log::Logger::getInstance()->info("Loss: {}", loss.item<float>());
+                // Gradient checks: positions, scales, normals
+                // (Make sure you've actually registered these as parameters in your module!)
+                auto positions = m_photonRebuildModule->m_tensorData.positions;
 
-            m_lastIteration.positionGradient = glm::vec3(positions[0][0].item<float>(),
-                                                         positions[0][1].item<float>(),
-                                                         positions[0][2].item<float>());
+                auto gradPositions = m_photonRebuildModule->m_tensorData.positions.grad();
+                auto gradScales = m_photonRebuildModule->m_tensorData.scales.grad();
+                auto gradNormals = m_photonRebuildModule->m_tensorData.normals.grad();
 
-            if (positions.defined()) {
-                // Check for NaNs or Infs
-                if (positions.isnan().any().item<bool>()) {
-                    std::cout << "positions contain NaNs!\n";
+                m_lastIteration.positionGradient = glm::vec3(positions[0][0].item<float>(),
+                                                             positions[0][1].item<float>(),
+                                                             positions[0][2].item<float>());
+
+                if (positions.defined()) {
+                    // Check for NaNs or Infs
+                    if (positions.isnan().any().item<bool>()) {
+                        std::cout << "positions contain NaNs!\n";
+                    }
+                    if (positions.isinf().any().item<bool>()) {
+                        std::cout << "positions contain Infs!\n";
+                    }
+                    std::cout << "Positions: ("
+                        << positions[0][0].item<float>() << ", "
+                        << positions[0][1].item<float>() << ", "
+                        << positions[0][2].item<float>() << ")"
+                        << std::endl;
+
+                    Log::Logger::getInstance()->info("eo Gradient: ({},{},{})",
+                                                     gradPositions[0][0].item<float>(),
+                                                     gradPositions[0][1].item<float>(),
+                                                     gradPositions[0][2].item<float>());
+
+                    Log::Logger::getInstance()->info("e0 Position: ({},{},{})",
+                                                     positions[0][0].item<float>(),
+                                                     positions[0][1].item<float>(),
+                                                     positions[0][2].item<float>());
                 }
-                if (positions.isinf().any().item<bool>()) {
-                    std::cout << "positions contain Infs!\n";
-                }
-                std::cout << "Positions: ("
-                    << positions[0][0].item<float>() << ", "
-                    << positions[0][1].item<float>() << ", "
-                    << positions[0][2].item<float>() << ")"
-                    << std::endl;
-
-                Log::Logger::getInstance()->info("eo Gradient: ({},{},{})",
-                                                 gradPositions[0][0].item<float>(),
-                                                 gradPositions[0][1].item<float>(),
-                                                 gradPositions[0][2].item<float>());
-
-                Log::Logger::getInstance()->info("e0 Position: ({},{},{})",
-                                                 positions[0][0].item<float>(),
-                                                 positions[0][1].item<float>(),
-                                                 positions[0][2].item<float>());
+                // Optimizer step
+                m_optimizer->step();
+                // Reset the accumulation if you only wanted to do a single backprop per accumulation
+                m_accumulatedTensor = torch::Tensor();
+                m_numAccumulated = 0;
+                m_optimizer->zero_grad(); // Clear old gradients
+                m_stepIteration++;
             }
-            // Optimizer step
-            m_optimizer->step();
-            // Reset the accumulation if you only wanted to do a single backprop per accumulation
-            m_accumulatedTensor = torch::Tensor();
-            m_numAccumulated = 0;
-            m_optimizer->zero_grad(); // Clear old gradients
-            m_stepIteration++;
         }
     }
 

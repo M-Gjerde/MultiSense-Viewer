@@ -16,7 +16,6 @@ namespace VkRender::PathTracer {
             : m_gpuData(gpuData), m_gpuDataOutput(gpuDataOutput), m_rng(rng) {
             m_cameraTransform = m_gpuData.cameraTransform;
             m_camera = m_gpuData.pinholeCamera;
-
         }
 
         void operator()(sycl::item<1> item) const {
@@ -45,7 +44,8 @@ namespace VkRender::PathTracer {
             size_t gaussianID = sampleRandomEmissiveGaussian(photonID, entityID);
             glm::vec3 emitPosLocal, emitNormalLocal;
             float emissionPower;
-            sampleGaussianPositionAndNormal(entityID, gaussianID, photonID, emitPosLocal, emitNormalLocal, emissionPower);
+            sampleGaussianPositionAndNormal(entityID, gaussianID, photonID, emitPosLocal, emitNormalLocal,
+                                            emissionPower);
             // Get the model transform matrix for the emissive entity
 
             // 2) Sample emission direction
@@ -159,18 +159,19 @@ namespace VkRender::PathTracer {
                     rayOrigin = hitPointWorld + hitNormalWorld * 1e-4f; // Offset to prevent self-intersection
                     rayDir = glm::normalize(newDir);
 
-                    castContributionRay(rayOrigin, cameraPlaneNormalWorld, apertureRadius, photonID, gaussianID, photonFlux);
+                    castContributionRay(rayOrigin, cameraPlaneNormalWorld, apertureRadius, photonID, gaussianID,
+                                        photonFlux);
                 }
                 else {
                     return;
                 }
-
             } // end for bounces
 
             // If we exit here, we used up all bounces w/o hitting sensor
         }
 
-        void castContributionRay(const glm::vec3& rayOrigin, const glm::vec3& cameraPlaneNormalWorld, float apertureRadius, size_t photonID, size_t gaussianID, float photonFlux) const {
+        void castContributionRay(const glm::vec3& rayOrigin, const glm::vec3& cameraPlaneNormalWorld,
+                                 float apertureRadius, size_t photonID, size_t gaussianID, float photonFlux) const {
             // Calculate direct lighting
 
             glm::vec3 apertureHitPoint;
@@ -223,7 +224,6 @@ namespace VkRender::PathTracer {
                     m_gpuDataOutput[photonID].emissionDirectionLength = closest_t;
                     m_gpuDataOutput[photonID].apertureHitPoint = apertureHitPoint;
                     m_gpuDataOutput[photonID].cameraHitPointLocal = hitPointCam;
-
                 }
             }
         }
@@ -410,34 +410,61 @@ namespace VkRender::PathTracer {
             float Z = hitPointCam.z;
             float xPixel = (fx * X / Z) + cx;
             float yPixel = (fy * Y / Z) + cy;
-            int px = static_cast<int>(std::round(xPixel));
-            int py = static_cast<int>(std::round(yPixel));
+            // 2. Determine the neighboring pixels.
+            // Compute the lower-left (floor) pixel coordinates and the fractional offsets.
+            int x0 = static_cast<int>(std::floor(xPixel));
+            int y0 = static_cast<int>(std::floor(yPixel));
+            float dx = xPixel - x0;
+            float dy = yPixel - y0;
+            int x1 = x0 + 1;
+            int y1 = y0 + 1;
 
-            //
-            // 4. Check bounds. If inside the image plane, accumulate flux
-            //
-            if (px >= 0 && px < static_cast<int>(m_camera->parameters().width) &&
-                py >= 0 && py < static_cast<int>(m_camera->parameters().height)) {
-                // Convert 2D coords -> 1D index
-                size_t pixelIndex =
-                    static_cast<size_t>(py) * static_cast<size_t>(m_camera->parameters().width) +
-                    static_cast<size_t>(px);
-                // Prevent saturation
+            // 3. Compute the bilinear weights for the 4 pixels.
+            float w00 = (1.0f - dx) * (1.0f - dy); // weight for pixel at (x0, y0)
+            float w10 = dx * (1.0f - dy); // weight for pixel at (x1, y0)
+            float w01 = (1.0f - dx) * dy; // weight for pixel at (x0, y1)
+            float w11 = dx * dy; // weight for pixel at (x1, y1)
 
-                photonFlux = std::pow(photonFlux, 1.0f / m_gpuData.renderInformation->gamma);
-                sycl::atomic_ref<float, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
-                    imageMemoryAtomic(m_gpuData.imageMemory[pixelIndex]);
-                float currentValue = imageMemoryAtomic.load();
-                float newValue = std::min(1.0f, currentValue + photonFlux);
-                photonFlux = newValue - currentValue; // Update photonFlux for atomic addition
-                imageMemoryAtomic.fetch_add(photonFlux);
-                sycl::atomic_ref<uint64_t, sycl::memory_order::relaxed, sycl::memory_scope::device, sycl::access::address_space::global_space>
-                    photonsAccumulatedAtomic(m_gpuData.renderInformation->photonsAccumulated);
+            // 4. Pre-correct the photon flux with gamma adjustment.
+            float correctedFlux = std::pow(photonFlux, 1.0f / m_gpuData.renderInformation->gamma);
 
-                photonsAccumulatedAtomic.fetch_add(static_cast<uint64_t>(1));
-            }
+            // 5. Retrieve image dimensions.
+            const size_t imageWidth = m_camera->parameters().width;
+            const size_t imageHeight = m_camera->parameters().height;
+
+            // Helper lambda to add the weighted flux contribution to a given pixel.
+            auto addFluxToPixel = [&](int px, int py, float weight) {
+                // Only update if the pixel is inside the image bounds.
+                if (px >= 0 && px < static_cast<int>(imageWidth) &&
+                    py >= 0 && py < static_cast<int>(imageHeight)) {
+                    size_t pixelIndex = static_cast<size_t>(py) * imageWidth + static_cast<size_t>(px);
+                    float fluxToAdd = weight * correctedFlux;
+
+                    // Use atomic operations to safely update the pixel value.
+                    sycl::atomic_ref<float, sycl::memory_order::relaxed,
+                                     sycl::memory_scope::device,
+                                     sycl::access::address_space::global_space>
+                        imageMemoryAtomic(m_gpuData.imageMemory[pixelIndex]);
+
+                    // Optionally, prevent saturation by clamping the pixel value to 1.0f.
+                    float currentValue = imageMemoryAtomic.load();
+                    float newValue = std::min(1.0f, currentValue + fluxToAdd);
+                    fluxToAdd = newValue - currentValue; // Adjust flux to the remaining margin.
+                    imageMemoryAtomic.fetch_add(fluxToAdd);
+                }
+            };
+            // 6. Distribute the corrected flux into the four neighboring pixels.
+            addFluxToPixel(x0, y0, w00);
+            addFluxToPixel(x1, y0, w10);
+            addFluxToPixel(x0, y1, w01);
+            addFluxToPixel(x1, y1, w11);
+            // 7. Atomically update the photon count.
+            sycl::atomic_ref<uint64_t, sycl::memory_order::relaxed,
+                             sycl::memory_scope::device,
+                             sycl::access::address_space::global_space>
+                photonsAccumulatedAtomic(m_gpuData.renderInformation->photonsAccumulated);
+            photonsAccumulatedAtomic.fetch_add(static_cast<uint64_t>(1));
         }
-
 
         // ---------------------------------------------------------------------
         //  Helper: sample an emissive gaussian object
@@ -538,7 +565,6 @@ namespace VkRender::PathTracer {
             // Distribute P_total across samples based on weight
             emissionPower = P_total * weight;
         }
-
 
 
         // ---------------------------------------------------------------------

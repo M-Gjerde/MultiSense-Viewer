@@ -232,7 +232,7 @@ namespace VkRender {
             key.setLayouts[1] = descriptorRegistry.getManager(DescriptorManagerType::Material).getDescriptorSetLayout();
 
             std::vector<VkVertexInputBindingDescription> vertexInputBinding = {
-                {0, sizeof(VkRender::Vertex), VK_VERTEX_INPUT_RATE_VERTEX}
+                {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX}
             };
 
             std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
@@ -246,6 +246,9 @@ namespace VkRender {
             key.vertexInputAttributes = vertexInputAttributes;
 
             if (meshData->isDynamic) {
+                if (!entity.hasComponent<MaterialComponent>())
+                    continue;
+
                 key.vertexShaderName = "CameraGizmo.vert";
                 key.fragmentShaderName = "defaultTexture.frag";
                 key.vertexInputBindingDescriptions.clear();

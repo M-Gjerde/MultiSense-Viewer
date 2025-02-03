@@ -52,6 +52,9 @@ namespace VkRender {
 
         void onEditorResize() override;
 
+        PathTracer::RenderInformation getRenderInformation() {
+            return m_pathTracer->getRenderInfo();
+        }
     private:
         std::vector<std::unique_ptr<Buffer>> m_shaderSelectionBuffer;
         PipelineManager m_pipelineManager;
@@ -73,6 +76,7 @@ namespace VkRender {
         uint32_t m_currentPipelineWidth = 0;
         uint32_t m_currentPipelineHeight = 0;
         CameraComponent* m_previousSceneCamera = nullptr;
+
     };
 }
 #endif //MULTISENSE_VIEWER_EDITORPATHTRACER_H

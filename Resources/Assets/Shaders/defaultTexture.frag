@@ -1,10 +1,5 @@
 #version 450
 
-layout (location = 0) in vec2 inUV;
-layout (location = 1) in vec4 fragPos;
-layout (location = 2) in vec3 inNormal;
-layout (location = 3) in vec3 inFragPos; // World space position
-
 
 layout (binding = 0) uniform CameraUBO
 {

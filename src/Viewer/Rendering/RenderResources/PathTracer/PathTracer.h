@@ -30,6 +30,7 @@ namespace VkRender::PathTracer {
 
             // Render settings
             float gammaCorrection = 2.2f;
+            uint32_t numFrames = 1;
             bool changed = false;
         };
 
@@ -55,7 +56,6 @@ namespace VkRender::PathTracer {
         PhotonTracer(Application* context, const PipelineSettings& pipelineSettings, std::shared_ptr<Scene>& scene);
 
         void setExecutionDevice();
-        RenderInformation getRenderInfo();
 
         void update(RenderSettings& editorImageUI);
         BackwardInfo backward(RenderSettings& settings);
@@ -68,6 +68,9 @@ namespace VkRender::PathTracer {
 
         const PipelineSettings& getPipelineSettings() {
             return m_pipelineSettings;
+        }
+        RenderInformation getRenderInfo() {
+            return *m_renderInformation;
         }
         void uploadGaussiansFromTensors(GPUDataTensors& data);
 
