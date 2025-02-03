@@ -37,6 +37,3 @@
 [submodule "Resources/models-repository"]
 	path = Resources/models-repository
 	url = https://github.com/M-Gjerde/models-repository
-[submodule "external/imgui"]
-	path = external/imgui
-	url = https://github.com/M-Gjerde/imgui
