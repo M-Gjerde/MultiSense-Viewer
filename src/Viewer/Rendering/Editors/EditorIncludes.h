@@ -159,6 +159,7 @@ namespace VkRender {
 
         EditorUILayoutInfo layoutConstants;
         bool showDebugWindow = false;
+        bool showPlotsWindow = false;
 
         bool active = false;
         bool hovered = false;

@@ -65,7 +65,7 @@ namespace VkRender {
     class OBJFileMeshParameters : public IMeshParameters {
     public:
         explicit OBJFileMeshParameters(std::filesystem::path  path) : path(path) {
-            std::string assetsPath = ApplicationConfig::getInstance().getUserSetting().assetsPath;
+            std::filesystem::path assetsPath = ApplicationConfig::getInstance().getUserSetting().assetsPath;
             // Check if the provided path is relative to the assets path
             if (path.string().find(assetsPath) == 0) {
                 // Compute the relative path from assetsPath

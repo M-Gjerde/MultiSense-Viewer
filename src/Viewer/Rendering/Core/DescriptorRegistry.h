@@ -30,6 +30,8 @@ namespace VkRender {
                 return "DynamicCameraGizmo";
             case DescriptorManagerType::Viewport3DTexture:
                 return "Viewport3DTexture";
+        default:
+            throw std::runtime_error("Unknown Descriptor Manager Type");
         }
     }
 

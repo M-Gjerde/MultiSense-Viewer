@@ -46,8 +46,9 @@ namespace VkRender {
 
         ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
-
-        float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        float fontSize = ImGui::GetFontSize();
+        ImVec2 framePadding = ImGui::GetStyle().FramePadding;
+        float lineHeight = fontSize + framePadding.y * 2.0f;
         ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
@@ -125,8 +126,9 @@ namespace VkRender {
 
         ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
-
-        float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        float fontSize = ImGui::GetFontSize();
+        ImVec2 framePadding = ImGui::GetStyle().FramePadding;
+        float lineHeight = fontSize + framePadding.y * 2.0f;
         ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.8f, 0.1f, 0.15f, 1.0f});
@@ -187,8 +189,9 @@ namespace VkRender {
 
         ImGui::PushMultiItemsWidths(3, ImGui::CalcItemWidth());
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2{0, 0});
-
-        float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+        float fontSize = ImGui::GetFontSize();
+        ImVec2 framePadding = ImGui::GetStyle().FramePadding;
+        float lineHeight = fontSize + framePadding.y * 2.0f;
         ImVec2 buttonSize = {lineHeight + 3.0f, lineHeight};
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4{0.5f, 0.5f, 0.5f, 1.0f}); // Gray
@@ -225,8 +228,10 @@ namespace VkRender {
             auto& component = entity.getComponent<T>();
             ImVec2 contentRegionAvailable = ImGui::GetContentRegionAvail();
 
+            float fontSize = ImGui::GetFontSize();
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2{4, 4});
-            float lineHeight = GImGui->Font->FontSize + GImGui->Style.FramePadding.y * 2.0f;
+
+            float lineHeight = fontSize + 4.0f * 2.0f;
             ImGui::Separator();
             bool open = ImGui::TreeNodeEx((void*)typeid(T).hash_code(), treeNodeFlags, "%s", componentName.c_str());
             ImGui::PopStyleVar();

@@ -48,6 +48,10 @@ namespace VkRender {
 
         void onEditorResize() override;
 
+        struct DebugData {
+            glm::vec3 positionGradient = glm::vec3(0.0f);
+        }m_lastIteration;
+
     private:
         std::vector<std::unique_ptr<Buffer>> m_shaderSelectionBuffer;
         PipelineManager m_pipelineManager;
@@ -72,6 +76,7 @@ namespace VkRender {
         uint32_t m_currentPipelineHeight = 0;
         CameraComponent* m_previousSceneCamera = nullptr;
         uint32_t m_stepIteration = 0;
+
     };
 }
 #endif //MULTISENSE_VIEWER_EDITOR_DIFFRENTIABLE_RENDERER

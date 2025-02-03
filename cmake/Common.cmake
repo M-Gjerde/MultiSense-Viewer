@@ -146,6 +146,7 @@ else ()
     message(STATUS "[VkRenderINFO]: Adding IMGUI from directory: ${IMGUI_DIR}")
 
     set(IMGUI_DIR external/imgui)
+    set(IMPLOT3D_DIR external/implot3d)
 
     target_sources(${PROJECT_NAME} PRIVATE
             ${IMGUI_DIR}/imgui.h
@@ -156,11 +157,20 @@ else ()
             ${IMGUI_DIR}/imgui_tables.cpp
             ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
             ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-            ${IMGUI_DIR}/imgui_widgets.cpp)
+            ${IMGUI_DIR}/imgui_widgets.cpp
+
+            ${IMPLOT3D_DIR}/implot3d.cpp
+            ${IMPLOT3D_DIR}/implot3d_demo.cpp
+            ${IMPLOT3D_DIR}/implot3d_items.cpp
+            ${IMPLOT3D_DIR}/implot3d_meshes.cpp
+
+    )
     target_include_directories(${PROJECT_NAME} PRIVATE
             ${IMGUI_DIR}/
             ${IMGUI_DIR}/backends
             ../src/Viewer/Rendering/ImGui/Custom
+
+            ${IMPLOT3D_DIR}/
     )
 
 

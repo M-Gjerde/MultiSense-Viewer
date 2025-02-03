@@ -108,8 +108,6 @@ namespace VkRender {
         m_guiResourcesData.imageButtonTextureDescriptor.resize(m_guiResources->iconCount);
         io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(m_guiResources->fontDescriptors[m_guiResources->fontCount]));
 
-        //io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(m_guiResources->fontDescriptors.front()));
-
         ImGuiStyle &style = ImGui::GetStyle();
         style.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
         style.Colors[ImGuiCol_TitleBgActive] = ImVec4(1.0f, 0.0f, 0.0f, 0.8f);

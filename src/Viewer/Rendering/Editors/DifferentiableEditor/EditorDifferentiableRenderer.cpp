@@ -74,7 +74,8 @@ namespace VkRender {
 
 
             // Load the YAML file
-            std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "render_info.yaml";
+            std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" /
+                "simple_dataset" / "render_info.yaml";
 
 
             //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
@@ -202,12 +203,10 @@ namespace VkRender {
             // Load the target tensor
 
             std::vector<std::filesystem::path> filePaths{
-                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera1.pfm",
-                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera2.pfm",
-                 Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera3.pfm"
-            };
-
-            ;
+                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera1.pfm",
+                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera2.pfm",
+                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera3.pfm"
+            };;
 
             Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
                                              filePaths[activeCameraIndex].string());
@@ -231,6 +230,10 @@ namespace VkRender {
             auto gradPositions = m_photonRebuildModule->m_tensorData.positions.grad();
             auto gradScales = m_photonRebuildModule->m_tensorData.scales.grad();
             auto gradNormals = m_photonRebuildModule->m_tensorData.normals.grad();
+
+            m_lastIteration.positionGradient = glm::vec3(positions[0][0].item<float>(),
+                                                         positions[0][1].item<float>(),
+                                                         positions[0][2].item<float>());
 
             if (positions.defined()) {
                 // Check for NaNs or Infs

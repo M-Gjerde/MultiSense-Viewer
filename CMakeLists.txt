@@ -285,8 +285,6 @@ set(SOURCE_FILES
         src/Viewer/Application/ApplicationUserSettingsSerializer.h
 )
 
-list(APPEND SOURCE_FILES ${IMGUI_SRC})
-
 # Libraries
 set(LIBRARIES
         Vulkan::Vulkan
@@ -309,6 +307,7 @@ if (ENABLE_SYCL)
             #src/Viewer/Rendering/RenderResources/3DGS/SYCLGaussian3D.cpp
             src/Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.cpp
             src/Viewer/Rendering/RenderResources/PathTracer/PathTracer.cpp
+            src/Viewer/Rendering/Editors/PathTracer/EditorPathTracer.cpp
             src/Viewer/Tools/SyclDeviceSelector.h
     )
     list(APPEND SOURCE_FILES ${SYCL_SOURCES})
@@ -322,6 +321,7 @@ if (${ENABLE_PYTORCH})
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildModule.cpp
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildFunction.cpp
             src/Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.cpp
+            src/Viewer/Rendering/ImGui/AdditionalWindows/Plot3DWindow.cpp
     )
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})
 
@@ -343,20 +343,10 @@ add_custom_command(
         DEPENDS ${ASSETS}
         COMMENT "Copying assets..."
 )
-
-#Custom command and target to copy assets if they have changed
-file(GLOB ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/models-repository/simple_dataset/*")
-add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/Resources/models-repository/simple_dataset ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
-        DEPENDS ${ASSETS}
-        COMMENT "Copying assets..."
-)
 # Add custom target to copy both assets
 add_custom_target(copy_assets ALL
         DEPENDS
         ${CMAKE_CURRENT_BINARY_DIR}/Resources/Assets
-        ${CMAKE_CURRENT_BINARY_DIR}/Resources/models-repository/simple_dataset
 )
 # Build configurations for different platforms
 if (UNIX)

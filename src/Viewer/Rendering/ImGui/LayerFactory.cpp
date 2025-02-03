@@ -23,6 +23,8 @@
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.h"
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayer.h"
 
+#include "Viewer/Rendering/ImGui/AdditionalWindows/Plot3DWindow.h" // TODO should have a way of transferring data between editors
+
 namespace VkRender {
 
 
@@ -30,6 +32,7 @@ namespace VkRender {
 
         if (layerName == "LayerExample") return std::make_shared<LayerExample>();
         if (layerName == "DebugWindow") return std::make_shared<DebugWindow>();
+        if (layerName == "Plot3DWindow") return std::make_shared<Plot3DWindow>();
         if (layerName == "NewVersionAvailable") return std::make_shared<NewVersionAvailable>();
         if (layerName == "WelcomeScreenLayer") return std::make_shared<WelcomeScreenLayer>();
         if (layerName == "SideBarLayer") return std::make_shared<SideBarLayer>();

@@ -17,30 +17,24 @@
 **/
 
 namespace VkRender {
-
-
     class MenuLayer : public VkRender::Layer {
-
     public:
         /** Called once upon this object creation**/
         void onAttach() override {
 #ifdef __linux__
             int argc = 0;
-            char **argv = NULL;
-            gtk_init(&argc, &argv);  // Initialize GTK
+            char** argv = NULL;
+            gtk_init(&argc, &argv); // Initialize GTK
 #endif
         }
 
         /** Called after frame has finished rendered **/
         void onFinishedRender() override {
-
         }
 
 
         /** Called once per frame **/
         void onUIRender() override {
-
-
             // Push style variables
             ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 5.0f));
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10.0f, 10.0f));
@@ -63,16 +57,19 @@ namespace VkRender {
                         std::vector<std::filesystem::path> projectFiles;
                         if (std::filesystem::exists(projectDir) && std::filesystem::is_directory(projectDir)) {
                             for (const auto& entry : std::filesystem::directory_iterator(projectDir)) {
-                                if (entry.is_regular_file() && entry.path().extension() == ".project") { // Use your project file extension
+                                if (entry.is_regular_file() && entry.path().extension() == ".project") {
+                                    // Use your project file extension
                                     projectFiles.push_back(entry.path());
                                 }
                             }
                         }
 
                         for (const auto& projectFile : projectFiles) {
-                            bool isCurrentProject = m_context->isCurrentProject(projectFile.filename().replace_extension().string());
+                            bool isCurrentProject = m_context->isCurrentProject(
+                                projectFile.filename().replace_extension().string());
 
-                            if (ImGui::MenuItem(projectFile.filename().replace_extension().c_str(), nullptr, isCurrentProject)) {
+                            if (ImGui::MenuItem(projectFile.filename().replace_extension().c_str(), nullptr,
+                                                isCurrentProject)) {
                                 if (!isCurrentProject) {
                                     Project project;
                                     ProjectSerializer serializer(project);
@@ -80,25 +77,25 @@ namespace VkRender {
                                         m_context->loadProject(project);
                                         ImGui::SetCurrentContext(m_context->getMainUIContext());
                                     }
-
                                 }
                             }
-
                         }
 
                         if (ImGui::MenuItem("Save current layout as Project..", nullptr)) {
-                            auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path())
+                                                    ? userSetting.lastActiveScenePath.parent_path()
+                                                    : Utils::getSystemHomePath();
                             std::vector<std::string> types{"project"};
-                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_PROJECT_AS, &loadFileFuture, openLocation);
+                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_PROJECT_AS,
+                                                        &loadFileFuture, openLocation);
                         }
-                        ImGui::EndMenu();  // End the Projects submenu
+                        ImGui::EndMenu(); // End the Projects submenu
                     }
 
                     // Scenes Menu
                     if (ImGui::BeginMenu("Scenes")) {
-
-                        auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
+                        auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
 
                         if (ImGui::MenuItem("New Scene", nullptr)) {
                             m_context->newScene();
@@ -113,24 +110,32 @@ namespace VkRender {
                             }
                         }
                         if (ImGui::MenuItem("Save Scene As..", nullptr)) {
-                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path())
+                                                    ? userSetting.lastActiveScenePath.parent_path()
+                                                    : Utils::getSystemHomePath();
                             std::vector<std::string> types{"multisense"};
-                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_SCENE_AS, &loadFileFuture, openLocation);
+                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_SCENE_AS,
+                                                        &loadFileFuture, openLocation);
                         }
                         if (ImGui::MenuItem("Load Scene file", nullptr)) {
-                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path())
+                                                    ? userSetting.lastActiveScenePath.parent_path()
+                                                    : Utils::getSystemHomePath();
 
                             std::vector<std::string> types{"multisense"};
-                            EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::LOAD_SCENE, &loadFileFuture, openLocation);
-
+                            EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::LOAD_SCENE,
+                                                              &loadFileFuture, openLocation);
                         }
 
                         if (ImGui::MenuItem("Set Assets Path", nullptr)) {
-                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
-                            EditorUtils::openImportFolderDialog("Load Scene", openLocation, LayerUtils::SELECT_FOLDER, &loadFileFuture);
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path())
+                                                    ? userSetting.lastActiveScenePath.parent_path()
+                                                    : Utils::getSystemHomePath();
+                            EditorUtils::openImportFolderDialog("Load Scene", openLocation, LayerUtils::SELECT_FOLDER,
+                                                                &loadFileFuture);
                         }
 
-                        ImGui::EndMenu();  // End the Scenes submenu
+                        ImGui::EndMenu(); // End the Scenes submenu
                     }
 
                     if (ImGui::MenuItem("Quit")) {
@@ -142,6 +147,7 @@ namespace VkRender {
 
                 if (ImGui::BeginMenu("View")) {
                     ImGui::MenuItem("Console", nullptr, &m_editor->ui()->showDebugWindow);
+                    ImGui::MenuItem("Plots", nullptr, &m_editor->ui()->showPlotsWindow);
                     ImGui::EndMenu();
                 }
 
@@ -150,67 +156,64 @@ namespace VkRender {
             }
 
             checkFileImportCompletion();
-// TODO Not the right place to call ubuntu file dialog stuff.
+            // TODO Not the right place to call ubuntu file dialog stuff.
 #ifdef __linux__
             while (g_main_context_iteration(nullptr, false));
 #endif
             ImGui::PopStyleVar(3);
             ImGui::PopStyleColor(5);
-
-
         }
 
         void
-        handleSelectedFileOrFolder(const LayerUtils::LoadFileInfo &loadFileInfo) {
+        handleSelectedFileOrFolder(const LayerUtils::LoadFileInfo& loadFileInfo) {
             if (!loadFileInfo.path.empty()) {
                 switch (loadFileInfo.filetype) {
-                    case LayerUtils::LOAD_SCENE: {
-                        auto scene = m_context->newScene();
-                        if (scene) {
-                            SceneSerializer serializer(scene);
-                            serializer.deserialize(loadFileInfo.path);
-                            auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-                            userSetting.lastActiveScenePath = loadFileInfo.path;
-                            userSetting.assetsPath = loadFileInfo.path.parent_path();
-                        }
+                case LayerUtils::LOAD_SCENE: {
+                    auto scene = m_context->newScene();
+                    if (scene) {
+                        SceneSerializer serializer(scene);
+                        serializer.deserialize(loadFileInfo.path);
+                        auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
+                        userSetting.lastActiveScenePath = loadFileInfo.path;
+                        userSetting.assetsPath = loadFileInfo.path.parent_path();
                     }
-                        break;
-                    case LayerUtils::SAVE_SCENE_AS: {
-                        auto scene = m_context->activeScene();
-                        if (scene) {
-                            auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-                            auto path = loadFileInfo.path;
-                            SceneSerializer serializer(scene);
-                            serializer.serialize(path);
-                            userSetting.lastActiveScenePath = path;
-                            userSetting.assetsPath = path.parent_path();
-                        }
+                }
+                break;
+                case LayerUtils::SAVE_SCENE_AS: {
+                    auto scene = m_context->activeScene();
+                    if (scene) {
+                        auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
+                        auto path = loadFileInfo.path;
+                        SceneSerializer serializer(scene);
+                        serializer.serialize(path);
+                        userSetting.lastActiveScenePath = path;
+                        userSetting.assetsPath = path.parent_path();
                     }
-                        break;
-                    case LayerUtils::SAVE_PROJECT_AS: {
-                            auto project = m_context->getCurrentProject();
-                            project.projectName = loadFileInfo.path.filename().replace_extension();
-                            ProjectSerializer serializer(project);
-                            serializer.serialize(loadFileInfo.path);
-                            serializer.serialize(Utils::getProjectsPath() / loadFileInfo.path.filename());
-                            ApplicationConfig::getInstance().getUserSetting().projectName = project.projectName;
+                }
+                break;
+                case LayerUtils::SAVE_PROJECT_AS: {
+                    auto project = m_context->getCurrentProject();
+                    project.projectName = loadFileInfo.path.filename().replace_extension();
+                    ProjectSerializer serializer(project);
+                    serializer.serialize(loadFileInfo.path);
+                    serializer.serialize(Utils::getProjectsPath() / loadFileInfo.path.filename());
+                    ApplicationConfig::getInstance().getUserSetting().projectName = project.projectName;
+                }
+                break;
+                case LayerUtils::SELECT_FOLDER: {
+                    auto scene = m_context->activeScene();
+                    if (scene) {
+                        std::filesystem::path assetsBasePath = loadFileInfo.path;
+                        SceneSerializer serializer(scene);
+                        serializer.deserialize(assetsBasePath);
+                        auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
+                        userSetting.lastActiveScenePath = loadFileInfo.path;
+                        userSetting.assetsPath = loadFileInfo.path.parent_path();
                     }
-                        break;
-                    case LayerUtils::SELECT_FOLDER: {
-                            auto scene = m_context->activeScene();
-                            if (scene) {
-                                std::filesystem::path assetsBasePath = loadFileInfo.path;
-                                SceneSerializer serializer(scene);
-                                serializer.deserialize(assetsBasePath);
-                                auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-                                userSetting.lastActiveScenePath = loadFileInfo.path;
-                                userSetting.assetsPath = loadFileInfo.path.parent_path();
-                            }
-                    }
-                        break;
-                    default:
-                        break;
-
+                }
+                break;
+                default:
+                    break;
                 }
             }
         }
@@ -226,13 +229,10 @@ namespace VkRender {
         /** Called once upon this object destruction **/
         void onDetach()
         override {
-
         }
 
     private:
         std::future<LayerUtils::LoadFileInfo> loadFileFuture;
-
     };
-
 }
 #endif //MULTISENSE_VIEWER_MENULAYER_H

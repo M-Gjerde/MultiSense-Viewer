@@ -142,6 +142,7 @@ namespace VkRender {
             m_editors.push_back(std::move(editor));
         }
 
+        m_mainEditor->addUI("Plot3DWindow"); // TODO suspicious add here, but it is because it relies on
 
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();
         m_multiSense->setup();

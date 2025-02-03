@@ -9,6 +9,7 @@
 #include "EditorDifferentiableRendererLayerUI.h"
 #include "Viewer/Rendering/ImGui/Layer.h"
 
+
 namespace VkRender {
     class EditorDifferentiableRendererLayer : public Layer {
     public:
@@ -23,6 +24,7 @@ namespace VkRender {
 
         /** Called once per frame **/
         void onUIRender() override {
+
             // Set window position and size
             // Set window position and size
             ImVec2 window_pos = ImVec2(m_editor->ui()->layoutConstants.uiXOffset, 0.0f); // Position (x, y)

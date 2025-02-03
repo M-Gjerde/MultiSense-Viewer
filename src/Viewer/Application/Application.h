@@ -126,6 +126,8 @@ namespace VkRender {
         VkInstance& getInstance() {return instance;}
         GLFWwindow* getWindow() {return window;}
 
+        std::vector<std::unique_ptr<Editor> > m_editors;
+
     private:
         void keyboardCallback(GLFWwindow *window, int key, int scancode, int action, int mods) override;
 
@@ -147,7 +149,6 @@ namespace VkRender {
 
         void onCharInput(unsigned int codepoint) override;
 
-        std::vector<std::unique_ptr<Editor> > m_editors;
 
         std::shared_ptr<Scene> m_activeScene;
         std::string m_selectedCameraTag = "Default Camera";
@@ -160,6 +161,8 @@ namespace VkRender {
         std::shared_ptr<UsageMonitor> m_usageMonitor;
         Entity m_selectedEntity;
 
+
+    private:
         std::shared_ptr<MultiSense::MultiSenseRendererBridge> m_multiSense;
 
         friend class ApplicationConfig;
