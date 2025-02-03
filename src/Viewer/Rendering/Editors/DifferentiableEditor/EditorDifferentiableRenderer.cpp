@@ -74,11 +74,11 @@ namespace VkRender {
 
 
             // Load the YAML file
-            std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" /
-                "simple_dataset" / "render_info.yaml";
+            //std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" /"simple_dataset" / "render_info.yaml";
 
 
-            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
+
+            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/3_views/render_info.yaml";
             //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
@@ -203,9 +203,9 @@ namespace VkRender {
             // Load the target tensor
 
             std::vector<std::filesystem::path> filePaths{
-                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera1.pfm",
-                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera2.pfm",
-                Utils::getAssetsPath().parent_path() / "models-repository" / "simple_dataset" / "Camera3.pfm"
+                "/home/magnus/datasets/PathTracingGS/3_views/Camera1.pfm",
+                "/home/magnus/datasets/PathTracingGS/3_views/Camera2.pfm",
+                "/home/magnus/datasets/PathTracingGS/3_views/Camera3.pfm"
             };;
 
             Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
