@@ -48,7 +48,7 @@ namespace VkRender {
         m_width = createInfo.imageCreateInfo.extent.width;
         m_height = createInfo.imageCreateInfo.extent.height;
 
-        Log::Logger::getInstance()->info("Created Image {}", createInfo.debugInfo);
+        Log::Logger::getInstance()->info("Created Image {}, size: {}x{}", createInfo.debugInfo, m_width, m_height);
     }
 
     VulkanImage::~VulkanImage() {

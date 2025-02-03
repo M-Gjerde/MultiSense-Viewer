@@ -5,7 +5,7 @@
 #ifndef PINHOLECAMERA_H
 #define PINHOLECAMERA_H
 
-#include <multisense_viewer/src/Viewer/Rendering/Editors/BaseCamera.h>
+#include <Viewer/Rendering/Editors/BaseCamera.h>
 
 
 namespace VkRender {

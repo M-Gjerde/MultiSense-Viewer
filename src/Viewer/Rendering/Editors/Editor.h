@@ -36,7 +36,10 @@ namespace VkRender {
         EditorType editorTypeDescription = EditorType::TestWindow;
         bool resizeable = true;
         size_t editorIndex = 0;
+
+        bool disableImGUI = false;
         ImGuiContext *uiContext = nullptr;
+
 
         std::shared_ptr<GuiAssets> guiResources;
 
@@ -238,12 +241,13 @@ namespace VkRender {
 
         bool m_renderDepthOnly = false;
         bool m_renderToOffscreen = false;
+        bool m_disableImGUI = false;
 
         struct StagingBuffer {
             VkBuffer buffer;
             VkDeviceMemory memory;
         };
-        StagingBuffer m_copyDataBuffer;
+        StagingBuffer m_copyDataBuffer{};
     };
 }
 

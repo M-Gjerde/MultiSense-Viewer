@@ -4,7 +4,7 @@
 
 #include "Viewer/Rendering/Editors/Video/VideoPlaybackSystem.h"
 
-#include <multisense_viewer/src/Viewer/Rendering/Editors/CommonEditorFunctions.h>
+#include <Viewer/Rendering/Editors/CommonEditorFunctions.h>
 
 #include "Viewer/Application/Application.h"
 

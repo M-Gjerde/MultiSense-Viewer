@@ -64,8 +64,8 @@ namespace VkRender {
     public:
 
         GuiManager(VulkanDevice &vulkanDevice, VkRenderPass const &renderPass, EditorUI *editorUi,
-                   VkSampleCountFlagBits msaaSamples, uint32_t imageCount, Application *ctx, ImGuiContext *imguiCtx,
-                   const GuiAssets *guiResources); // TODO context should be pass by reference as it is no nullable?
+                   VkSampleCountFlagBits msaaSamples, uint32_t imageCount, Application *ctx,
+                   GuiAssets *guiResources); // TODO context should be pass by reference as it is no nullable?
 
         ~GuiManager() {
             for (const auto &layerStack: m_LayerStack)
@@ -102,7 +102,7 @@ namespace VkRender {
         std::vector<std::shared_ptr<Layer>> m_LayerStack{};
         GuiAssets::PushConstBlock pushConstBlock{};
         // Textures
-        const GuiAssets *m_guiResources;
+        GuiAssets *m_guiResources;
         GuiResourcesData m_guiResourcesData;
 
         // Vulkan resources for rendering the UI

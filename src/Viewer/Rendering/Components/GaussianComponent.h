@@ -5,7 +5,7 @@
 #ifndef MULTISENSE_VIEWER_GAUSSIANCOMPONENT_H
 #define MULTISENSE_VIEWER_GAUSSIANCOMPONENT_H
 
-#include <multisense_viewer/external/tinyply/source/tinyply.h>
+#include <tinyply.h>
 #include <vector>
 #include <filesystem>
 #include <iostream>

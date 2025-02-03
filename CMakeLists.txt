@@ -267,8 +267,6 @@ set(SOURCE_FILES
         src/Viewer/Rendering/Editors/SceneRenderer.cpp
         src/Viewer/Rendering/Editors/SceneHierarchy/SceneHierarchyLayer.cpp
 
-        src/Viewer/Rendering/Editors/PathTracer/EditorPathTracer.cpp
-
         src/Viewer/Rendering/Core/PipelineKey.cpp
         src/Viewer/Rendering/Editors/Properties/PropertiesLayer.cpp
         src/Viewer/Rendering/Core/PipelineManager.cpp
@@ -287,11 +285,12 @@ set(SOURCE_FILES
         src/Viewer/Application/ApplicationUserSettingsSerializer.h
 )
 
+list(APPEND SOURCE_FILES ${IMGUI_SRC})
+
 # Libraries
 set(LIBRARIES
         Vulkan::Vulkan
         glfw
-        imgui
         tiff
         nlohmann_json::nlohmann_json
         httplib::httplib

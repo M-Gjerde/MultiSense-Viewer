@@ -100,21 +100,15 @@ namespace VkRender::PathTracer {
     class PhotonTracer {
     public:
 
-        struct Settings
-        {
-            // Device and execution settings
-            bool clearImageMemory = false;
-            std::string kernelDevice = "GPU";
+        struct RenderSettings {
+            PinholeCamera camera{};
+            TransformComponent cameraTransform{};
 
-            // Execution Flow:
             KernelType kernelType = KERNEL_PATH_TRACER_2DGS;
 
             // Render settings
-            uint64_t photonCount = 1e4;
-            int numBounces = 32;
             float gammaCorrection = 2.2f;
-
-
+            bool changed = false;
         };
 
 
@@ -124,7 +118,7 @@ namespace VkRender::PathTracer {
         void update(const EditorPathTracerLayerUI& editorImageUI, std::shared_ptr<Scene> scene) {}
         float* getImage() {return nullptr;}
         ~PhotonTracer() {}
-        void upload(std::weak_ptr<Scene> scene, const Settings& settings) {}
+        void upload(std::weak_ptr<Scene> scene, const RenderSettings& settings) {}
         void setActiveCamera(const TransformComponent &transformComponent, float w, float h){}
         void setActiveCamera(const std::shared_ptr<PinholeCamera>& camera, const TransformComponent *cameraTransform){}
     };

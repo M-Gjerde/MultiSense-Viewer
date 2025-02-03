@@ -91,9 +91,7 @@ namespace VkRender {
         m_mainEditor->addUI("MenuLayer");
         m_mainEditor->addUI("MainContextLayer");
 
-
         m_editorFactory = std::make_unique<EditorFactory>();
-
 
         std::string lastActiveProject = ApplicationConfig::getInstance().getUserSetting().projectName;
         auto projectDir = Utils::getProjectsPath(); // This should return a vector of project file paths
@@ -143,6 +141,7 @@ namespace VkRender {
             editor->loadScene(scene);
             m_editors.push_back(std::move(editor));
         }
+
 
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();
         m_multiSense->setup();
@@ -241,6 +240,7 @@ namespace VkRender {
         mainIO.MousePos = ImVec2(mouse.x, mouse.y);
         mainIO.MouseDown[0] = mouse.left;
         mainIO.MouseDown[1] = mouse.right;
+
         for (auto& editor : m_editors) {
             ImGui::SetCurrentContext(editor->guiContext());
             ImGuiIO& otherIO = ImGui::GetIO();
@@ -250,6 +250,7 @@ namespace VkRender {
             otherIO.MouseDown[0] = mouse.left;
             otherIO.MouseDown[1] = mouse.right;
         }
+
 
         updateEditors();
         m_mainEditor->update();
@@ -287,6 +288,7 @@ namespace VkRender {
 
         sceneRendererCreateInfo.pPassCreateInfo = passCreateInfo;
         sceneRendererCreateInfo.editorTypeDescription = EditorType::SceneRenderer;
+        sceneRendererCreateInfo.disableImGUI = true;
 
         auto editorPtr = std::shared_ptr<Editor>(std::move(createEditorWithUUID(uuid, sceneRendererCreateInfo)));
         m_sceneRenderers[uuid] = std::dynamic_pointer_cast<SceneRenderer>(std::move(editorPtr));

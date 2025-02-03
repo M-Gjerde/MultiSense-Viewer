@@ -65,17 +65,40 @@ namespace VkRender {
 
     GuiManager::GuiManager(VulkanDevice &vulkanDevice, VkRenderPass const &renderPass, EditorUI *editorUi,
                            VkSampleCountFlagBits msaaSamples, uint32_t imageCount, Application *ctx,
-                           ImGuiContext *imguiCtx,
-                           const GuiAssets *guiResources) : m_guiResources(guiResources),
+                           GuiAssets *guiResources) : m_guiResources(guiResources),
                                                             m_vulkanDevice(vulkanDevice), m_context(ctx) {
 
         vertexBuffer.resize(imageCount);
         indexBuffer.resize(imageCount);
         indexCount.resize(imageCount);
         vertexCount.resize(imageCount);
-        m_imguiContext = imguiCtx;
+        m_imguiContext = ImGui::CreateContext(&m_guiResources->fontAtlas);
         ImGui::SetCurrentContext(m_imguiContext);
         // Load UI info from file:
+
+
+        /*
+
+        // Setup Platform/Renderer backends
+        ImGui_ImplGlfw_InitForVulkan(ctx->getWindow(), true);
+        ImGui_ImplVulkan_InitInfo init_info = {};
+        init_info.Instance = ctx->getInstance();
+        init_info.PhysicalDevice = vulkanDevice.m_PhysicalDevice;
+        init_info.Device = vulkanDevice.m_LogicalDevice;
+        init_info.QueueFamily = vulkanDevice.m_QueueFamilyIndices.graphics;
+        init_info.Queue = vulkanDevice.m_TransferQueue;
+        init_info.PipelineCache = nullptr;
+        init_info.DescriptorPoolSize = ctx->swapChainBuffers().size() * 3;
+        init_info.RenderPass = renderPass;
+        init_info.Subpass = 0;
+        init_info.MinImageCount = ctx->swapChainBuffers().size();
+        init_info.ImageCount = ctx->swapChainBuffers().size();
+        init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+        init_info.Allocator = nullptr;
+        init_info.CheckVkResultFn = nullptr;
+        ImGui_ImplVulkan_Init(&init_info);
+
+        */
 
         ImGuiIO &io = ImGui::GetIO();
         io.GetClipboardTextFn = ImGuiGlfwGetClipboardText;
@@ -84,6 +107,8 @@ namespace VkRender {
         io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
         m_guiResourcesData.imageButtonTextureDescriptor.resize(m_guiResources->iconCount);
         io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(m_guiResources->fontDescriptors[m_guiResources->fontCount]));
+
+        //io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(m_guiResources->fontDescriptors.front()));
 
         ImGuiStyle &style = ImGui::GetStyle();
         style.Colors[ImGuiCol_TitleBg] = ImVec4(1.0f, 0.0f, 0.0f, 0.6f);
@@ -108,12 +133,14 @@ namespace VkRender {
         m_guiResourcesData.font24 = guiResources->font24;
         m_guiResourcesData.fontIcons = guiResources->fontIcons;
 
+        /*
         for (int i = 0; i < m_guiResources->iconCount; ++i) {
-            m_guiResourcesData.imageButtonTextureDescriptor[i] = reinterpret_cast<void *>(m_guiResources->imageIconDescriptors[i]);
+            m_guiResourcesData.imageButtonTextureDescriptor[i] = reinterpret_cast<ImTextureID>(m_guiResources->imageIconDescriptors[i]);
         }
         for (int i = 0; i < m_guiResources->gif.totalFrames; ++i) {
-            m_guiResourcesData.gif.image[i] = m_guiResources->gifImageDescriptors[i];
+            m_guiResourcesData.gif.image[i] =  reinterpret_cast<ImTextureID>(m_guiResources->gifImageDescriptors[i]);
         }
+        */
 
         VulkanGraphicsPipelineCreateInfo pipelineCreateInfo(renderPass, m_vulkanDevice);
         pipelineCreateInfo.rasterizationStateCreateInfo = Populate::pipelineRasterizationStateCreateInfo(
@@ -199,8 +226,6 @@ namespace VkRender {
     void
     GuiManager::update() {
         ImGui::SetCurrentContext(m_imguiContext);
-
-
         /*
         //Log::Logger::getInstance()->trace("Set ImGUI Context {} and updating", reinterpret_cast<uint64_t>(m_imguiContext));
         m_guiResourcesData.frameTimer = frameTimer;
@@ -216,16 +241,20 @@ namespace VkRender {
         m_guiResourcesData.aspect = static_cast<float>(editorUI.width) / static_cast<float>(editorUI.height);
         m_guiResourcesData.= pInput;
         */
+        //ImGui_ImplVulkan_NewFrame();
+        //ImGui_ImplGlfw_NewFrame();
 
         ImGui::NewFrame();
+
 
         {
             for (auto &layer: m_LayerStack) {
                 layer->onUIRender();
             }
         }
+
+
         ImGui::Render();
-        ImGui::EndFrame();
 
         // Save to config file every 5 seconds
         if (std::chrono::duration_cast<std::chrono::duration<float >>(
@@ -361,7 +390,8 @@ namespace VkRender {
                 for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
-                    auto texture = static_cast<VkDescriptorSet>(pcmd->GetTexID());
+                    auto texture = reinterpret_cast<VkDescriptorSet>(pcmd->GetTexID());
+
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                                             m_pipeline->getPipelineLayout(), 0, 1,
                                             &texture, 0, nullptr);

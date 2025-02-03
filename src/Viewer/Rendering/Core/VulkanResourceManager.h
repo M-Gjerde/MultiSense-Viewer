@@ -10,7 +10,7 @@
 #include <mutex>
 #include <deque>
 #include <vulkan/vulkan.h>
-#include <multisense_viewer/external/VulkanMemoryAllocator/include/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 #include <functional>
 #include <utility>
 #include "VulkanDevice.h"

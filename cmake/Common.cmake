@@ -146,13 +146,24 @@ else ()
     message(STATUS "[VkRenderINFO]: Adding IMGUI from directory: ${IMGUI_DIR}")
 
     set(IMGUI_DIR external/imgui)
-    include_directories(../src/Viewer/Rendering/ImGui/Custom) # Custom IMGUI application
-    include_directories(SYSTEM ${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
-    set(IMGUI_SRC
-            ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp ${IMGUI_DIR}/imgui.cpp
-            ${IMGUI_DIR}/imgui_draw.cpp ${IMGUI_DIR}/imgui_demo.cpp ${IMGUI_DIR}/imgui_tables.cpp ${IMGUI_DIR}/imgui_widgets.cpp
-            src/Viewer/Rendering/ImGui/Custom/imgui_user.h)
-    add_library(imgui STATIC ${IMGUI_SRC})
+
+    target_sources(${PROJECT_NAME} PRIVATE
+            ${IMGUI_DIR}/imgui.h
+            ${IMGUI_DIR}/imgui_internal.h
+            ${IMGUI_DIR}/imgui.cpp
+            ${IMGUI_DIR}/imgui_demo.cpp
+            ${IMGUI_DIR}/imgui_draw.cpp
+            ${IMGUI_DIR}/imgui_tables.cpp
+            ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+            ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+            ${IMGUI_DIR}/imgui_widgets.cpp)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+            ${IMGUI_DIR}/
+            ${IMGUI_DIR}/backends
+            ../src/Viewer/Rendering/ImGui/Custom
+    )
+
+
 endif ()
 
 

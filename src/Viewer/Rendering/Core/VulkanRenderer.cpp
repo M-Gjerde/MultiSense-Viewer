@@ -36,7 +36,7 @@
 
 
 #include <stb_image.h>
-#include <multisense_viewer/external/VulkanMemoryAllocator/include/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 
 #include "VulkanRenderer.h"
 
@@ -1267,7 +1267,7 @@ namespace VkRender {
                 throw std::runtime_error("Failed to create framebuffer");
             }
         }
-        Log::Logger::getInstance()->info("Prepared Renderer");
+        Log::Logger::getInstance()->info("Created {} Framebuffers, size: {}x{}", m_frameBuffers.size(), m_width, m_height);
     }
 
     // Virtual functions

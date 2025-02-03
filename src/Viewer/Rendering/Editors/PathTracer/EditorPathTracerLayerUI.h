@@ -7,6 +7,8 @@
 
 #include "Viewer/Rendering/ImGui/Layer.h"
 
+#include "Viewer/Rendering/RenderResources/PathTracer/Definitions.h"
+
 namespace VkRender {
 
     struct EditorPathTracerLayerUI : EditorUI {

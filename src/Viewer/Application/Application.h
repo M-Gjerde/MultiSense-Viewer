@@ -39,7 +39,7 @@
 #include "pch.h"
 
 #include <GLFW/glfw3.h>
-#include <multisense_viewer/external/entt/include/entt/entt.hpp>
+#include <entt/entt.hpp>
 
 
 #include "Viewer/Application/Project.h"
@@ -123,6 +123,8 @@ namespace VkRender {
             return m_setDebugUtilsObjectNameEXT;
         }
 
+        VkInstance& getInstance() {return instance;}
+        GLFWwindow* getWindow() {return window;}
 
     private:
         void keyboardCallback(GLFWwindow *window, int key, int scancode, int action, int mods) override;

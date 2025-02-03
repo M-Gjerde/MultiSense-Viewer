@@ -6,7 +6,7 @@
 #define MULTISENSE_VIEWER_DEFAULTGRAPHICSPIPELINECOMPONENT2_H
 
 
-#include <multisense_viewer/src/Viewer/Rendering/Core/PipelineKey.h>
+#include <Viewer/Rendering/Core/PipelineKey.h>
 
 #include "Viewer/Rendering/Core/RenderDefinitions.h"
 #include "Viewer/Rendering/Components/Components.h"

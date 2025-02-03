@@ -4,7 +4,7 @@
 
 #include "VulkanGraphicsPipeline.h"
 
-#include <multisense_viewer/src/Viewer/Tools/Macros.h>
+#include <Viewer/Tools/Macros.h>
 
 #include "VulkanResourceManager.h"
 

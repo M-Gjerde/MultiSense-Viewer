@@ -4,7 +4,7 @@
 
 #include "EditorGaussianViewer.h"
 
-#include <multisense_viewer/src/Viewer/Rendering/Editors/CommonEditorFunctions.h>
+#include <Viewer/Rendering/Editors/CommonEditorFunctions.h>
 
 #include "EditorGaussianViewerLayer.h"
 

@@ -48,7 +48,7 @@
 #include "Viewer/Tools/Macros.h"
 DISABLE_WARNING_PUSH
 DISABLE_WARNING_ALL
-#include <multisense_viewer/external/VulkanMemoryAllocator/include/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 DISABLE_WARNING_POP
 
 #define IMGUI_DEFINE_MATH_OPERATORS

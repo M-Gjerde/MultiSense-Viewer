@@ -42,7 +42,7 @@
 #include <cstdint>
 #include <memory>
 #include <glm/ext/matrix_float4x4.hpp>
-#include <multisense_viewer/external/LibMultiSense/source/LibMultiSense/include/MultiSense/MultiSenseChannel.hh>
+#include <MultiSense/MultiSenseChannel.hh>
 
 #include "Viewer/Rendering/Core/RenderDefinitions.h"
 #include "Viewer/Tools/Utils.h"

@@ -6,7 +6,7 @@
 #define MULTISENSE_VIEWER_VULKANRENDERPASS_H
 
 #include <vulkan/vulkan_core.h>
-#include <multisense_viewer/external/VulkanMemoryAllocator/include/vk_mem_alloc.h>
+#include <vk_mem_alloc.h>
 #include <string>
 #include <memory>
 #include <utility>

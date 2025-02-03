@@ -55,98 +55,99 @@ namespace VkRender {
 
             float menuBarHeight = 25.0f;
             ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, menuBarHeight));
-            ImGui::BeginMainMenuBar();
-            if (ImGui::BeginMenu("File")) {
-                // Projects Menu
-                if (ImGui::BeginMenu("Projects")) {
-                    auto projectDir = Utils::getProjectsPath(); // This should return a vector of project file paths
-                    std::vector<std::filesystem::path> projectFiles;
-                    if (std::filesystem::exists(projectDir) && std::filesystem::is_directory(projectDir)) {
-                        for (const auto& entry : std::filesystem::directory_iterator(projectDir)) {
-                            if (entry.is_regular_file() && entry.path().extension() == ".project") { // Use your project file extension
-                                projectFiles.push_back(entry.path());
-                            }
-                        }
-                    }
-
-                    for (const auto& projectFile : projectFiles) {
-                        bool isCurrentProject = m_context->isCurrentProject(projectFile.filename().replace_extension().string());
-
-                        if (ImGui::MenuItem(projectFile.filename().replace_extension().c_str(), nullptr, isCurrentProject)) {
-                            if (!isCurrentProject) {
-                                Project project;
-                                ProjectSerializer serializer(project);
-                                if (serializer.deserialize(projectFile)) {
-                                    m_context->loadProject(project);
-                                    ImGui::SetCurrentContext(m_context->getMainUIContext());
+            if (ImGui::BeginMainMenuBar()) {
+                if (ImGui::BeginMenu("File")) {
+                    // Projects Menu
+                    if (ImGui::BeginMenu("Projects")) {
+                        auto projectDir = Utils::getProjectsPath(); // This should return a vector of project file paths
+                        std::vector<std::filesystem::path> projectFiles;
+                        if (std::filesystem::exists(projectDir) && std::filesystem::is_directory(projectDir)) {
+                            for (const auto& entry : std::filesystem::directory_iterator(projectDir)) {
+                                if (entry.is_regular_file() && entry.path().extension() == ".project") { // Use your project file extension
+                                    projectFiles.push_back(entry.path());
                                 }
-
                             }
                         }
 
-                    }
+                        for (const auto& projectFile : projectFiles) {
+                            bool isCurrentProject = m_context->isCurrentProject(projectFile.filename().replace_extension().string());
 
-                    if (ImGui::MenuItem("Save current layout as Project..", nullptr)) {
-                        auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-                        auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
-                        std::vector<std::string> types{"project"};
-                        EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_PROJECT_AS, &loadFileFuture, openLocation);
-                    }
-                    ImGui::EndMenu();  // End the Projects submenu
-                }
+                            if (ImGui::MenuItem(projectFile.filename().replace_extension().c_str(), nullptr, isCurrentProject)) {
+                                if (!isCurrentProject) {
+                                    Project project;
+                                    ProjectSerializer serializer(project);
+                                    if (serializer.deserialize(projectFile)) {
+                                        m_context->loadProject(project);
+                                        ImGui::SetCurrentContext(m_context->getMainUIContext());
+                                    }
 
-                // Scenes Menu
-                if (ImGui::BeginMenu("Scenes")) {
+                                }
+                            }
 
-                    auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
-
-                    if (ImGui::MenuItem("New Scene", nullptr)) {
-                        m_context->newScene();
-                        userSetting.lastActiveScenePath.clear();
-                    }
-
-                    if (std::filesystem::exists(userSetting.lastActiveScenePath)) {
-                        if (ImGui::MenuItem("Save Scene", nullptr)) {
-                            SceneSerializer serializer(m_context->activeScene());
-                            serializer.serialize(userSetting.lastActiveScenePath);
-                            userSetting.assetsPath = userSetting.lastActiveScenePath.parent_path();
                         }
-                    }
-                    if (ImGui::MenuItem("Save Scene As..", nullptr)) {
-                        auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
-                        std::vector<std::string> types{"multisense"};
-                        EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_SCENE_AS, &loadFileFuture, openLocation);
-                    }
-                    if (ImGui::MenuItem("Load Scene file", nullptr)) {
-                        auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
 
-                        std::vector<std::string> types{"multisense"};
-                        EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::LOAD_SCENE, &loadFileFuture, openLocation);
-
+                        if (ImGui::MenuItem("Save current layout as Project..", nullptr)) {
+                            auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            std::vector<std::string> types{"project"};
+                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_PROJECT_AS, &loadFileFuture, openLocation);
+                        }
+                        ImGui::EndMenu();  // End the Projects submenu
                     }
 
-                    if (ImGui::MenuItem("Set Assets Path", nullptr)) {
-                        auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
-                        EditorUtils::openImportFolderDialog("Load Scene", openLocation, LayerUtils::SELECT_FOLDER, &loadFileFuture);
+                    // Scenes Menu
+                    if (ImGui::BeginMenu("Scenes")) {
+
+                        auto &userSetting = ApplicationConfig::getInstance().getUserSetting();
+
+                        if (ImGui::MenuItem("New Scene", nullptr)) {
+                            m_context->newScene();
+                            userSetting.lastActiveScenePath.clear();
+                        }
+
+                        if (std::filesystem::exists(userSetting.lastActiveScenePath)) {
+                            if (ImGui::MenuItem("Save Scene", nullptr)) {
+                                SceneSerializer serializer(m_context->activeScene());
+                                serializer.serialize(userSetting.lastActiveScenePath);
+                                userSetting.assetsPath = userSetting.lastActiveScenePath.parent_path();
+                            }
+                        }
+                        if (ImGui::MenuItem("Save Scene As..", nullptr)) {
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            std::vector<std::string> types{"multisense"};
+                            EditorUtils::saveFileDialog("Save scene as", types, LayerUtils::SAVE_SCENE_AS, &loadFileFuture, openLocation);
+                        }
+                        if (ImGui::MenuItem("Load Scene file", nullptr)) {
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+
+                            std::vector<std::string> types{"multisense"};
+                            EditorUtils::openImportFileDialog("Load Scene", types, LayerUtils::LOAD_SCENE, &loadFileFuture, openLocation);
+
+                        }
+
+                        if (ImGui::MenuItem("Set Assets Path", nullptr)) {
+                            auto openLocation = std::filesystem::exists(userSetting.lastActiveScenePath.parent_path()) ? userSetting.lastActiveScenePath.parent_path() : Utils::getSystemHomePath();
+                            EditorUtils::openImportFolderDialog("Load Scene", openLocation, LayerUtils::SELECT_FOLDER, &loadFileFuture);
+                        }
+
+                        ImGui::EndMenu();  // End the Scenes submenu
                     }
 
-                    ImGui::EndMenu();  // End the Scenes submenu
+                    if (ImGui::MenuItem("Quit")) {
+                        // Handle quitting the application
+                        m_context->closeApplication();
+                    }
+                    ImGui::EndMenu();
                 }
 
-                if (ImGui::MenuItem("Quit")) {
-                    // Handle quitting the application
-                    m_context->closeApplication();
+                if (ImGui::BeginMenu("View")) {
+                    ImGui::MenuItem("Console", nullptr, &m_editor->ui()->showDebugWindow);
+                    ImGui::EndMenu();
                 }
-                ImGui::EndMenu();
+
+
+                ImGui::EndMainMenuBar();
             }
-
-            if (ImGui::BeginMenu("View")) {
-                ImGui::MenuItem("Console", nullptr, &m_editor->ui()->showDebugWindow);
-                ImGui::EndMenu();
-            }
-
-
-            ImGui::EndMainMenuBar();
 
             checkFileImportCompletion();
 // TODO Not the right place to call ubuntu file dialog stuff.

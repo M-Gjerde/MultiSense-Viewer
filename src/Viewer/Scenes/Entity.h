@@ -6,7 +6,7 @@
 #define MULTISENSE_VIEWER_ENTITY_H
 
 #include <cassert>
-#include <multisense_viewer/external/entt/include/entt/entt.hpp>
+#include <entt/entt.hpp>
 
 #include "Viewer/Tools/Macros.h"
 #include "Viewer/Scenes/Scene.h"

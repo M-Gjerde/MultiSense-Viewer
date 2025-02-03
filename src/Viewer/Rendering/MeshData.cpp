@@ -10,7 +10,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION // define this in only *one* .cc
 #define TINYOBJLOADER_USE_MAPBOX_EARCUT
 
-#include <multisense_viewer/external/tinyobjloader/tiny_obj_loader.h>
+#include <tiny_obj_loader.h>
 #include <stb_image.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
