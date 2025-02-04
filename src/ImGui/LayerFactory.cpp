@@ -2,6 +2,7 @@
 // Created by magnus on 10/2/23.
 //
 
+#define IMGUI_INCLUDE_IMGUI_USER_H
 #include "Viewer/ImGui/LayerFactory.h"
 
 #include "Viewer/ImGui/SideBarLayer.h"

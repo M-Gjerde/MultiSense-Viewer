@@ -448,7 +448,7 @@ namespace VkRender {
                 for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
-                    auto texture = static_cast<VkDescriptorSet>(pcmd->GetTexID());
+                    auto texture = reinterpret_cast<VkDescriptorSet>(pcmd->GetTexID());
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                             &texture, 0, nullptr);
 
@@ -525,7 +525,7 @@ namespace VkRender {
             write_desc[0].pImageInfo = &gifTexture[i]->m_Descriptor;
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
 
-            handles.info->gif.image[i] = reinterpret_cast<void *>(dSet);
+            handles.info->gif.image[i] = reinterpret_cast<ImTextureID>(dSet);
             pixelPointer += handles.info->gif.imageSize;
 
             gifImageDescriptors.emplace_back(dSet);
@@ -566,7 +566,7 @@ namespace VkRender {
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
         }
 
-        handles.info->imageButtonTextureDescriptor[i] = reinterpret_cast<void *>(imageIconDescriptors[i]);
+        handles.info->imageButtonTextureDescriptor[i] = reinterpret_cast<ImTextureID>(imageIconDescriptors[i]);
     }
 
 
@@ -574,7 +574,7 @@ namespace VkRender {
         ImFontConfig config;
         config.OversampleH = 2;
         config.OversampleV = 1;
-        config.GlyphExtraSpacing.x = 1.0f;
+        //config.GlyphExtraSpacing.x = 1.0f;
         ImGuiIO *io = &ImGui::GetIO();
         ImFont *font = io->Fonts->AddFontFromFileTTF(file.c_str(), fontSize, &config);
 

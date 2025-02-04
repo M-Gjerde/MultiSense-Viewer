@@ -41,7 +41,7 @@
 #include <queue>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-
+#include <imgui.h>
 #include <imgui_internal.h>
 #include <sys/types.h>
 
@@ -218,7 +218,7 @@ public:
                                   ImVec4(0, 0, 0, 0)); // Transparent button background when active
             ImGui::SameLine();
             ImGui::SetNextItemWidth(ImGui::CalcTextSize("Privacy policy").x);
-            if (ImGui::Selectable("Privacy policy", false, ImGuiSelectableFlags_DontClosePopups))
+            if (ImGui::Selectable("Privacy policy", false, ImGuiSelectableFlags_NoAutoClosePopups))
             {
                 openURL(url);
                 handle->usageMonitor->userClickAction("Privacy policy", "Selectable",
@@ -988,7 +988,7 @@ private:
                     if (entryConnectDeviceList[n].cameraName.empty()) continue;
                     if (ImGui::Selectable((entryConnectDeviceList[n].cameraName + "##" + std::to_string(n)).c_str(),
                                           resultsComboIndex == static_cast<int>(n),
-                                          ImGuiSelectableFlags_DontClosePopups,
+                                          ImGuiSelectableFlags_NoAutoClosePopups,
                                           ImVec2(handles->info->popupWidth - (20.0f * 2), 15.0f)))
                     {
                         handles->usageMonitor->userClickAction(entryConnectDeviceList[n].cameraName, "Selectable",
@@ -1171,7 +1171,7 @@ private:
                                                     1.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, blueLinkColor);
                 std::string selectableTxt = "Network Configuration Guide";
-                if (ImGui::Selectable(selectableTxt.c_str(), false, ImGuiSelectableFlags_DontClosePopups,
+                if (ImGui::Selectable(selectableTxt.c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups,
                                       ImGui::CalcTextSize(selectableTxt.c_str())))
                 {
                     openURL(url);
