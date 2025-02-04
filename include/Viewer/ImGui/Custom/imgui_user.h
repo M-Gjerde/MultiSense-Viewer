@@ -211,7 +211,7 @@ namespace ImGui {
         return clicked;
     };
 
-    inline bool ButtonWithGif(const char *str_id, const ImVec2 btnSize, ImTextureID user_texture_id, const ImVec2 &size,
+    static bool ButtonWithGif(const char *str_id, const ImVec2 btnSize, ImTextureID user_texture_id, const ImVec2 &size,
                               const ImVec2 &uv0, const ImVec2 &uv1, const ImVec4 &tint_col, ImVec4 btnColor) {
         ImGuiContext &g = *GImGui;
         ImGuiWindow *window = g.CurrentWindow;
@@ -252,6 +252,7 @@ namespace ImGui {
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + ((btnSize.y - size.y) / 2));
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ((btnSize.x - size.x - txtSize.x - 50.0f)));
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 0.0f));
+        std::string identifier = std::to_string(*str_id) + "##";
         clicked |= ImageButtonEx(window->GetID(str_id), user_texture_id, size, uv0, uv1, color, tint_col);
         ImGui::PopStyleVar();
         ImGui::PopID();

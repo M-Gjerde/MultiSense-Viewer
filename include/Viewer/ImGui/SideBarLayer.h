@@ -488,7 +488,7 @@ private:
             case VkRender::CRL_STATE_CONNECTED:
                 break;
             case VkRender::CRL_STATE_CONNECTING:
-                buttonIdentifier = "Connecting";
+                buttonIdentifier = "Connecting...";
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, VkRender::Colors::CRLGray424);
                 ImGui::PushStyleColor(ImGuiCol_Button, VkRender::Colors::CRLBlueIsh);
                 btnColor = VkRender::Colors::CRLBlueIsh;
@@ -644,13 +644,17 @@ private:
             }
 
             // Connect button
-            if (buttonIdentifier == "Connecting")
+            if (buttonIdentifier == "Connecting...") // Supposed to be a gif here
             {
+                /*
                 e.clicked = ImGui::ButtonWithGif(buttonIdentifier.c_str(), ImVec2(ImGui::GetFontSize() * 10, 35.0f),
                                                  handles->info->gif.image[gifFrameIndex2], ImVec2(35.0f, 35.0f),
                                                  uv0,
                                                  uv1,
                                                  tint_col, btnColor) && !busy;
+                */
+                e.clicked = ImGui::Button(buttonIdentifier.c_str(),
+                          ImVec2(ImGui::GetFontSize() * 10, ImGui::GetFontSize() * 2)) && !busy;
             }
             else
             {
