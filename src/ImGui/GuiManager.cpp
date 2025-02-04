@@ -118,7 +118,7 @@ namespace VkRender {
         handles.info->font15 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 15);
         handles.info->font18 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 18);
         handles.info->font24 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 24);
-        io.Fonts->SetTexID(reinterpret_cast<VkDescriptorSet>(fontDescriptors[fontCount - 1]));
+        io.Fonts->SetTexID((fontDescriptors[fontCount - 1]));
 
         imageIconDescriptors.resize(10);
         handles.info->imageButtonTextureDescriptor.resize(10);
@@ -444,7 +444,7 @@ namespace VkRender {
                 for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
-                    auto texture = reinterpret_cast<VkDescriptorSet>(pcmd->GetTexID());
+                    auto texture = (pcmd->GetTexID());
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                             &texture, 0, nullptr);
 
@@ -520,7 +520,7 @@ namespace VkRender {
             write_desc[0].pImageInfo = &gifTexture[i]->m_Descriptor;
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
 
-            handles.info->gif.image[i] = reinterpret_cast<VkDescriptorSet>(gifImageDescriptors[i]);
+            handles.info->gif.image[i] = (gifImageDescriptors[i]);
             pixelPointer += handles.info->gif.imageSize;
         }
         stbi_image_free(pixels);
@@ -559,7 +559,7 @@ namespace VkRender {
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
         }
 
-        handles.info->imageButtonTextureDescriptor[i] = reinterpret_cast<VkDescriptorSet>(imageIconDescriptors[i]);
+        handles.info->imageButtonTextureDescriptor[i] = (imageIconDescriptors[i]);
     }
 
 
