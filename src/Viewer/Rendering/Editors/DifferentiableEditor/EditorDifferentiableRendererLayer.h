@@ -10,21 +10,25 @@
 #include "Viewer/Rendering/ImGui/Layer.h"
 
 
-namespace VkRender {
-    class EditorDifferentiableRendererLayer : public Layer {
+namespace VkRender
+{
+    class EditorDifferentiableRendererLayer : public Layer
+    {
     public:
         /** Called once upon this object creation**/
-        void onAttach() override {
+        void onAttach() override
+        {
         }
 
         /** Called after frame has finished rendered **/
-        void onFinishedRender() override {
+        void onFinishedRender() override
+        {
         }
 
 
         /** Called once per frame **/
-        void onUIRender() override {
-
+        void onUIRender() override
+        {
             // Set window position and size
             // Set window position and size
             ImVec2 window_pos = ImVec2(m_editor->ui()->layoutConstants.uiXOffset, 0.0f); // Position (x, y)
@@ -54,13 +58,20 @@ namespace VkRender {
             ImGui::SameLine(0.0f, 10.0f);
 
             ImGui::Checkbox("Denoise##Toggle", &imageUI->denoise);
+            ImGui::SameLine();
 
+            ImGui::SameLine(); // Dropdown for selecting render kernel
+            const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
+            ImGui::SetNextItemWidth(100.0f);
+            ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections,IM_ARRAYSIZE(selections));
+            imageUI->kernelDevice = selections[imageUI->selectedDeviceIndex];
 
             ImGui::End();
         }
 
         /** Called once upon this object destruction **/
-        void onDetach() override {
+        void onDetach() override
+        {
         }
     };
 }

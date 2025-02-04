@@ -8,6 +8,7 @@
 #include "Viewer/Rendering/ImGui/Layer.h"
 
 #include "Viewer/Rendering/RenderResources/PathTracer/Definitions.h"
+#include "Viewer/Rendering/Editors/EditorIncludes.h"
 
 namespace VkRender {
 
@@ -19,6 +20,7 @@ namespace VkRender {
         bool render = false;
         bool toggleRendering = false;
         bool saveImage = false;
+        bool bypassSave = false;
         bool denoise = false;
 
         bool clearImageMemory = false;

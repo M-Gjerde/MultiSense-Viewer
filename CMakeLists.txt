@@ -92,8 +92,6 @@ if (PYTORCH_AVAILABLE)
         set(CMAKE_CUDA_STANDARD 20)
         set(CMAKE_CUDA_STANDARD_REQUIRED ON)
         set(CMAKE_CUDA_EXTENSIONS OFF)
-
-
         message(STATUS "[VkRenderINFO]: CUDA language support enabled.")
         target_link_libraries(${PROJECT_NAME} PRIVATE ${TORCH_LIBRARIES} cuda cudart cupti)
         target_link_directories(${PROJECT_NAME} PRIVATE /usr/local/cuda/lib64)
@@ -151,7 +149,7 @@ if (ENABLE_SYCL)
         if (CMAKE_BUILD_TYPE STREQUAL "Release")
             set(ACPP_TARGETS "generic")
         else ()
-            set(ACPP_TARGETS "omp")
+            set(ACPP_TARGETS "generic")
         endif ()
         target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
         target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
@@ -308,6 +306,7 @@ if (ENABLE_SYCL)
             src/Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewer.cpp
             src/Viewer/Rendering/RenderResources/PathTracer/PathTracer.cpp
             src/Viewer/Rendering/Editors/PathTracer/EditorPathTracer.cpp
+            src/Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.cpp
             src/Viewer/Tools/SyclDeviceSelector.h
     )
     list(APPEND SOURCE_FILES ${SYCL_SOURCES})
@@ -321,7 +320,7 @@ if (${ENABLE_PYTORCH})
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildModule.cpp
             src/Viewer/Rendering/RenderResources/PathTracer/libtorch/PhotonRebuildFunction.cpp
             src/Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.cpp
-            src/Viewer/Rendering/ImGui/AdditionalWindows/Plot3DWindow.cpp
+            src/Viewer/Rendering/ImGui/AdditionalWindows/ToolWindow.cpp
     )
     list(APPEND SOURCE_FILES ${DIFF_RENDER_SOURCES})
 

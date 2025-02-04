@@ -92,8 +92,6 @@ namespace VkRender {
             if (imageUI->kernelDevice == "GPU") {
                 deviceType = SyclDeviceSelector::DeviceType::GPU;
             }
-            else if (imageUI->kernelDevice == "CPU") {
-            }
 
             m_pathTracer.reset();
             m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
@@ -226,7 +224,7 @@ namespace VkRender {
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
         }
 
-        if (imageUI->saveImage) {
+        if (imageUI->saveImage || imageUI->bypassSave) {
             saveImage();
         }
 
@@ -395,8 +393,14 @@ namespace VkRender {
         out << YAML::Key << "FrameCount" << YAML::Value << info.frameID; // Start from 0
         out << YAML::EndMap;
 
+        auto sceneCamera = m_activeScene->getActiveCamera();
+        std::string  prefix = "Viewport";
+        if (sceneCamera) {
+            prefix = m_activeScene->getActiveCameraEntity().getName();
+        }
+
         // Write YAML content to a file
-        std::string infoFileName = "render_info.yaml"; // Change to your desired infoFileName/path
+        std::string infoFileName = prefix + ":render_info.yaml"; // Change to your desired infoFileName/path
         std::ofstream fout(infoFileName);
         if (fout.is_open()) {
             fout << out.c_str();
@@ -414,7 +418,10 @@ namespace VkRender {
         }
 
 
-        std::filesystem::path filename = "screenshot.pfm";
+        std::filesystem::path filename = "output/" + prefix + ".pfm";
+        if (!std::filesystem::exists(filename)) {
+            std::filesystem::create_directory(filename.parent_path());
+        }
         std::ofstream file(filename, std::ios::binary);
 
         if (!file.is_open()) {

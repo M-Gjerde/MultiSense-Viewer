@@ -6,6 +6,8 @@
 #define DEFINITIONS_H
 
 #include <glm/glm.hpp>
+#include <Viewer/Rendering/Components/TransformComponent.h>
+#include <Viewer/Rendering/Editors/PinholeCamera.h>
 
 #include "Viewer/Rendering/Components/MaterialComponent.h"
 #include "Viewer/Rendering/Components/Components.h"

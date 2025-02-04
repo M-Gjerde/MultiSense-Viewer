@@ -147,7 +147,7 @@ namespace VkRender {
 
                 if (ImGui::BeginMenu("View")) {
                     ImGui::MenuItem("Console", nullptr, &m_editor->ui()->showDebugWindow);
-                    ImGui::MenuItem("Plots", nullptr, &m_editor->ui()->showPlotsWindow);
+                    ImGui::MenuItem("Tool Window", "T", &m_editor->ui()->showPlotsWindow);
                     ImGui::EndMenu();
                 }
 

@@ -42,6 +42,7 @@ namespace VkRender {
         bool isDescendantOf(Entity entity, Entity potentialAncestor);
 
         CameraComponent* getActiveCamera();
+        Entity getActiveCameraEntity();
 
         template<class T>
         void onComponentUpdated(Entity entity, T &component);

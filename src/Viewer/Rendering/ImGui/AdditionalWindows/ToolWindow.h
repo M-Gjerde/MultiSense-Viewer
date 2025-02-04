@@ -2,8 +2,8 @@
 // Created by magnus on 2/3/25.
 //
 
-#ifndef PLOT3DWINDOW_H
-#define PLOT3DWINDOW_H
+#ifndef TOOLWINDOW_H
+#define TOOLWINDOW_H
 
 
 #include <implot3d.h>
@@ -12,12 +12,14 @@
 
 
 namespace VkRender {
+    class EditorPathTracer;
     class EditorDifferentiableRenderer;
 
 
-    class Plot3DWindow : public VkRender::Layer {
+    class ToolWindow : public VkRender::Layer {
     public:
         EditorDifferentiableRenderer* diffRenderer{};
+        EditorPathTracer* m_editorPathTracer{};
 
         /** Called once upon this object creation**/
         void onAttach() override;
@@ -30,6 +32,12 @@ namespace VkRender {
 
         /** Called once upon this object destruction **/
         void onDetach() override;
+
+    private:
+
+        void generateCameras(Scene* scene, int N, float radius);
+        uint32_t m_cameraID = 0;
+        bool m_checkRenderDataset = false;
     };
 }
-#endif //PLOT3DWINDOW_H
+#endif //TOOLWINDOW_H

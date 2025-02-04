@@ -42,16 +42,8 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
 
-#include <utility>
-
 #include "Viewer/Application/pch.h"
-
 #include "Viewer/Application/UsageMonitor.h"
-#include "Viewer/Rendering/Core/RenderDefinitions.h"
-#include "Viewer/Rendering/Core/KeyInput.h"
-#include "Viewer/Tools/ThreadPool.h"
-
-#include "Viewer/Rendering/Editors/EditorIncludes.h"
 
 namespace VkRender {
     class Application;

@@ -40,7 +40,6 @@
 
 #include <string>
 #include <vector>
-#include <vector>
 #include <cstring>
 #include <iostream>
 #include <chrono>
@@ -58,7 +57,7 @@ DISABLE_WARNING_POP
 #endif
 
 #include "Viewer/Rendering/ImGui/GuiManager.h"
-#include "Viewer/Tools/Logger.h"
+#include "Viewer/Rendering/Core/KeyInput.h"
 
 #include "VulkanSwapchain.h"
 #include "VulkanDevice.h"

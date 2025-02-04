@@ -5,6 +5,7 @@
 #ifndef MULTISENSE_VIEWER_EDITOR_H
 #define MULTISENSE_VIEWER_EDITOR_H
 
+#include "Viewer/Rendering/Core/KeyInput.h"
 #include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/Components/MaterialComponent.h"
 #include "Viewer/Rendering/Components/MeshComponent.h"

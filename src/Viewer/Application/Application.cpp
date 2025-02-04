@@ -98,7 +98,8 @@ namespace VkRender {
         std::vector<std::filesystem::path> projectFiles;
         if (std::filesystem::exists(projectDir) && std::filesystem::is_directory(projectDir)) {
             for (const auto& entry : std::filesystem::directory_iterator(projectDir)) {
-                if (entry.is_regular_file() && entry.path().extension() == ".project") { // Use your project file extension
+                if (entry.is_regular_file() && entry.path().extension() == ".project") {
+                    // Use your project file extension
                     projectFiles.push_back(entry.path());
                 }
             }
@@ -118,7 +119,8 @@ namespace VkRender {
         if (loadDefault) {
             if (projectSerializer.deserialize(Utils::getEditorProjectPath())) {
                 loadProject(project);
-            } else {
+            }
+            else {
                 throw std::runtime_error("Failed to load project file");
             }
         }
@@ -142,7 +144,7 @@ namespace VkRender {
             m_editors.push_back(std::move(editor));
         }
 
-        m_mainEditor->addUI("Plot3DWindow"); // TODO suspicious add here, but it is because it relies on
+        m_mainEditor->addUI("ToolWindow"); // TODO suspicious add here, but it is because it relies on other editors
 
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();
         m_multiSense->setup();
@@ -207,7 +209,8 @@ namespace VkRender {
     Editor3DViewport* Application::getViewport() {
         for (auto& editor : m_editors) {
             auto& ci = editor->getCreateInfo();
-            if(ci.editorTypeDescription == EditorType::Viewport3D) { // TODO make it selectable if we have more viewports
+            if (ci.editorTypeDescription == EditorType::Viewport3D) {
+                // TODO make it selectable if we have more viewports
                 auto viewport = dynamic_cast<Editor3DViewport*>(editor.get());
                 return viewport;
             };
@@ -259,7 +262,7 @@ namespace VkRender {
         m_multiSense->update();
     }
 
-        SceneRenderer* Application::getSceneRendererByUUID(const UUID& uuid) {
+    SceneRenderer* Application::getSceneRendererByUUID(const UUID& uuid) {
         if (m_sceneRenderers.contains(uuid))
             return m_sceneRenderers.find(uuid)->second.get();
         return nullptr;
@@ -332,7 +335,6 @@ namespace VkRender {
     }
 
     void Application::onRender() {
-
         /** Generate Draw Commands **/
         // Render sceneRenderer outside of other editors to avoid calling new render passes inside active render passes.
         for (auto& editor : m_sceneRenderers) {
@@ -422,9 +424,10 @@ namespace VkRender {
                     editor->ui()->active = false;
                     editor->ui()->indirectlyActivated = false;
                 }
-                if (editor->ui()->resizeActive){
+                if (editor->ui()->resizeActive) {
                     // Trigger update for editors since we transitioned from resizing to no resize
-                    editor->onEditorResize(); // TODO it is nice to also resize the editos during resize, look into debouncing techniques to check how we can resize editors meanwhile the viewport is also being resized
+                    editor->onEditorResize();
+                    // TODO it is nice to also resize the editos during resize, look into debouncing techniques to check how we can resize editors meanwhile the viewport is also being resized
                 }
 
                 editor->ui()->resizeActive = false;
@@ -673,8 +676,6 @@ namespace VkRender {
 
 
     void Application::postRenderActions() {
-
-
     }
 
     /*
@@ -684,6 +685,10 @@ namespace VkRender {
     void Application::keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         input.lastKeyPress = key;
         input.action = action;
+
+        if (key == GLFW_KEY_T && action == GLFW_PRESS) {
+            m_mainEditor->ui()->showPlotsWindow = !m_mainEditor->ui()->showPlotsWindow;
+        }
 
         for (auto& editor : m_editors) {
             ImGui::SetCurrentContext(editor->guiContext());
@@ -749,13 +754,15 @@ namespace VkRender {
     bool Application::isCurrentProject(std::string projectName) {
         return ApplicationConfig::getInstance().getUserSetting().projectName == projectName;
     }
+
     Project Application::getCurrentProject() {
         Project project;
 
         // Populate general settings
         auto& userSetting = ApplicationConfig::getInstance().getUserSetting();
         project.projectName = userSetting.projectName;
-        project.sceneName = "Default Scene"; //TODO Implement - Assume this function exists to get the current scene name
+        project.sceneName = "Default Scene";
+        //TODO Implement - Assume this function exists to get the current scene name
 
         // Populate editor settings
         // TODO make sure percentages add up to 100 to cover the exact amount of pixels.
@@ -764,8 +771,10 @@ namespace VkRender {
             // Calculate percentages for position and size
             editorConfig.x = static_cast<int32_t>(editor->getCreateInfo().x / static_cast<float>(m_width) * 100.0f);
             editorConfig.y = static_cast<int32_t>(editor->getCreateInfo().y / static_cast<float>(m_height) * 100.0f);
-            editorConfig.width = static_cast<int32_t>(editor->getCreateInfo().width / static_cast<float>(m_width) * 100.0f);
-            editorConfig.height = static_cast<int32_t>(editor->getCreateInfo().height / static_cast<float>(m_height) * 100.0f);
+            editorConfig.width = static_cast<int32_t>(editor->getCreateInfo().width / static_cast<float>(m_width) *
+                100.0f);
+            editorConfig.height = static_cast<int32_t>(editor->getCreateInfo().height / static_cast<float>(m_height) *
+                100.0f);
             // Populate other properties
             editorConfig.borderSize = editor->getCreateInfo().borderSize;
             editorConfig.editorTypeDescription = editorTypeToString(editor->getCreateInfo().editorTypeDescription);

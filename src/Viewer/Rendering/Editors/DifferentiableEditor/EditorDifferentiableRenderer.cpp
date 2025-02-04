@@ -68,6 +68,14 @@ namespace VkRender {
             // Store the new resolution for next frame's comparison
             m_currentPipelineWidth = newWidth;
             m_currentPipelineHeight = newHeight;
+
+            SyclDeviceSelector::DeviceType deviceType = SyclDeviceSelector::DeviceType::CPU;
+            if (imageUI->kernelDevice == "GPU") {
+                deviceType = SyclDeviceSelector::DeviceType::GPU;
+            }
+            m_pathTracer.reset();
+            m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
+
             PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
                                                                         m_currentPipelineWidth,
                                                                         m_currentPipelineHeight);
@@ -79,7 +87,7 @@ namespace VkRender {
 
 
             //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/3_views/render_info.yaml";
-            std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
+            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/04_02_active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
                 // Retrieve values from YAML nodes
@@ -137,6 +145,10 @@ namespace VkRender {
                 // Then define the Adam options, e.g. learning rate = 1e-3
                 torch::optim::AdamOptions(0.1f)
             );
+
+            m_accumulatedTensor = torch::Tensor();
+            m_numAccumulated = 0;
+            m_optimizer->zero_grad(); // Clear old gradients
         }
 
 
@@ -209,18 +221,18 @@ namespace VkRender {
             if (m_numAccumulated >= m_renderSettings.numFrames) {
                 // Load the target tensor
 
-                /*
+
                 std::vector<std::filesystem::path> filePaths{
-                    "/home/magnus/datasets/PathTracingGS/3_views/Camera1.pfm",
-                    "/home/magnus/datasets/PathTracingGS/3_views/Camera2.pfm",
-                    "/home/magnus/datasets/PathTracingGS/3_views/Camera3.pfm"
+                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera1.pfm",
+                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera2.pfm",
+                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera3.pfm"
                 };
-                */
-                std::vector<std::filesystem::path> filePaths{
-                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera1.pfm",
-                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera2.pfm",
-                    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera3.pfm"
-                };;
+
+                //std::vector<std::filesystem::path> filePaths{
+                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera1.pfm",
+                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera2.pfm",
+                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera3.pfm"
+                //};;
 
                 Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
                                                  filePaths[activeCameraIndex].string());

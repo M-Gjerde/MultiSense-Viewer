@@ -101,33 +101,10 @@ namespace VkRender::PathTracer {
                 // Note: de_i/de_o = e_i * (e_c - e_o) / sigma^2.
                 glm::vec3 de_i_deo = -(e_i / (sigma * sigma)) * (e_c - e_o);
 
-                // Now compute the derivative of t_min with respect to e_o.
-                // Let v = a - e_o and recompute the aperture sample direction:
-                glm::vec3 v = a - e_o;
-                float v_norm = glm::length(v);
-                glm::vec3 e_d_new = v / v_norm; // recomputed normalized direction
-                float N = glm::dot(f - e_o, f_n); // numerator: (f - e_o) · f_n
-                float D = glm::dot(e_d_new, f_n); // denominator: e_d · f_n
-                // Compute derivative dtmin/deo (a vec3) via the quotient rule:
-                // dtmin/deo = { - D * f_n + N * [ f_n/v_norm - v*(dot(v, f_n))/(v_norm^3) ] } / (D*D)
-                glm::vec3 term1 = -D * f_n;
-                glm::vec3 term2 = N * ((f_n / v_norm) - (v * (glm::dot(v, f_n)) / (v_norm * v_norm * v_norm)));
-                glm::vec3 dtmin_deo = (term1 + term2) / (D * D);
-
-                // The intersection point on the focal plane is p = e_o + t_min * e_d.
-                // Differentiating p with respect to e_o gives an extra term: dp/de_o_extra = e_d * (dtmin/deo).
-                // (In a full implementation, you would also include t_min * (de_d/de_o).)
-                // Here, for simplicity, we approximate the extra derivative as:
-                glm::vec3 dp_deo_extra = e_d_new * dtmin_deo.x; // using the x-component as a proxy scalar.
-                // (In a rigorous implementation, one would combine the full vector dtmin_deo with the Jacobian of the projection.)
-
                 // Now, combine the derivative contributions.
                 // Previously, we computed dL/de_o = dLoss * de_i/de_o.
                 // We add the extra term from the path-length differentiation:
                 glm::vec3 dL_deo = dLoss * de_i_deo; // from the Gaussian intensity
-                glm::vec3 dL_extra = dLoss * dp_deo_extra; // extra contribution from dtmin/deo
-                glm::vec3 dL_deo_total = dL_deo + dL_extra;
-
 
                 // Atomically accumulate the gradient.
                 sycl::atomic_ref<float, sycl::memory_order::relaxed,
@@ -136,6 +113,7 @@ namespace VkRender::PathTracer {
                     sum_x(m_gpuData.sumGradients->x),
                     sum_y(m_gpuData.sumGradients->y),
                     sum_z(m_gpuData.sumGradients->z);
+
                 sum_x.fetch_add(dL_deo.x);
                 sum_y.fetch_add(dL_deo.y);
                 sum_z.fetch_add(dL_deo.z);

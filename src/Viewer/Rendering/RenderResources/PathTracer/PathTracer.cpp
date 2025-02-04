@@ -27,7 +27,7 @@ namespace VkRender::PathTracer {
         m_renderInformation = std::make_unique<RenderInformation>();
         pipelineSettings.queue.wait();
         prepareImageAndInfoBuffers();
-        uploadVertexData(scene);
+        //uploadVertexData(scene);
         uploadGaussianData(scene);
         pipelineSettings.queue.wait();
 
@@ -346,9 +346,8 @@ namespace VkRender::PathTracer {
         m_gpu.gaussianInputAssembly = sycl::malloc_device<GaussianInputAssembly>(N, queue);
         queue.memcpy(m_gpu.gaussianInputAssembly, hostGaussians.data(), N * sizeof(GaussianInputAssembly));
 
-        uint32_t numPhotons = 500000;
-        m_gpu.gradients = sycl::malloc_device<glm::vec3>(numPhotons, queue);
-        queue.fill(m_gpu.gradients, glm::vec3(0.0f), numPhotons);
+        m_gpu.gradients = sycl::malloc_device<glm::vec3>(m_pipelineSettings.photonCount, queue);
+        queue.fill(m_gpu.gradients, glm::vec3(0.0f), m_pipelineSettings.photonCount);
 
         m_gpu.sumGradients = sycl::malloc_device<glm::vec3>(1, queue);
         queue.fill(m_gpu.sumGradients, glm::vec3(0.0f), 1);

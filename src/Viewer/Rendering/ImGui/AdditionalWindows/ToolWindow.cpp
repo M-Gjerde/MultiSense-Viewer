@@ -1,0 +1,169 @@
+//
+// Created by magnus on 2/3/25.
+//
+
+#define IMGUI_DEFINE_MATH_OPERATORS
+
+#include "Viewer/Rendering/ImGui/AdditionalWindows/ToolWindow.h"
+
+#include <Viewer/Application/Application.h>
+#include <Viewer/Rendering/Editors/Editor.h>
+#include <Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.h>
+
+namespace VkRender {
+    /** Called once upon this object creation**/
+    void ToolWindow::onAttach() {
+        for (auto& editor : m_context->m_editors) {
+            if (editor->getCreateInfo().editorTypeDescription == EditorType::DifferentiableRenderer) {
+                Editor* renderer = editor.get();
+                diffRenderer = reinterpret_cast<EditorDifferentiableRenderer*>(renderer);
+                break;
+            }
+        }
+        for (auto& editor : m_context->m_editors) {
+            if (editor->getCreateInfo().editorTypeDescription == EditorType::PathTracer) {
+                Editor* renderer = editor.get();
+                m_editorPathTracer = reinterpret_cast<EditorPathTracer*>(renderer);
+
+
+                break;
+            }
+        }
+    }
+
+    /** Called after frame has finished rendered **/
+    void ToolWindow::onFinishedRender() {
+    }
+
+    /** Called once per frame **/
+    void ToolWindow::onUIRender() {
+        if (!m_editor->ui()->showPlotsWindow)
+            return;
+
+        // Begin a new ImGui window called "Debug Window".
+        ImGui::Begin("Tool Window");
+        uint32_t numCameras = 30;
+        auto scene = m_context->activeScene();
+
+        // Create a button labeled "Generate Cameras".
+        if (ImGui::Button("Generate Cameras")) {
+            // When the button is clicked, retrieve the active scene and call generateCameras.
+            generateCameras(scene.get(), numCameras, 10);
+        }
+
+
+        // You can add more controls here as needed.
+        auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
+
+        if(ImGui::Checkbox("Render Dataset", &m_checkRenderDataset)) {
+            imageUI->kernelDevice = "GPU";
+            imageUI->photonCount = 1000000;
+            imageUI->numBounces = 0;
+            imageUI->shaderSelection.gammaCorrection = 1.25f;
+            imageUI->switchKernelDevice = true;
+            imageUI->useSceneCamera = true;
+        }
+
+        if (m_checkRenderDataset) {
+            std::string cameraName = "camera" + std::to_string(m_cameraID % numCameras);
+            auto& camera = scene->getEntityByName(cameraName).getComponent<CameraComponent>();
+            camera.isActiveCamera() = true;
+
+            imageUI->toggleRendering = true;
+            imageUI->bypassSave = false;
+
+            if (m_editorPathTracer->getRenderInformation().frameID >= 14) {
+                imageUI->bypassSave = true;
+            }
+
+            if (m_editorPathTracer->getRenderInformation().frameID >= 15) {
+                m_cameraID++;
+                camera.isActiveCamera() = false;
+                imageUI->clearImageMemory = true;
+            }
+
+
+        }
+
+
+        // Create a button labeled "Generate Cameras".
+        if (ImGui::Button("Stop")) {
+            // When the button is clicked, retrieve the active scene and call generateCameras.
+            imageUI->toggleRendering = false;
+        }
+
+        // End the ImGui window.
+        ImGui::End();
+    }
+
+
+    // Function to create N cameras evenly spaced on an upper hemisphere of a given radius.
+    void ToolWindow::generateCameras(Scene* scene, int N, float radius) {
+        // All cameras will look at the origin.
+        glm::vec3 target(0.0f, 0.0f, 0.0f);
+        // World up direction.
+        glm::vec3 up(0.0f, 0.0f, 1.0f);
+
+        // --- Fibonacci Spiral parameters for the hemisphere ---
+        // When generating points on a full sphere, one common approach is to set:
+        //    offset = 2.0 / N and y = (i * offset - 1) + offset/2,
+        // which yields y in [-1,1]. For a hemisphere (upper half) we want y in [0,1].
+        // One simple modification is to use:
+        //    offset = 1.0 / N and y = 1.0 - (i + 0.5) * offset.
+        // This will yield points with y from nearly 1 (the pole) down to nearly 0.
+        float offset = 1.0f / static_cast<float>(N);
+        // Golden angle in radians.
+        float goldenAngle = glm::pi<float>() * (3.0f - std::sqrt(5.0f));
+
+        for (int i = 0; i < N; i++) {
+            // Compute the y coordinate (vertical component) so that points are evenly distributed.
+            float z = 1.0f - (i + 0.5f) * offset; // y in (0,1)
+            // Compute the radius of the horizontal circle at this y.
+            float r = std::sqrt(1.0f - z * z);
+            // Compute the azimuthal angle using the golden angle.
+            float theta = goldenAngle * i;
+            float x = r * std::cos(theta);
+            float y = r * std::sin(theta);
+            // Position in Cartesian coordinates on the unit hemisphere; scale to the desired radius.
+            glm::vec3 pos = radius * glm::vec3(x, y, z);
+
+            // Create a unique name for the camera.
+            std::string cameraName = "camera" + std::to_string(i);
+            auto entity = scene->createEntity(cameraName);
+            entity.addComponent<TemporaryComponent>();
+            // Add the transform component and set its position.
+            auto& transform = entity.getComponent<TransformComponent>();
+            transform.setPosition(pos);
+
+            // Compute the direction from the camera's position to the target.
+            glm::vec3 direction = glm::normalize(target - pos);
+            // Compute the rotation quaternion so that the camera's forward direction points to the target.
+            // (Assuming the camera's forward is -Z.)
+            glm::quat orientation = glm::quatLookAt(direction, up);
+            transform.setRotationQuaternion(orientation);
+
+            // Add and configure the camera component.
+            auto& camera = entity.addComponent<CameraComponent>();
+            camera.cameraType = CameraComponent::PINHOLE;
+            camera.pinholeParameters.fx = 600;
+            camera.pinholeParameters.fy = 600;
+            camera.pinholeParameters.cx = 300;
+            camera.pinholeParameters.cy = 300;
+            camera.pinholeParameters.width = 600;
+            camera.pinholeParameters.height = 600;
+            camera.pinholeParameters.focalLength = 10;
+            camera.pinholeParameters.fNumber = 4;
+            camera.updateParametersChanged();
+
+            // Optionally add a material component.
+            auto& material = entity.addComponent<MaterialComponent>();
+
+            auto& mesh = entity.addComponent<MeshComponent>(CAMERA_GIZMO_PINHOLE);
+            mesh.polygonMode() = VK_POLYGON_MODE_LINE;
+        }
+    }
+
+    /** Called once upon this object destruction **/
+    void ToolWindow::onDetach() {
+    }
+}
