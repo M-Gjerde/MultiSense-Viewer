@@ -9,7 +9,15 @@
 #include <unordered_map>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
+#include <Viewer/Tools/Macros.h>
+
+DISABLE_WARNING_PUSH
+DISABLE_WARNING_ALL
 #include <imgui.h>
+DISABLE_WARNING_POP
+DISABLE_WARNING_ALL
+#include <imgui.h>
+DISABLE_WARNING_POP
 #include <json.hpp>
 
 namespace crl {

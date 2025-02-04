@@ -153,6 +153,10 @@ if (UNIX) ## Linux
             src/main.cpp
     )
 
+    foreach(IMGUI_FILE ${IMGUI_SOURCES})
+        set_source_files_properties(${IMGUI_FILE} PROPERTIES COMPILE_FLAGS "-w")
+    endforeach()
+
     # Direct linking of libraries
     target_link_libraries(${PROJECT_NAME} PRIVATE
             fmt::fmt
@@ -166,15 +170,11 @@ if (UNIX) ## Linux
             httplib::httplib
             rosbag_cpp_writer
     )
-
     # Add dependencies directly to the project
     add_dependencies(${PROJECT_NAME}
             AutoConnect
             rosbag_cpp_writer
     )
-
-    #set_project_warnings(ScriptLibrary)
-    #set_project_warnings(VulkanRenderer)
     set_project_warnings(${PROJECT_NAME})
 
 

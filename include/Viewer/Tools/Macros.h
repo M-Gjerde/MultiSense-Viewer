@@ -38,7 +38,6 @@
 
 #include <vulkan/vulkan_core.h>
 #include <string>
-#include "Viewer/Tools/Logger.h"
 
 #if defined(_MSC_VER)
 #define DISABLE_WARNING_PUSH           __pragma(warning( push ))

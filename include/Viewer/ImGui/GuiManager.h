@@ -44,8 +44,12 @@
 #include <functional>
 #include <glm/vec2.hpp>
 
+#include "Viewer/Tools/Macros.h"
 
+DISABLE_WARNING_PUSH
+DISABLE_WARNING_ALL
 #include <imgui_internal.h>
+DISABLE_WARNING_POP
 
 #include "Viewer/Tools/Utils.h"
 #include "Viewer/Tools/Populate.h"

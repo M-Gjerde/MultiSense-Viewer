@@ -41,8 +41,12 @@
 #include <queue>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
+DISABLE_WARNING_PUSH
+DISABLE_WARNING_ALL
 #include <imgui.h>
 #include <imgui_internal.h>
+DISABLE_WARNING_POP
+
 #include <sys/types.h>
 
 #include "Viewer/Tools/Utils.h"

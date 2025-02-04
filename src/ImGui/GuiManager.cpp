@@ -41,11 +41,6 @@
 
 #include <stb_image.h>
 
-#define IMGUI_DEFINE_MATH_OPERATORS
-
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_vulkan.h>
-
 #include "Viewer/ImGui/GuiManager.h"
 
 
