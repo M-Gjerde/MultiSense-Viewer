@@ -77,6 +77,11 @@ jobs:
         with:
           submodules: 'true'
 
+      - name: Disable certificate revocation check for curl
+        shell: pwsh
+        run: |
+          [Environment]::SetEnvironmentVariable("CURL_SSL_NO_REVOKE", "1", "User")
+
       - name: Prepare Vulkan SDK
         uses: humbletim/setup-vulkan-sdk@v1.2.0
         with:
@@ -89,28 +94,40 @@ jobs:
 
       - name: Build project
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target install -- /m:10
+      # Remove the unwanted directories from the install folder
+      - name: Remove bin, include, and lib folders
+        shell: pwsh
+        run: |
+          Write-Host "Removing 'bin', 'include', and 'lib' from the install folder..."
+          $installPath = "${{ needs.VersionJob.outputs.install_path }}"
+          foreach ($folder in @('bin', 'include', 'lib')) {
+              $fullPath = Join-Path $installPath $folder
+              if (Test-Path $fullPath) {
+                  Remove-Item -Path $fullPath -Recurse -Force
+                  Write-Host "Removed $fullPath"
+              }
+              else {
+                  Write-Host "Folder $fullPath does not exist, skipping..."
+              }
+          }
 
-  #      - name: Prepare Installer Files
-  #        shell: powershell
-  #        run: |
-  #          # Move Inno Setup script and necessary tools into the build directory
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\Windows\inno_setup_script.iss" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\Windows\build_installer.ps1" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\compile.sh" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\install_spirv_compiler.sh" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\monitor_memory_usage.py" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\how_to_release" -Destination "$($env.GITHUB_WORKSPACE)\build"
-  #
-  #          # Clean up unnecessary directories
-  #          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\Assets\Tools\Ubuntu"
-  #          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\bin"
-  #          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\include"
-  #          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\lib"
-  #
-  #      - name: Building the installer
-  #        run: |
-  #          "%programfiles(x86)%\Inno Setup 6\iscc.exe" "$env.GITHUB_WORKSPACE\build\inno_setup_script.iss"
-  #        shell: cmd
+      # Create a ZIP archive of the install folder (without the removed directories)
+      - name: Zip the install folder
+        shell: pwsh
+        run: |
+          $installPath = "${{ needs.VersionJob.outputs.install_path }}"
+          $zipPath = "${{ github.workspace }}\install_artifact.zip"
+          Write-Host "Zipping the install folder from $installPath to $zipPath"
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $installPath "*") -DestinationPath $zipPath
+          Write-Host "Created ZIP archive at $zipPath"
+
+      # Upload the ZIP archive as an artifact
+      - name: Upload install artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-artifact
+          path: ${{ github.workspace }}\install_artifact.zip
 
   BuildUbuntu20:
     name: Build and package for Ubuntu 20_04
