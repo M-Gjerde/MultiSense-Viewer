@@ -2,7 +2,7 @@ name: MultiSense Viewer Pull request workflow
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
   push:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
@@ -66,7 +66,11 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: print install location
-      - run: echo "My output is ${{ needs.VersionJob.outputs.install_path  }}"
+        run: echo "My output is ${{ needs.VersionJob.outputs.install_path  }}"
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,7 +89,7 @@ jobs:
 
       - name: Build project
         run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target install -- /m:10
-          
+
   #      - name: Prepare Installer Files
   #        shell: powershell
   #        run: |
