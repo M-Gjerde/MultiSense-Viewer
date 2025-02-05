@@ -15,9 +15,6 @@ DISABLE_WARNING_PUSH
 DISABLE_WARNING_ALL
 #include <imgui.h>
 DISABLE_WARNING_POP
-DISABLE_WARNING_ALL
-#include <imgui.h>
-DISABLE_WARNING_POP
 #include <json.hpp>
 
 namespace crl {

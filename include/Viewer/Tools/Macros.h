@@ -57,6 +57,12 @@
 #define DISABLE_WARNING_DEPRECATION                      DISABLE_WARNING(4996)
 // other warnings you want to deactivate...
 
+#define DISABLE_WARNING_ALL DISABLE_WARNING_UNREFERENCED_FORMAL_PARAMETER \
+DISABLE_WARNING_UNREFERENCED_FUNCTION \
+DISABLE_WARNING_UNREFERENCED_VARIABLE \
+DISABLE_WARNING_DEPRECATION
+
+
 #elif defined(__GNUC__) || defined(__clang__)
 #define DO_PRAGMA(X) _Pragma(#X)
 #define DISABLE_WARNING_PUSH                                      DO_PRAGMA(GCC diagnostic push)
@@ -118,8 +124,6 @@ DISABLE_WARNING_USELESS_CAST
 }
 
 namespace Macros {
-
-
     inline std::string errorString(VkResult errorCode) {
         switch (errorCode) {
 #define STR(r) case VK_ ##r: return #r

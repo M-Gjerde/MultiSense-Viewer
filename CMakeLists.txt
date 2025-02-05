@@ -227,25 +227,36 @@ if (WIN32)
             IMPORTED_LINK_INTERFACE_LANGUAGES "C"
             IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/openssl_1.1.1/lib/libcrypto.lib")
 
-    add_library(CustomLoggerInterface INTERFACE)
-    target_link_libraries(CustomLoggerInterface INTERFACE fmt::fmt)
+    # Consolidate all source files
+    set(ALL_SOURCES
+            ${LOGGER_SRC}
+            ${ENGINE_SRC}
+            ${SCRIPTS_LIB_SRC}
+            ${IMGUI_SOURCES}
+            src/main.cpp
+    )
+    foreach(IMGUI_FILE ${IMGUI_SOURCES})
+        set_source_files_properties(${IMGUI_FILE} PROPERTIES COMPILE_FLAGS "/w")
+    endforeach()
 
-    add_library(CustomLogger ${LOGGER_SRC})
-    target_link_libraries(CustomLogger PRIVATE CustomLoggerInterface)
+    # Create a single executable target
+    target_sources(${PROJECT_NAME} PRIVATE ${ALL_SOURCES})
 
-    add_library(VulkanRenderer STATIC ${ENGINE_SRC})
-    target_link_libraries(VulkanRenderer ${LIBRARIES} CustomLogger libsll libcrypto)
+    # Link all necessary libraries directly to the main target
+    target_link_libraries(${PROJECT_NAME}
+            PRIVATE
+            fmt::fmt
+            ${LIBRARIES}
+            libsll
+            libcrypto
+            avutil
+            swscale
+            rosbag_cpp_writer
+    )
 
-    add_library(ScriptLibrary STATIC ${SCRIPTS_LIB_SRC})
-    target_link_libraries(ScriptLibrary VulkanRenderer avutil swscale libsll libcrypto rosbag_cpp_writer)
-
-    target_sources(${PROJECT_NAME} PRIVATE src/main.cpp)
-
-    target_link_libraries(${PROJECT_NAME} VulkanRenderer ScriptLibrary CustomLoggerInterface)
+    # Add dependencies and set project warnings
     add_dependencies(${PROJECT_NAME} AutoConnect)
 
-    set_project_warnings(ScriptLibrary)
-    set_project_warnings(VulkanRenderer)
     set_project_warnings(${PROJECT_NAME})
 
     #AutoConnect
@@ -276,7 +287,7 @@ if (WIN32)
     # do the copying
     foreach (file_i ${THIRD_PARTY_DLLS})
         add_custom_command(
-                TARGET VulkanRenderer
+                TARGET ${PROJECT_NAME}
                 POST_BUILD
                 COMMAND ${CMAKE_COMMAND}
                 ARGS -E copy ${file_i} ${CMAKE_BINARY_DIR}/)
