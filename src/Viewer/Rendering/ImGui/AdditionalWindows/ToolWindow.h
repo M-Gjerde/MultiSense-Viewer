@@ -18,7 +18,7 @@ namespace VkRender {
 
     class ToolWindow : public VkRender::Layer {
     public:
-        EditorDifferentiableRenderer* diffRenderer{};
+        EditorDifferentiableRenderer* m_diffRenderer{};
         EditorPathTracer* m_editorPathTracer{};
 
         /** Called once upon this object creation**/

@@ -60,6 +60,9 @@ namespace VkRender
             ImGui::Checkbox("Denoise##Toggle", &imageUI->denoise);
             ImGui::SameLine();
 
+            ImGui::Checkbox("Loop Cameras##Toggle", &imageUI->automatic);
+            ImGui::SameLine();
+
             ImGui::SameLine(); // Dropdown for selecting render kernel
             const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
             ImGui::SetNextItemWidth(100.0f);

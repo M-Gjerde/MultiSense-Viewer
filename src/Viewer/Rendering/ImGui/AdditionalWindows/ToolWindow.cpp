@@ -9,6 +9,7 @@
 #include <Viewer/Application/Application.h>
 #include <Viewer/Rendering/Editors/Editor.h>
 #include <Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRenderer.h>
+#include <Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayerUI.h>
 
 namespace VkRender {
     /** Called once upon this object creation**/
@@ -16,7 +17,7 @@ namespace VkRender {
         for (auto& editor : m_context->m_editors) {
             if (editor->getCreateInfo().editorTypeDescription == EditorType::DifferentiableRenderer) {
                 Editor* renderer = editor.get();
-                diffRenderer = reinterpret_cast<EditorDifferentiableRenderer*>(renderer);
+                m_diffRenderer = reinterpret_cast<EditorDifferentiableRenderer*>(renderer);
                 break;
             }
         }
@@ -53,15 +54,16 @@ namespace VkRender {
 
 
         // You can add more controls here as needed.
-        auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
+        auto pathTracerUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
+        auto optimizationUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_diffRenderer->ui());
 
         if(ImGui::Checkbox("Render Dataset", &m_checkRenderDataset)) {
-            imageUI->kernelDevice = "GPU";
-            imageUI->photonCount = 1000000;
-            imageUI->numBounces = 0;
-            imageUI->shaderSelection.gammaCorrection = 1.25f;
-            imageUI->switchKernelDevice = true;
-            imageUI->useSceneCamera = true;
+            pathTracerUI->kernelDevice = "GPU";
+            pathTracerUI->photonCount = 1000000;
+            pathTracerUI->numBounces = 0;
+            pathTracerUI->shaderSelection.gammaCorrection = 1.25f;
+            pathTracerUI->switchKernelDevice = true;
+            pathTracerUI->useSceneCamera = true;
         }
 
         if (m_checkRenderDataset) {
@@ -69,17 +71,17 @@ namespace VkRender {
             auto& camera = scene->getEntityByName(cameraName).getComponent<CameraComponent>();
             camera.isActiveCamera() = true;
 
-            imageUI->toggleRendering = true;
-            imageUI->bypassSave = false;
+            pathTracerUI->toggleRendering = true;
+            pathTracerUI->bypassSave = false;
 
             if (m_editorPathTracer->getRenderInformation().frameID >= 14) {
-                imageUI->bypassSave = true;
+                pathTracerUI->bypassSave = true;
             }
 
             if (m_editorPathTracer->getRenderInformation().frameID >= 15) {
                 m_cameraID++;
                 camera.isActiveCamera() = false;
-                imageUI->clearImageMemory = true;
+                pathTracerUI->clearImageMemory = true;
             }
 
 
@@ -89,7 +91,7 @@ namespace VkRender {
         // Create a button labeled "Generate Cameras".
         if (ImGui::Button("Stop")) {
             // When the button is clicked, retrieve the active scene and call generateCameras.
-            imageUI->toggleRendering = false;
+            pathTracerUI->toggleRendering = false;
         }
 
         // End the ImGui window.

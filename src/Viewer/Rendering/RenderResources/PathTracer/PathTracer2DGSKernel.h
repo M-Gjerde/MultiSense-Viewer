@@ -53,7 +53,8 @@ namespace VkRender::PathTracer {
             float photonFlux = emissionPower; // or you can store a color as a vec3 if needed
             glm::vec3 rayOrigin = emitPosLocal;
             float apertureDiameter = (m_camera->parameters().focalLength / m_camera->parameters().fNumber) / 1000;
-            float apertureRadius = apertureDiameter * 0.5f;
+            // float apertureRadius = apertureDiameter * 0.5f;
+            float apertureRadius = 0.00001f;
 
             glm::mat4 entityTransform = m_cameraTransform->getTransform();
             glm::vec3 cameraPlaneNormalWorld = glm::normalize(
@@ -208,7 +209,8 @@ namespace VkRender::PathTracer {
 
                     float d = glm::length(cameraHitPointWorld);
                     float cosTheta = glm::dot(directLightingDir, -cameraPlaneNormalWorld);
-                    float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / glm::max(0.1f, cosTheta);
+                    //float scaleFactor = (M_PIf * apertureRadius * apertureRadius * d * d) / glm::max(0.1f, cosTheta);
+                    float scaleFactor = (M_PIf * 0.000001f * d * d) / glm::max(0.1f, cosTheta);
 
                     //
                     // 1. Transform the hit point from world space to camera space
@@ -221,7 +223,7 @@ namespace VkRender::PathTracer {
                     m_gpuDataOutput[photonID].emissionOrigin = rayOrigin;
                     m_gpuDataOutput[photonID].emissionDirection = directLightingDir;
                     m_gpuDataOutput[photonID].hitCamera = cameraHit;
-                    m_gpuDataOutput[photonID].emissionDirectionLength = closest_t;
+                    m_gpuDataOutput[photonID].emissionDirectionLength = tCam;
                     m_gpuDataOutput[photonID].apertureHitPoint = apertureHitPoint;
                     m_gpuDataOutput[photonID].cameraHitPointLocal = hitPointCam;
                 }
@@ -296,6 +298,21 @@ namespace VkRender::PathTracer {
         }
 
 
+
+        glm::vec3 sampleDirectionTowardAperture(
+            const glm::vec3& lightPos,
+            const glm::vec3& apertureCenter,
+            const glm::vec3& apertureNormal,
+            glm::vec3& apertureHitpoint,
+            float apertureRadius,
+            uint64_t photonID) const {
+            // pick random point on the lens
+            apertureHitpoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
+            // direction from light to lens point
+            glm::vec3 dir = apertureHitpoint - lightPos;
+            return normalize(dir);
+        }
+
         glm::vec3 samplePointOnDisk(size_t photonID,
                                     const glm::vec3& center,
                                     const glm::vec3& normal,
@@ -320,20 +337,6 @@ namespace VkRender::PathTracer {
 
             glm::vec3 offset = dx * u + dy * v;
             return center + offset;
-        }
-
-        glm::vec3 sampleDirectionTowardAperture(
-            const glm::vec3& lightPos,
-            const glm::vec3& apertureCenter,
-            const glm::vec3& apertureNormal,
-            glm::vec3& apertureHitpoint,
-            float apertureRadius,
-            uint64_t photonID) const {
-            // pick random point on the lens
-            apertureHitpoint = samplePointOnDisk(photonID, apertureCenter, apertureNormal, apertureRadius);
-            // direction from light to lens point
-            glm::vec3 dir = apertureHitpoint - lightPos;
-            return normalize(dir);
         }
 
         bool checkCameraPlaneIntersection(

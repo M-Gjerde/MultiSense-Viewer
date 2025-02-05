@@ -68,13 +68,13 @@ namespace VkRender {
             m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
 
             float width = m_activeScene->getActiveCamera()->pinholeParameters.width;
-            float height =m_activeScene->getActiveCamera()->pinholeParameters.height;
+            float height = m_activeScene->getActiveCamera()->pinholeParameters.height;
 
             PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
                                                                         width, height);
 
 
-            std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
+            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
             //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/04_02_active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
@@ -128,7 +128,7 @@ namespace VkRender {
                 // We pass in the parameters of our module (or custom parameter list)
                 m_photonRebuildModule->parameters(),
                 // Then define the Adam options, e.g. learning rate = 1e-3
-                torch::optim::AdamOptions(0.1f)
+                torch::optim::AdamOptions(0.05f)
             );
 
             m_accumulatedTensor = torch::Tensor();
@@ -142,36 +142,47 @@ namespace VkRender {
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Store camera entities (assuming there are exactly two cameras)
-            auto cameraView = m_activeScene->getRegistry().view<CameraComponent>();
+
+            CameraComponent activeCamera;
+
             std::vector<Entity> cameraEntities;
-            for (auto e : cameraView) {
-                cameraEntities.emplace_back(e, m_context->activeScene().get());
+            size_t activeCameraIndex;
+
+            if (imageUI->automatic) {
+                auto cameraView = m_activeScene->getRegistry().view<CameraComponent>();
+                for (auto e : cameraView) {
+                    cameraEntities.emplace_back(e, m_context->activeScene().get());
+                }
+
+                // Assuming Entity class has getName() that returns std::string
+                std::sort(cameraEntities.begin(), cameraEntities.end(), [](Entity& a, Entity& b) {
+                    auto extractNumber = [](const std::string& name) -> int {
+                        size_t pos = name.find_first_of("0123456789");
+                        return (pos != std::string::npos) ? std::stoi(name.substr(pos)) : -1;
+                    };
+                    return extractNumber(a.getName()) < extractNumber(b.getName());
+                });
+                // Alternating logic based on m_stepIteration
+                // Select the active camera
+                activeCameraIndex = m_stepIteration % cameraEntities.size();
+
+                activeCamera = cameraEntities[activeCameraIndex].getComponent<CameraComponent>();
+                Log::Logger::getInstance()->info("Selecting Camera: {}", cameraEntities[activeCameraIndex].getName());
+
+            } else {
+                activeCamera = *m_activeScene->getActiveCamera();
             }
 
-            // Assuming Entity class has getName() that returns std::string
-            std::sort(cameraEntities.begin(), cameraEntities.end(), [](Entity& a, Entity& b) {
-                auto extractNumber = [](const std::string& name) -> int {
-                    size_t pos = name.find_first_of("0123456789");
-                    return (pos != std::string::npos) ? std::stoi(name.substr(pos)) : -1;
-                };
-                return extractNumber(a.getName()) < extractNumber(b.getName());
-            });
-            // Alternating logic based on m_stepIteration
-            size_t activeCameraIndex = m_stepIteration % cameraEntities.size();
-            // Select the active camera
-            auto& cameraComponent = cameraEntities[activeCameraIndex].getComponent<CameraComponent>();
-
-            Log::Logger::getInstance()->info("Selecting Camera: {}", cameraEntities[activeCameraIndex].getName());
 
 
             // Prepare path tracer forward settings
             // Use the actual scene camera (pinhole) from your scene
-            m_renderSettings.camera = *cameraComponent.getPinholeCamera();
+            m_renderSettings.camera = *activeCamera.getPinholeCamera();
             m_renderSettings.cameraTransform = TransformComponent(
-                cameraComponent.getPinholeCamera()->matrices.transform);
-            if (m_previousSceneCamera != &cameraComponent)
+                activeCamera.getPinholeCamera()->matrices.transform);
+            if (m_previousSceneCamera != &activeCamera)
                 m_pathTracer->resetImage();
-            m_previousSceneCamera = &cameraComponent;
+            m_previousSceneCamera = &activeCamera;
 
             if (m_numAccumulated == 0) {
                 m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
@@ -213,25 +224,23 @@ namespace VkRender {
                 // Load the target tensor
 
 
-                std::vector<std::filesystem::path> filePaths{
-                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera1.pfm",
-                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera2.pfm",
-                    "/home/magnus/datasets/PathTracingGS/04_02_active/Camera3.pfm"
-                };
+                //std::filesystem::path basePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/";
+                std::filesystem::path basePath = "/home/magnus/datasets/PathTracingGS/active/";
+                std::filesystem::path gtFileName ;
+                if (imageUI->automatic) {
+                    gtFileName = basePath / (cameraEntities[activeCameraIndex].getName() + ".pfm");
 
-                //std::vector<std::filesystem::path> filePaths{
-                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera1.pfm",
-                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera2.pfm",
-                //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera3.pfm"
-                //};;
-                std::filesystem::path basePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/";
-                std::filesystem::path gtFileName = basePath / (cameraEntities[activeCameraIndex].getName() + ".pfm");
+                } else {
+                    gtFileName = basePath / (m_activeScene->getActiveCameraEntity().getName() + ".pfm");
+                }
+
                 Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
                                                  gtFileName.string());
                 torch::Tensor targetTensor = loadPFM(gtFileName, width, height);
 
                 // Compute loss
                 auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
+                //auto loss = torch::mean(torch::pow(targetTensor - m_accumulatedTensor, 2));
 
                 // Backward
                 loss.backward();
