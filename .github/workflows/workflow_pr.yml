@@ -108,23 +108,34 @@ jobs:
               }
           }
 
-      # Create a ZIP archive of the install folder (without the removed directories)
-      - name: Zip the install folder
+      - name: Create ZIP Archive
         shell: pwsh
         run: |
-          $installPath = "${{ needs.VersionJob.outputs.install_path }}"
-          $zipPath = "${{ github.workspace }}\install_artifact.zip"
+          # Construct the full install path using the workspace and the output from VersionJob
+          $installPath = Join-Path $env:GITHUB_WORKSPACE "build/${{ needs.VersionJob.outputs.install_path }}"
+          
+          # Define where to put the ZIP archive; adjust the path as needed
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "build/install_artifact.zip"
+          
           Write-Host "Zipping the install folder from $installPath to $zipPath"
-          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          
+          # If a previous ZIP exists, remove it
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          
+          # Compress all files from the install directory into the ZIP archive
           Compress-Archive -Path (Join-Path $installPath "*") -DestinationPath $zipPath
+          
           Write-Host "Created ZIP archive at $zipPath"
+
 
       # Upload the ZIP archive as an artifact
       - name: Upload install artifact
         uses: actions/upload-artifact@v4
         with:
           name: install-artifact
-          path: ${{ github.workspace }}\install_artifact.zip
+          path: ${{ github.workspace }}\build\install_artifact.zip
 
   BuildUbuntu20:
     name: Build and package for Ubuntu 20_04
