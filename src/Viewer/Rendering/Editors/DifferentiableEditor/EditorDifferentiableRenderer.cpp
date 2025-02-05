@@ -52,22 +52,13 @@ namespace VkRender {
     void EditorDifferentiableRenderer::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
 
-        auto sceneCamera = m_activeScene->getActiveCamera();
-        auto cameraView = m_context->activeScene()->getRegistry().view<CameraComponent>();
-
-        if (!sceneCamera)
+        if (!m_activeScene->getActiveCamera())
             return;
 
-        uint32_t newWidth = sceneCamera->pinholeParameters.width;
-        uint32_t newHeight = sceneCamera->pinholeParameters.height;
-
         // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
-        bool resolutionChanged = (newWidth != m_currentPipelineWidth || newHeight != m_currentPipelineHeight);
-        if (imageUI->reloadRenderer || resolutionChanged) {
+        if (imageUI->reloadRenderer) {
             Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
             // Store the new resolution for next frame's comparison
-            m_currentPipelineWidth = newWidth;
-            m_currentPipelineHeight = newHeight;
 
             SyclDeviceSelector::DeviceType deviceType = SyclDeviceSelector::DeviceType::CPU;
             if (imageUI->kernelDevice == "GPU") {
@@ -76,18 +67,15 @@ namespace VkRender {
             m_pathTracer.reset();
             m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
 
+            float width = m_activeScene->getActiveCamera()->pinholeParameters.width;
+            float height =m_activeScene->getActiveCamera()->pinholeParameters.height;
+
             PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
-                                                                        m_currentPipelineWidth,
-                                                                        m_currentPipelineHeight);
+                                                                        width, height);
 
 
-            // Load the YAML file
-            //std::filesystem::path filePath = Utils::getAssetsPath().parent_path() / "models-repository" /"simple_dataset" / "render_info.yaml";
-
-
-
-            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/3_views/render_info.yaml";
-            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/04_02_active/render_info.yaml";
+            std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/render_info.yaml";
+            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/04_02_active/render_info.yaml";
             if (std::filesystem::exists(filePath)) {
                 YAML::Node config = YAML::LoadFile(filePath);
                 // Retrieve values from YAML nodes
@@ -113,10 +101,8 @@ namespace VkRender {
 
             // Create a new path tracer pipeline
             m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-            float editorAspect = static_cast<float>(m_createInfo.width) /
-                static_cast<float>(m_createInfo.height);
-            float sceneCameraAspect = static_cast<float>(m_currentPipelineWidth) /
-                static_cast<float>(m_currentPipelineHeight);
+            float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
+            float sceneCameraAspect = width / height;
 
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
@@ -127,11 +113,10 @@ namespace VkRender {
             }
             m_meshInstances.reset();
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-
             // Create a new color texture with the same (possibly updated) dimensions
             m_colorTexture = EditorUtils::createEmptyTexture(
-                m_currentPipelineWidth,
-                m_currentPipelineHeight,
+                width,
+                height,
                 VK_FORMAT_R8G8B8A8_UNORM,
                 m_context
             );
@@ -157,30 +142,36 @@ namespace VkRender {
         // ----------------------------------------------------------
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Store camera entities (assuming there are exactly two cameras)
+            auto cameraView = m_activeScene->getRegistry().view<CameraComponent>();
             std::vector<Entity> cameraEntities;
             for (auto e : cameraView) {
                 cameraEntities.emplace_back(e, m_context->activeScene().get());
             }
 
-            // Ensure we have exactly two cameras to alternate between
+            // Assuming Entity class has getName() that returns std::string
             std::sort(cameraEntities.begin(), cameraEntities.end(), [](Entity& a, Entity& b) {
-                return a.getName() < b.getName();
+                auto extractNumber = [](const std::string& name) -> int {
+                    size_t pos = name.find_first_of("0123456789");
+                    return (pos != std::string::npos) ? std::stoi(name.substr(pos)) : -1;
+                };
+                return extractNumber(a.getName()) < extractNumber(b.getName());
             });
-
             // Alternating logic based on m_stepIteration
-            size_t activeCameraIndex = m_stepIteration % 3;
+            size_t activeCameraIndex = m_stepIteration % cameraEntities.size();
+            // Select the active camera
             auto& cameraComponent = cameraEntities[activeCameraIndex].getComponent<CameraComponent>();
-            sceneCamera = &cameraComponent;
+
             Log::Logger::getInstance()->info("Selecting Camera: {}", cameraEntities[activeCameraIndex].getName());
 
 
             // Prepare path tracer forward settings
             // Use the actual scene camera (pinhole) from your scene
-            m_renderSettings.camera = *sceneCamera->getPinholeCamera();
-            m_renderSettings.cameraTransform = TransformComponent(sceneCamera->getPinholeCamera()->matrices.transform);
-            if (m_previousSceneCamera != sceneCamera)
+            m_renderSettings.camera = *cameraComponent.getPinholeCamera();
+            m_renderSettings.cameraTransform = TransformComponent(
+                cameraComponent.getPinholeCamera()->matrices.transform);
+            if (m_previousSceneCamera != &cameraComponent)
                 m_pathTracer->resetImage();
-            m_previousSceneCamera = sceneCamera;
+            m_previousSceneCamera = &cameraComponent;
 
             if (m_numAccumulated == 0) {
                 m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
@@ -233,12 +224,11 @@ namespace VkRender {
                 //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera2.pfm",
                 //    "/home/magnus-desktop/datasets/PhotonRebuild/active/Camera3.pfm"
                 //};;
-
+                std::filesystem::path basePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/";
+                std::filesystem::path gtFileName = basePath / (cameraEntities[activeCameraIndex].getName() + ".pfm");
                 Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
-                                                 filePaths[activeCameraIndex].string());
-                //std::filesystem::path filePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/screenshot.pfm";
-
-                torch::Tensor targetTensor = loadPFM(filePaths[activeCameraIndex], width, height);
+                                                 gtFileName.string());
+                torch::Tensor targetTensor = loadPFM(gtFileName, width, height);
 
                 // Compute loss
                 auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));

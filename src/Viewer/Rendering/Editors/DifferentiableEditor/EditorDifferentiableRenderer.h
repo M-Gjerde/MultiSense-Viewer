@@ -77,8 +77,7 @@ namespace VkRender
         std::unique_ptr<SyclDeviceSelector> m_syclDevice = nullptr;
 
         PathTracer::PhotonTracer::RenderSettings m_renderSettings;
-        uint32_t m_currentPipelineWidth = 0;
-        uint32_t m_currentPipelineHeight = 0;
+
         CameraComponent* m_previousSceneCamera = nullptr;
         uint32_t m_stepIteration = 0;
     };
