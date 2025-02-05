@@ -96,6 +96,7 @@ namespace VkRender {
             m_pathTracer.reset();
             m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
             imageUI->resetPathTracer = true;
+            imageUI->switchKernelDevice = false;
         }
 
         auto sceneCamera = m_activeScene->getActiveCamera();
@@ -400,7 +401,7 @@ namespace VkRender {
         }
 
         // Write YAML content to a file
-        std::string infoFileName = prefix + ":render_info.yaml"; // Change to your desired infoFileName/path
+        std::string infoFileName = "output/" + prefix + ":render_info.yaml"; // Change to your desired infoFileName/path
         std::ofstream fout(infoFileName);
         if (fout.is_open()) {
             fout << out.c_str();

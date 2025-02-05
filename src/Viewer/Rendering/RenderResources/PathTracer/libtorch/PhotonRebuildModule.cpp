@@ -169,8 +169,6 @@ void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
 
         m_data.numGaussians = gaussianInputAssembly.size(); // Number of entities for rendering
 
-        Log::Logger::getInstance()->info("Uploaded  {} Gaussians from scene to PhotonRebuildModule",
-                                         m_data.numGaussians);
 
         // Now we have gaussianInputAssembly filled. Suppose we want to create separate PyTorch Tensors:
         auto device = torch::kCPU; // or torch::kCPU, depends on your use-case
@@ -270,5 +268,8 @@ void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
         register_parameter("colors", m_tensorData.colors);
         register_parameter("specular", m_tensorData.scales);
         register_parameter("diffuse", m_tensorData.diffuse);
+
+        Log::Logger::getInstance()->info("Registrered and Uploaded {} Gaussians from scene to Tensors",
+                                         m_data.numGaussians);
     }
 }

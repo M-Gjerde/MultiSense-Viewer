@@ -73,7 +73,6 @@ namespace VkRender {
 
             ImGui::SameLine(); // Dropdown for selecting render kernel
             const char* selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
-            imageUI->switchKernelDevice = false;
             ImGui::SetNextItemWidth(100.0f);
             if (ImGui::Combo("##Select Device Type", &imageUI->selectedDeviceIndex, selections,
                              IM_ARRAYSIZE(selections))) {
