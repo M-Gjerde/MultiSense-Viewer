@@ -42,33 +42,47 @@ namespace VkRender {
             }
         }
 
-        glm::vec3 position(0.0f);
-        glm::vec3 normal(0.0f);
         auto gaussianView = m_registry.view<GaussianComponent2DGS>();
         for (auto e : gaussianView) {
-            auto entity = Entity(e, this);
-            auto& gaussianComponent = entity.getComponent<GaussianComponent2DGS>();
-            position = gaussianComponent.positions.front();
-            normal = gaussianComponent.normals.front();
-        }
-
-        auto meshView = m_registry.view<MeshComponent>();
-        for (auto e : meshView) {
-            auto entity = Entity(e, this);
-            auto& meshComponent = entity.getComponent<MeshComponent>();
-            if (meshComponent.meshDataType() == OBJ_FILE) {
-                auto params = std::dynamic_pointer_cast<OBJFileMeshParameters>(meshComponent.meshParameters);
-                if (entity.getName() == "Disk") {
-                    auto& transformComponent = entity.getComponent<TransformComponent>();
-                    transformComponent.setPosition(position);
-                    // Assume the disk's local normal is (0, 0, 1).
-                    glm::vec3 diskLocalNormal(0.0f, 0.0f, 1.0f);
-                    // Compute the quaternion rotation from the disk's local normal to the target normal.
-                    // glm::rotation computes the quaternion that rotates 'diskLocalNormal' to 'normal'.
-                    glm::quat rotationQuat = glm::rotation(diskLocalNormal, normal);
-                    // Apply the rotation.
-                    transformComponent.setRotationQuaternion(rotationQuat);
+            // Wrap the entity to use our helper functions.
+            Entity gaussianEntity(e, this);
+            auto& gaussianComp = gaussianEntity.getComponent<GaussianComponent2DGS>();
+            // For this example, we use the first position and normal from the component.
+            size_t numGaussians = gaussianComp.size();
+            for (size_t i = 0; i < numGaussians; i++) {
+                glm::vec3 position = gaussianComp.positions[i];
+                glm::vec3 normal = gaussianComp.normals[i];
+                // Create a unique name for the mesh entity associated with this gaussian.
+                std::string entityName = "GaussianEntity_" + std::to_string(static_cast<uint32_t>(i));
+                // Get or create the entity with the given name.
+                Entity meshEntity = getOrCreateEntityByName(entityName);
+                // Only add the MeshComponent if it doesn't already exist.
+                if (!meshEntity.hasComponent<MeshComponent>()) {
+                    meshEntity.addComponent<MeshComponent>(
+                        OBJ_FILE,
+                        "/home/magnus/CLionProjects/multisense_viewer/Resources/models-repository/disk.obj"
+                    );
                 }
+                // Only add the MaterialComponent if it doesn't already exist.
+                if (!meshEntity.hasComponent<MaterialComponent>()) {
+                    meshEntity.addComponent<MaterialComponent>();
+                }
+                // Ensure that a TransformComponent exists.
+                if (!meshEntity.hasComponent<TransformComponent>()) {
+                    meshEntity.addComponent<TransformComponent>();
+                }
+                if (!meshEntity.hasComponent<TemporaryComponent>()) {
+                    meshEntity.addComponent<TemporaryComponent>();
+                }
+
+                auto& transform = meshEntity.getComponent<TransformComponent>();
+                // Update the transform's position.
+                transform.setPosition(position);
+                // Compute the quaternion rotation so that the local up vector (0,1,0)
+                // aligns with the Gaussian normal.
+                glm::vec3 localUp(0.0f, 0.0f, 1.0f);
+                glm::quat rotation = glm::rotation(localUp, normal);
+                transform.setRotationQuaternion(rotation);
             }
         }
     }

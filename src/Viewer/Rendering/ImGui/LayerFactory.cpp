@@ -23,6 +23,7 @@
 
 #ifdef SYCL_ENABLED
 #include "Viewer/Rendering/ImGui/AdditionalWindows/ToolWindow.h" // TODO should have a way of transferring data between editors
+
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.h"
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayer.h"
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewerLayer.h"
@@ -30,10 +31,7 @@
 #endif
 
 namespace VkRender {
-
-
-    std::shared_ptr<Layer> LayerFactory::createLayer(const std::string &layerName) {
-
+    std::shared_ptr<Layer> LayerFactory::createLayer(const std::string& layerName) {
         if (layerName == "LayerExample") return std::make_shared<LayerExample>();
         if (layerName == "DebugWindow") return std::make_shared<DebugWindow>();
         if (layerName == "NewVersionAvailable") return std::make_shared<NewVersionAvailable>();
@@ -51,9 +49,13 @@ namespace VkRender {
 
 #ifdef SYCL_ENABLED
         if (layerName == "EditorPathTracerLayer") return std::make_shared<EditorPathTracerLayer>();
-        if (layerName == "EditorDifferentiableRendererLayer") return std::make_shared<EditorDifferentiableRendererLayer>();
-        if (layerName == "ToolWindow") return std::make_shared<ToolWindow>();
+        if (layerName == "EditorDifferentiableRendererLayer") return std::make_shared<
+            EditorDifferentiableRendererLayer>();
         if (layerName == "EditorGaussianViewerLayer") return std::make_shared<EditorGaussianViewerLayer>();
+#ifdef PYTORCH_ENABLED
+        if (layerName == "ToolWindow") return std::make_shared<ToolWindow>();
+
+#endif
 #endif
         throw std::runtime_error("Tried to push layer: " + layerName + " Which doesn't exists");
     }
