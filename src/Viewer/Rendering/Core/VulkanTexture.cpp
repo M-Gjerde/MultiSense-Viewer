@@ -45,6 +45,8 @@ namespace VkRender {
         auto logicalDevice = m_vulkanDevice.m_LogicalDevice;
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, sampler]() {
+                    Log::Logger::getInstance()->trace("Cleaning Up Vulkan Texture Resource");
+
                     vkDestroySampler(logicalDevice, sampler, nullptr);
                 },
                 fence);
@@ -107,7 +109,7 @@ namespace VkRender {
                 VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-
+        Log::Logger::getInstance()->trace("Flushing Command Buffer for Texture Transfer");
         m_vulkanDevice.flushCommandBuffer(copyCmd, m_vulkanDevice.m_TransferQueue);
         // Clean up the staging buffer
         vkDestroyBuffer(m_vulkanDevice.m_LogicalDevice, stagingBuffer, nullptr);

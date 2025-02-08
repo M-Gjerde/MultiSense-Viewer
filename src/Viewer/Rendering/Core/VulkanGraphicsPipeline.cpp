@@ -124,6 +124,8 @@ namespace VkRender {
 
         VulkanResourceManager::getInstance().deferDeletion(
             [logicalDevice, pipeline, pipelinCache, pipelineLayout]() {
+                Log::Logger::getInstance()->trace("Cleaning Up Vulkan GraphicsPipeline Resource");
+
                 vkDestroyPipeline(logicalDevice, pipeline, nullptr);
                 vkDestroyPipelineCache(logicalDevice, pipelinCache, nullptr);
                 vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);

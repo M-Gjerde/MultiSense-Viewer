@@ -52,6 +52,7 @@ namespace VkRender {
             for (size_t i = 0; i < numGaussians; i++) {
                 glm::vec3 position = gaussianComp.positions[i];
                 glm::vec3 normal = gaussianComp.normals[i];
+                glm::vec2 scale = gaussianComp.scales[i];
                 // Create a unique name for the mesh entity associated with this gaussian.
                 std::string entityName = "GaussianEntity_" + std::to_string(static_cast<uint32_t>(i));
                 // Get or create the entity with the given name.
@@ -78,6 +79,7 @@ namespace VkRender {
                 auto& transform = meshEntity.getComponent<TransformComponent>();
                 // Update the transform's position.
                 transform.setPosition(position);
+                transform.setScale({scale.x, scale.y, 1.0f});
                 // Compute the quaternion rotation so that the local up vector (0,1,0)
                 // aligns with the Gaussian normal.
                 glm::vec3 localUp(0.0f, 0.0f, 1.0f);

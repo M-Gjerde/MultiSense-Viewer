@@ -12,13 +12,15 @@ namespace VkRender {
     void VulkanResourceManager::cleanup(bool onExit) {
         auto functionStart = std::chrono::high_resolution_clock::now();
 
-        Log::Logger::getInstance()->trace("Cleaning up unused resources");
         std::lock_guard<std::mutex> lock(resourceMutex);
 
         submitCommandBuffers();
 
+        bool somethingToClean = false;
         // Check if fences are signaled and execute corresponding cleanup functions
         for (auto it = m_deferredCleanupFunctions.begin(); it != m_deferredCleanupFunctions.end();) {
+            Log::Logger::getInstance()->trace("Cleaning up unused resources");
+            somethingToClean = true;
             VkResult result = vkGetFenceStatus(m_vulkanDevice->m_LogicalDevice, it->fence);
             if (result == VK_SUCCESS || onExit) {
                 it->cleanupFunction();
@@ -29,9 +31,11 @@ namespace VkRender {
             }
         }
 
-        auto functionEnd = std::chrono::high_resolution_clock::now();
-        auto functionDuration = std::chrono::duration_cast<std::chrono::milliseconds>(functionEnd - functionStart).count();
-        Log::Logger::getInstance()->trace("cleanup function took {} microseconds to execute", functionDuration);
+        if (somethingToClean) {
+            auto functionEnd = std::chrono::high_resolution_clock::now();
+            auto functionDuration = std::chrono::duration_cast<std::chrono::milliseconds>(functionEnd - functionStart).count();
+            Log::Logger::getInstance()->trace("cleanup function took {} microseconds to execute", functionDuration);
+        }
     }
 
     void VulkanResourceManager::submitCommandBuffers() {

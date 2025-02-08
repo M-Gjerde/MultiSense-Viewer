@@ -36,6 +36,8 @@ namespace VkRender {
 
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, framebuffer]() {
+                    Log::Logger::getInstance()->trace("Cleaning Up Vulkan FrameBuffer Resource");
+
                     vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
                 },
                 fence);

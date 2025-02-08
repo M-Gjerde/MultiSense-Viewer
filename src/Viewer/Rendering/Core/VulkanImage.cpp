@@ -67,6 +67,8 @@ namespace VkRender {
 
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, allocator, allocation, view, image]() {
+                    Log::Logger::getInstance()->trace("Cleaning Up Vulkan Image Resource");
+
                     vkDestroyImageView(logicalDevice, view, nullptr);
                     vmaDestroyImage(allocator, image, allocation);
                 },

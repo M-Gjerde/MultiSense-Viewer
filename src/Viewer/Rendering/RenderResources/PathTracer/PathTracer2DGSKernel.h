@@ -90,18 +90,14 @@ namespace VkRender::PathTracer {
                         // METALLIC branch (diffuse == 0)
                         // ----------------------------------
                         // For a purely metallic surface, ignore diffuse lighting altogether.
-
                         // Compute reflection direction
                         glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
-
                         // Compute specular highlight (cosAlpha)
                         float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
                         cosAlpha = glm::max(0.0f, cosAlpha);
-
                         // Multiply by albedo if metals have tinted reflection
                         // e.g. specularContribution = specular * albedo * ...
                         float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
-
                         // Purely specular => total = specular only
                         totalContribution = specularContribution;
                     }
@@ -109,19 +105,16 @@ namespace VkRender::PathTracer {
                         // ----------------------------------
                         // NON-METALLIC branch (diffuse > 0)
                         // ----------------------------------
-
                         // 1) Diffuse contribution
                         // Compute cosTheta for the diffuse term
                         float cosTheta = glm::dot(hitNormalWorld, -rayDir);
                         cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
                         float diffuseContribution = diffusion * albedo * cosTheta / M_PIf;
-
                         // 2) Specular contribution
                         glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
                         float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
                         cosAlpha = glm::max(0.0f, cosAlpha);
                         float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
-
                         //3 ) Energy conservation / normalization:
                         //    We want to ensure that the total reflection doesn't exceed 1,
                         //    weight diffuse vs. specular so that sum of their "weights" is 1.
@@ -129,7 +122,6 @@ namespace VkRender::PathTracer {
                         if (sumForWeights > 0.0f) {
                             float diffuseWeight = albedo / sumForWeights;
                             float specularWeight = specular / sumForWeights;
-
                             // Weighted sum
                             totalContribution = diffuseWeight * diffuseContribution
                                 + specularWeight * specularContribution;
@@ -142,7 +134,6 @@ namespace VkRender::PathTracer {
 
                     // Finally, scale the photonFlux (or outgoing radiance) by total contribution
                     photonFlux *= totalContribution;
-
                     // Russian Roulette termination
                     float rrProb = photonFlux;
                     float minProbability = 0.2f; // 20%

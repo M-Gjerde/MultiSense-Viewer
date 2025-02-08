@@ -53,11 +53,64 @@ namespace VkRender {
             static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
 
-        PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(), m_createInfo.width,
-                                                                    m_createInfo.height);
-        m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,
-                                                         VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
+
+        auto sceneCamera = m_activeScene->getActiveCamera();
+        // 1. Figure out what camera we are using and the correct resolution.
+        bool useSceneCamera = (imageUI->useSceneCamera && sceneCamera && sceneCamera->cameraType ==
+            CameraComponent::PINHOLE);
+        uint32_t newWidth = m_createInfo.width;
+        uint32_t newHeight = m_createInfo.height;
+        if (useSceneCamera) {
+            newWidth = sceneCamera->pinholeParameters.width;
+            newHeight = sceneCamera->pinholeParameters.height;
+        }
+        // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
+        bool resolutionChanged = (newWidth != m_currentPipelineWidth || newHeight != m_currentPipelineHeight);
+        if (imageUI->resetPathTracer || resolutionChanged) {
+            Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
+            // Store the new resolution for next frame's comparison
+            m_currentPipelineWidth = newWidth;
+            m_currentPipelineHeight = newHeight;
+            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
+                                                                        m_currentPipelineWidth,
+                                                                        m_currentPipelineHeight);
+            pipelineSettings.photonCount = imageUI->photonCount;
+            pipelineSettings.numBounces = imageUI->numBounces;
+            // Create a new path tracer pipeline
+            if (m_pathTracer) {
+                m_pathTracer.reset();
+            }
+            if (m_colorTexture) {
+                m_colorTexture.reset();
+            }
+
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
+            float editorAspect = static_cast<float>(m_createInfo.width) /
+                static_cast<float>(m_createInfo.height);
+            float sceneCameraAspect = static_cast<float>(m_currentPipelineWidth) /
+                static_cast<float>(m_currentPipelineHeight);
+
+            float scaleX = 1.0f, scaleY = 1.0f;
+            if (editorAspect > sceneCameraAspect) {
+                scaleX = sceneCameraAspect / editorAspect;
+            }
+            else {
+                scaleY = editorAspect / sceneCameraAspect;
+            }
+            m_meshInstances.reset();
+            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+
+            // Create a new color texture with the same (possibly updated) dimensions
+            m_colorTexture = EditorUtils::createEmptyTexture(
+                m_currentPipelineWidth,
+                m_currentPipelineHeight,
+                VK_FORMAT_R8G8B8A8_UNORM,
+                m_context
+            );
+
+            return;
+        }
     }
 
     void EditorPathTracer::onFileDrop(const std::filesystem::path& path) {
@@ -79,8 +132,7 @@ namespace VkRender {
         PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(), m_createInfo.width,
                                                                     m_createInfo.height);
         m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,
-                                                         VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,VK_FORMAT_R8G8B8A8_UNORM, m_context);
     }
 
 
@@ -122,6 +174,13 @@ namespace VkRender {
             pipelineSettings.photonCount = imageUI->photonCount;
             pipelineSettings.numBounces = imageUI->numBounces;
             // Create a new path tracer pipeline
+            if (m_pathTracer) {
+                m_pathTracer.reset();
+            }
+            if (m_colorTexture) {
+                m_colorTexture.reset();
+            }
+
             m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
             float editorAspect = static_cast<float>(m_createInfo.width) /
                 static_cast<float>(m_createInfo.height);
@@ -145,6 +204,8 @@ namespace VkRender {
                 VK_FORMAT_R8G8B8A8_UNORM,
                 m_context
             );
+
+            return;
         }
 
         if (imageUI->clearImageMemory)
@@ -189,10 +250,11 @@ namespace VkRender {
         }
 
         float* image = m_pathTracer->getImage();
-        if (image) {
-            const uint32_t width = m_colorTexture->width();
-            const uint32_t height = m_colorTexture->height();
-            const size_t totalPixels = static_cast<size_t>(width) * height;
+        const uint32_t texWidth = m_colorTexture->width();
+        const uint32_t texHeight = m_colorTexture->height();
+        bool sizeMatch = m_pathTracer->getPipelineSettings().width == texWidth && texWidth == m_currentPipelineWidth && m_pathTracer->getPipelineSettings().height == texHeight && texHeight == m_currentPipelineHeight;
+        if (image && !resolutionChanged && sizeMatch) {
+            const size_t totalPixels = static_cast<size_t>(texWidth) * texHeight;
 
             // Prepare a container for the final image (after optional denoising)
             const float* finalImage = image;
@@ -200,7 +262,7 @@ namespace VkRender {
 
             // Denoise if requested; otherwise, use the original image directly.
             if (imageUI->denoise) {
-                denoiseImage(image, width, height, denoisedImage);
+                denoiseImage(image, texWidth, texHeight, denoisedImage);
                 // Use the denoised data if the denoising call was successful.
                 if (!denoisedImage.empty()) {
                     finalImage = denoisedImage.data();
@@ -222,7 +284,10 @@ namespace VkRender {
                 convertedImage[offset + 3] = 255; // A (fully opaque)
             }
             // Upload the texture
+            Log::Logger::getInstance()->trace("Uploading Path Tracer Image to Color Texture. Size: {}bytes into{}. SizeMatch: {}", convertedImage.size(), m_colorTexture->getSize(), sizeMatch);
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
+            Log::Logger::getInstance()->trace("Uploaded new Texture Data");
+
         }
 
         if (imageUI->saveImage || imageUI->bypassSave) {
@@ -270,6 +335,7 @@ namespace VkRender {
     void EditorPathTracer::onRender(CommandBuffer& commandBuffer) {
         std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> renderGroups;
         collectRenderCommands(renderGroups, commandBuffer.frameIndex);
+        Log::Logger::getInstance()->trace("Collected Drawing commands");
 
         // Render each group
         for (auto& [pipeline, commands] : renderGroups) {
@@ -279,6 +345,8 @@ namespace VkRender {
                 bindResourcesAndDraw(commandBuffer, command);
             }
         }
+
+        Log::Logger::getInstance()->trace("Drawing Path tracer");
     }
 
     void EditorPathTracer::collectRenderCommands(

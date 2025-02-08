@@ -157,13 +157,18 @@ Buffer::~Buffer() {
 
     // Schedule deferred deletion
     VkRender::VulkanResourceManager::getInstance().deferDeletion(
+
             [logicalDevice, buffer, memory]() {
+
+                Log::Logger::getInstance()->trace("Cleaning Up Buffer Resource");
+
                 if (buffer) {
                     vkDestroyBuffer(logicalDevice, buffer, nullptr);
                 }
                 if (memory) {
                     vkFreeMemory(logicalDevice, memory, nullptr);
                 }
+
             },
             fence);
 

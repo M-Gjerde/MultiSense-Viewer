@@ -36,6 +36,8 @@ namespace VkRender {
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, renderPass]() {
                     // Cleanup logic with captured values
+                        Log::Logger::getInstance()->trace("Cleaning Up Vulkan Renderpass Resource");
+
                     vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
                 },
                 fence);

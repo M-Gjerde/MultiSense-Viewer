@@ -605,7 +605,7 @@ void VulkanDevice::flushCommandBuffer(VkCommandBuffer commandBuffer, VkQueue que
     if (res != VK_SUCCESS)
         throw std::runtime_error("Failed to submit to graphicsQueue");
     // Wait for the fence to signal that command buffer has finished executing
-    res = vkWaitForFences(m_LogicalDevice, 1, &fence, VK_TRUE, UINT64_MAX);
+    res = vkWaitForFences(m_LogicalDevice, 1, &fence, VK_TRUE, 1000000000);
     if (res != VK_SUCCESS)
         throw std::runtime_error("Failed to wait for fence");
     if (free) {

@@ -42,12 +42,15 @@ namespace VkRender::PathTracer {
             m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
             m_renderInformation->gamma = renderSettings.gammaCorrection;
             m_renderInformation->numBounces = m_pipelineSettings.numBounces;
+            Log::Logger::getInstance()->trace("Path Tracer: Uploading Render Information");
+
             queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation));
             queue.memcpy(m_gpu.pinholeCamera, &renderSettings.camera, sizeof(PinholeCamera));
             queue.memcpy(m_gpu.cameraTransform, &renderSettings.cameraTransform, sizeof(TransformComponent));
-
+            queue.wait();
             // Kernel Launch
             sycl::range<1> globalRange(m_pipelineSettings.photonCount);
+            Log::Logger::getInstance()->trace("Path Tracer: Submitting Kernels");
 
             switch (renderSettings.kernelType) {
             case KERNEL_PATH_TRACER_2DGS:
@@ -68,6 +71,7 @@ namespace VkRender::PathTracer {
                 // Handle unsupported kernel type if necessary
                     break;
             }
+
             queue.wait_and_throw();
 
             // Retrieve updated information from GPU
@@ -79,7 +83,7 @@ namespace VkRender::PathTracer {
             double totalM = static_cast<double>(m_renderInformation->totalPhotons) / 1e6;
             double sensorK = static_cast<double>(m_renderInformation->photonsAccumulated) / 1000.0;
             Log::Logger::getInstance()->info(
-                "Simulated {}M photons. About {}k photons hit the sensor",
+                "Path Tracer:  Simulated {}M photons. About {}k photons hit the sensor",
                 totalM, sensorK);
 
         }
@@ -125,6 +129,7 @@ namespace VkRender::PathTracer {
     }
 
     void PhotonTracer::resetImage() {
+        Log::Logger::getInstance()->trace("Resetting Image...");
         auto& queue = m_pipelineSettings.queue;
         queue.fill(m_gpu.imageMemory, static_cast<float>(0),
                    m_pipelineSettings.width * m_pipelineSettings.height).wait();
@@ -132,6 +137,7 @@ namespace VkRender::PathTracer {
         m_renderInformation->photonsAccumulated = 0;
         m_renderInformation->totalPhotons = 0;
         queue.memcpy(m_gpu.renderInformation, m_renderInformation.get(), sizeof(RenderInformation)).wait();
+        Log::Logger::getInstance()->trace("Image successfully reset");
     }
 
     void PhotonTracer::prepareImageAndInfoBuffers() {
@@ -151,8 +157,6 @@ namespace VkRender::PathTracer {
         // Initialize device memory to 0
         queue.fill(m_gpu.imageMemory, 0.0f, imageSize).wait();
         // Initialize host memory to 0
-        std::fill(m_imageMemory, m_imageMemory + imageSize, 0.0f);
-
         // Initialize RNGs
         // Generate a random seed using std::random_device.
         size_t simulatePhotonCount = m_pipelineSettings.photonCount;
