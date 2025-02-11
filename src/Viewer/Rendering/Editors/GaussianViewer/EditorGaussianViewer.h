@@ -7,7 +7,7 @@
 
 #include "Viewer/Rendering/Editors/Editor.h"
 #include "Viewer/Scenes/Scene.h"
-#include "Viewer/Tools/SyclDeviceSelector.h"
+#include "Viewer/Tools/SYCLDeviceSelector.h"
 #include "Viewer/Rendering/Core/DescriptorSetManager.h"
 #include "Viewer/Rendering/Core/PipelineManager.h"
 #include "Viewer/Rendering/Core/DescriptorRegistry.h"
@@ -47,7 +47,7 @@ namespace VkRender {
         std::shared_ptr<Scene> m_activeScene;
         CameraComponent* m_lastActiveCamera = nullptr;
 
-        SyclDeviceSelector m_deviceSelector = SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
+        SYCLDeviceSelector m_deviceSelector; //= SyclDeviceSelector(SyclDeviceSelector::DeviceType::GPU);
         SYCLGaussian2D gaussianRenderer2D;
         SYCLGaussian3D gaussianRenderer3D;
 

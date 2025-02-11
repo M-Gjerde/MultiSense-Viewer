@@ -45,11 +45,10 @@ namespace VkRender {
         auto logicalDevice = m_vulkanDevice.m_LogicalDevice;
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, sampler]() {
-                    Log::Logger::getInstance()->trace("Cleaning Up Vulkan Texture Resource");
 
                     vkDestroySampler(logicalDevice, sampler, nullptr);
                 },
-                fence);
+                fence, "Cleaning Up Texture Resource");
     }
 
 

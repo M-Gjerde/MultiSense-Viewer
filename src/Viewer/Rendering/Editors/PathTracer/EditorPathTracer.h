@@ -18,65 +18,66 @@
 #include "Viewer/Rendering/Editors/ArcballCamera.h"
 
 namespace VkRender {
-
-
     class EditorPathTracer : public Editor {
     public:
         EditorPathTracer() = delete;
-        ~EditorPathTracer() {
-            // Make sure path tracer gets destroyed before the SYCL device
-            m_pathTracer.reset();
-            m_syclDevice.reset();
-        }
 
         explicit EditorPathTracer(EditorCreateInfo &createInfo, UUID uuid);
 
         void onUpdate() override;
 
         void onRender(CommandBuffer &drawCmdBuffers) override;
+
         void collectRenderCommands(
-                std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
-                uint32_t frameIndex);
-        void bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command);
+            std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand> > &renderGroups,
+            uint32_t frameIndex);
+
+        void bindResourcesAndDraw(const CommandBuffer &commandBuffer, RenderCommand &command);
+
         void saveImage();
 
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
 
+        void updatePathTracerSettings();
+
         void onMouseMove(const MouseButtons &mouse) override;
-        void denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height, std::vector<float>& output);
+
+        void denoiseImage(float *singleChannelImage, uint32_t width, uint32_t height, std::vector<float> &output);
 
         void onFileDrop(const std::filesystem::path &path) override;
 
         void onMouseScroll(float change) override;
-        void onKeyCallback(const Input& input) override;
+
+        void onKeyCallback(const Input &input) override;
 
         void onEditorResize() override;
 
-        PathTracer::RenderInformation getRenderInformation() {
-            return m_pathTracer->getRenderInfo();
+        PathTracer::RenderInformation *getRenderInformation() {
+            if (m_pathTracer)
+                return m_pathTracer->getRenderInfo();
+
+            return nullptr;
         }
+
     private:
-        std::vector<std::unique_ptr<Buffer>> m_shaderSelectionBuffer;
+        std::vector<std::unique_ptr<Buffer> > m_shaderSelectionBuffer;
         PipelineManager m_pipelineManager;
         DescriptorRegistry m_descriptorRegistry;
         std::shared_ptr<MeshInstance> m_meshInstances;
+        std::shared_ptr<VulkanTexture2D> m_colorTextureTMP;
         std::shared_ptr<VulkanTexture2D> m_colorTexture;
 
         std::unique_ptr<PathTracer::PhotonTracer> m_pathTracer;
-        std::unique_ptr<SyclDeviceSelector> m_syclDevice;
 
         std::shared_ptr<ArcballCamera> m_editorCamera;
-        CameraComponent* m_lastActiveCamera = nullptr;
+        CameraComponent *m_lastActiveCamera = nullptr;
         bool m_wasSceneCameraActive = false;
         bool m_movedCamera = false;
-        std::shared_ptr<Scene> m_activeScene;
+
         void updateActiveCamera();
 
         // temp TODO remove and find another solution
-        uint32_t m_currentPipelineWidth = 0;
-        uint32_t m_currentPipelineHeight = 0;
-        CameraComponent* m_previousSceneCamera = nullptr;
-
+        CameraComponent *m_previousSceneCamera = nullptr;
     };
 }
 #endif //MULTISENSE_VIEWER_EDITORPATHTRACER_H

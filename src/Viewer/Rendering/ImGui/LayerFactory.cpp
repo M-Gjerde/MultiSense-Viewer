@@ -22,8 +22,10 @@
 
 
 #ifdef SYCL_ENABLED
-#include "Viewer/Rendering/ImGui/AdditionalWindows/ToolWindow.h" // TODO should have a way of transferring data between editors
 
+#ifdef DIFF_RENDERER_ENABLED
+#include "Viewer/Rendering/ImGui/AdditionalWindows/ToolWindow.h" // TODO should have a way of transferring data between editors
+#endif
 #include "Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.h"
 #include "Viewer/Rendering/Editors/DifferentiableEditor/EditorDifferentiableRendererLayer.h"
 #include "Viewer/Rendering/Editors/GaussianViewer/EditorGaussianViewerLayer.h"
@@ -52,7 +54,7 @@ namespace VkRender {
         if (layerName == "EditorDifferentiableRendererLayer") return std::make_shared<
             EditorDifferentiableRendererLayer>();
         if (layerName == "EditorGaussianViewerLayer") return std::make_shared<EditorGaussianViewerLayer>();
-#ifdef PYTORCH_ENABLED
+#ifdef DIFF_RENDERER_ENABLED
         if (layerName == "ToolWindow") return std::make_shared<ToolWindow>();
 
 #endif

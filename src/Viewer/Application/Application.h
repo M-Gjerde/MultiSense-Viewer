@@ -51,6 +51,7 @@
 #include "Viewer/Rendering/Editors/SceneRenderer.h"
 #include "Viewer/Scenes/Scene.h"
 #include "Viewer/Modules/MultiSense/MultiSenseRendererBridge.h"
+#include "Viewer/Tools/SYCLDeviceSelector.h"
 
 namespace VkRender {
     class Entity;
@@ -126,6 +127,8 @@ namespace VkRender {
         VkInstance& getInstance() {return instance;}
         GLFWwindow* getWindow() {return window;}
 
+        SYCLDeviceManager& getSyclDeviceSelector(){return m_syclDeviceManager;}
+
         std::vector<std::unique_ptr<Editor> > m_editors;
 
     private:
@@ -161,6 +164,7 @@ namespace VkRender {
         std::shared_ptr<UsageMonitor> m_usageMonitor;
         Entity m_selectedEntity;
 
+        SYCLDeviceManager m_syclDeviceManager;
 
     private:
         std::shared_ptr<MultiSense::MultiSenseRendererBridge> m_multiSense;

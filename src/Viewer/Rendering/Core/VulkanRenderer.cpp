@@ -448,7 +448,7 @@ namespace VkRender {
         Log::Logger::getInstance()->info("Initialized Renderer backend");
 
         rendererStartTime = std::chrono::system_clock::now();
-        VulkanResourceManager::getInstance(m_vulkanDevice, m_allocator);
+        VulkanResourceManager::getInstance(m_vulkanDevice, m_allocator, graphicsQueue);
 
         createColorResources();
         createDepthStencil();
@@ -551,7 +551,7 @@ namespace VkRender {
             frameTimer = static_cast<float>(tDiff) / 1000;
 
             if (static_cast<float>(tDiff) > 33){
-                Log::Logger::getInstance()->trace("Warning: Exceeding 33ms for render time");
+                Log::Logger::getInstance()->trace("Warning: Exceeding 33ms for render time. Time: {}", static_cast<float>(tDiff));
             }
             postRenderActions();
             mouse.d = glm::vec2(0.0f);
@@ -566,11 +566,10 @@ namespace VkRender {
 
     void VulkanRenderer::prepareFrame() {
         // Use a fence to wait until the command buffer has finished execution before using it again
+        Log::Logger::getInstance()->trace("Waiting for render fence");
         if (vkWaitForFences(device, 1, &waitFences[currentFrame], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
             throw std::runtime_error("Failed to wait for render fence");
 
-        // Cleanup deferred deletions
-        VulkanResourceManager::getInstance().cleanup();
 
 
         if (recreateResourcesNextFrame) {
@@ -596,9 +595,15 @@ namespace VkRender {
             throw std::runtime_error(
                 "Failed to acquire next m_Image in prepareFrame. VkResult: " + std::to_string(result));
 
+        Log::Logger::getInstance()->trace("Acquired next image");
         result = vkResetFences(device, 1, &waitFences[currentFrame]);
         if (result != VK_SUCCESS)
             throw std::runtime_error("Failed to reset fence");
+
+        // Cleanup deferred deletions
+        Log::Logger::getInstance()->trace("Deferred cleanup check");
+        VulkanResourceManager::getInstance().cleanup();
+
 
         // Also signal subsequent fences by various rendering operations
         drawCmdBuffers.setAllEvents(m_vulkanDevice->m_LogicalDevice);
@@ -608,6 +613,7 @@ namespace VkRender {
     }
 
     void VulkanRenderer::submitFrame() {
+        Log::Logger::getInstance()->trace("Submitting render commands");
         std::unique_lock<std::mutex> lock(queueSubmitMutex);
         VkSemaphore waitSemaphores[] = {
             //semaphores[currentFrame].computeComplete,
@@ -633,6 +639,7 @@ namespace VkRender {
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &activeBuffer;
         vkQueueSubmit(graphicsQueue, 1, &submitInfo, waitFences[currentFrame]);
+        Log::Logger::getInstance()->trace("Presenting frame");
 
         VkResult result = swapchain->queuePresent(graphicsQueue, imageIndex, semaphores[currentFrame].renderComplete);
         if (result == VK_SUBOPTIMAL_KHR || result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -649,6 +656,8 @@ namespace VkRender {
 
         currentFrame = (currentFrame + 1) % swapchain->imageCount;
         drawCmdBuffers.frameIndex = currentFrame;
+        Log::Logger::getInstance()->trace("Next Frame");
+
     }
 
     /** CALLBACKS **/
@@ -1141,6 +1150,8 @@ namespace VkRender {
     }
 
     void VulkanRenderer::recordCommands() {
+        Log::Logger::getInstance()->trace("Recording commands...");
+
         VkCommandBufferBeginInfo cmdBufInfo = Populate::commandBufferBeginInfo();
         cmdBufInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; // Allow reusing this command buffer
         cmdBufInfo.pInheritanceInfo = nullptr;

@@ -37,7 +37,7 @@ namespace VkRender::MultiSense {
     private:
         std::vector<std::shared_ptr<MultiSenseDevice>> m_multiSenseDevices;
         std::shared_ptr<MultiSenseDevice> m_selectedProfileRef;
-        AdapterUtils m_adapterUtils;
+        //AdapterUtils m_adapterUtils;
     };
 }
 

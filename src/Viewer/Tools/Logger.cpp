@@ -76,7 +76,7 @@ namespace Log {
 
         m_file.open(logFileName.c_str(), std::ios::out | std::ios::app);
         m_logLevel = LOG_LEVEL_TRACE;
-        m_logType = FILE_LOG;
+        m_logType = ALL_LOGS;
 
         info("<=============================== START OF PROGRAM ===============================>");
 
@@ -148,9 +148,10 @@ namespace Log {
         data.append(text);
 
         // ERROR must be capture
-        if (m_logType == FILE_LOG) {
+        if (m_logType & FILE_LOG) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if (m_logType == CONSOLE) {
+        }
+        if (m_logType & CONSOLE) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
     }
@@ -161,9 +162,10 @@ namespace Log {
         data.append(text);
 
         // ERROR must be capture
-        if (m_logType == FILE_LOG) {
+        if (m_logType & FILE_LOG) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if (m_logType == CONSOLE) {
+        }
+        if (m_logType & CONSOLE) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
     }
@@ -174,9 +176,10 @@ namespace Log {
         data.append(text);
 
         // ERROR must be capture
-        if (m_logType == FILE_LOG) {
+        if (m_logType & FILE_LOG) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if (m_logType == CONSOLE) {
+        }
+        if (m_logType & CONSOLE) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
     }
@@ -187,9 +190,10 @@ namespace Log {
         data.append("[INFO]: ");
         data.append(text);
 
-        if ((m_logType == FILE_LOG) && (m_logLevel >= LOG_LEVEL_INFO)) {
+        if ((m_logType & FILE_LOG) && (m_logLevel >= LOG_LEVEL_INFO)) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if ((m_logType == CONSOLE) && (m_logLevel >= LOG_LEVEL_INFO)) {
+        }
+        if ((m_logType & CONSOLE) && (m_logLevel >= LOG_LEVEL_INFO)) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
 
@@ -200,9 +204,10 @@ namespace Log {
         data.append("[TRACE]: ");
         data.append(text);
 
-        if ((m_logType == FILE_LOG) && (m_logLevel >= LOG_LEVEL_TRACE)) {
+        if ((m_logType & FILE_LOG) && (m_logLevel >= LOG_LEVEL_TRACE)) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if ((m_logType == CONSOLE) && (m_logLevel >= LOG_LEVEL_TRACE)) {
+        }
+        if ((m_logType & CONSOLE) && (m_logLevel >= LOG_LEVEL_TRACE)) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
 
@@ -215,9 +220,10 @@ namespace Log {
         data.append(text);
 
         // No check for ALWAYS logs
-        if (m_logType == FILE_LOG) {
+        if (m_logType & FILE_LOG) {
             m_threadPool->Push(Logger::logIntoFile, this, data);
-        } else if (m_logType == CONSOLE) {
+        }
+        if (m_logType & CONSOLE) {
             m_threadPool->Push(Logger::logOnConsole, data);
         }
     }

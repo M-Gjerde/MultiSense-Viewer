@@ -40,7 +40,7 @@ namespace VkRender {
 
                     vkDestroyFramebuffer(logicalDevice, framebuffer, nullptr);
                 },
-                fence);
+                fence, "Cleaning up FrameBuffer");
 
     }
 }

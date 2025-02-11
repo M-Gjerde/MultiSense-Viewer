@@ -130,6 +130,6 @@ namespace VkRender {
                 vkDestroyPipelineCache(logicalDevice, pipelinCache, nullptr);
                 vkDestroyPipelineLayout(logicalDevice, pipelineLayout, nullptr);
             },
-            fence);
+            fence, "Cleaning up GraphicsPipeline");
     }
 }

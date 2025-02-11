@@ -160,8 +160,6 @@ Buffer::~Buffer() {
 
             [logicalDevice, buffer, memory]() {
 
-                Log::Logger::getInstance()->trace("Cleaning Up Buffer Resource");
-
                 if (buffer) {
                     vkDestroyBuffer(logicalDevice, buffer, nullptr);
                 }
@@ -170,7 +168,7 @@ Buffer::~Buffer() {
                 }
 
             },
-            fence);
+            fence, "Cleaning Up Buffer Resource");
 
     // Reset the internal members after scheduling deferred cleanup
     m_buffer = VK_NULL_HANDLE;

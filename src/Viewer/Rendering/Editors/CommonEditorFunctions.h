@@ -49,7 +49,7 @@ namespace VkRender::EditorUtils {
         auto texture = std::make_shared<VulkanTexture2D>(textureCreateInfo);
 
         if (setValues) {
-            uint32_t imageSize = static_cast<uint32_t>(width) * static_cast<uint32_t>(height) * Utils::getBytesPerPixelFromVkFormat(format);
+            uint32_t imageSize = width * height * Utils::getBytesPerPixelFromVkFormat(format);
 
             void* imageMemory = malloc(imageSize);
             std::fill(static_cast<uint8_t*>(imageMemory), static_cast<uint8_t*>(imageMemory) + imageSize, 200);

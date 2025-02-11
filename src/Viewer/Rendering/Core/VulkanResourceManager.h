@@ -19,8 +19,8 @@ namespace VkRender {
 
     class VulkanResourceManager {
     public:
-        static VulkanResourceManager& getInstance(VulkanDevice* device = VK_NULL_HANDLE, VmaAllocator allocator = VK_NULL_HANDLE) {
-            std::call_once(initInstanceFlag, &VulkanResourceManager::initSingleton, device, allocator);
+        static VulkanResourceManager& getInstance(VulkanDevice* device = VK_NULL_HANDLE, VmaAllocator allocator = VK_NULL_HANDLE, VkQueue queue = VK_NULL_HANDLE) {
+            std::call_once(initInstanceFlag, &VulkanResourceManager::initSingleton, device, allocator, queue);
             return *instance;
         }
         static void destroyInstance() {
@@ -33,19 +33,19 @@ namespace VkRender {
 
         using CleanupFunction = std::function<void()>;
 
-        void deferDeletion(CleanupFunction cleanupFunction, VkFence& fence) {
+        void deferDeletion(CleanupFunction cleanupFunction, VkFence& fence, std::string debugString = "") {
             std::lock_guard<std::mutex> lock(resourceMutex);
-            m_deferredCleanupFunctions.push_back({std::move(cleanupFunction), fence});
+            m_deferredCleanupFunctions.push_back({std::move(cleanupFunction), fence, std::move(debugString)});
         }
 
         void cleanup(bool onExit = false) ;
 
     private:
-        VulkanResourceManager(VulkanDevice* device, VmaAllocator allocator)
-                : m_vulkanDevice(device), m_allocator(allocator) {}
+        VulkanResourceManager(VulkanDevice* device, VmaAllocator allocator, VkQueue queue)
+                : m_vulkanDevice(device), m_allocator(allocator), m_queue(queue) {}
 
-        static void initSingleton(VulkanDevice* device, VmaAllocator allocator) {
-            instance = new VulkanResourceManager(device, allocator);
+        static void initSingleton(VulkanDevice* device, VmaAllocator allocator, VkQueue queue) {
+            instance = new VulkanResourceManager(device, allocator, queue);
         }
 
         static void cleanupSingleton() {
@@ -62,10 +62,13 @@ namespace VkRender {
 
         VulkanDevice* m_vulkanDevice;
         VmaAllocator m_allocator = VK_NULL_HANDLE;
+        VkQueue m_queue = VK_NULL_HANDLE;
 
         struct DeferredCleanup {
             CleanupFunction cleanupFunction;
             VkFence fence;
+            std::string debugString;
+            uint32_t framesWaited = 0; // Initialized to 0 when the task is queued.
         };
 
         std::deque<DeferredCleanup> m_deferredCleanupFunctions;

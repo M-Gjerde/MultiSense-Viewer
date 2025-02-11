@@ -12,7 +12,7 @@
 #include <yaml-cpp/yaml.h>
 
 namespace VkRender {
-    EditorDifferentiableRenderer::EditorDifferentiableRenderer(EditorCreateInfo& createInfo, UUID uuid) : Editor(
+    EditorDifferentiableRenderer::EditorDifferentiableRenderer(EditorCreateInfo &createInfo, UUID uuid) : Editor(
         createInfo, uuid) {
         addUI("EditorDifferentiableRendererLayer");
         addUI("EditorUILayer");
@@ -22,7 +22,7 @@ namespace VkRender {
         m_descriptorRegistry.createManager(DescriptorManagerType::Viewport3DTexture, m_context->vkDevice());
 
         m_shaderSelectionBuffer.resize(m_context->swapChainBuffers().size());
-        for (auto& frameIndex : m_shaderSelectionBuffer) {
+        for (auto &frameIndex: m_shaderSelectionBuffer) {
             m_context->vkDevice().createBuffer(
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -33,10 +33,6 @@ namespace VkRender {
         m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,
                                                          VK_FORMAT_R8G8B8A8_UNORM, m_context);
 
-        m_activeSceneCamera = std::make_shared<ArcballCamera>();
-        m_activeSceneCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
-
-        m_syclDevice = std::make_unique<SyclDeviceSelector>(SyclDeviceSelector::DeviceType::CPU);
     }
 
     void EditorDifferentiableRenderer::onEditorResize() {
@@ -44,98 +40,111 @@ namespace VkRender {
 
 
     void EditorDifferentiableRenderer::onSceneLoad(std::shared_ptr<Scene> scene) {
-        m_activeScene = scene;
-        //initializeDifferentiableRenderer();
     }
 
+
+    void EditorDifferentiableRenderer::updatePathTracerSettings() {
+        auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
+        auto activeCamera = m_context->activeScene()->getActiveCamera();
+        Log::Logger::getInstance()->info("Setting New Kernel Device");
+        SYCLDeviceType deviceType = SYCLDeviceType::CPU;
+        if (imageUI->kernelDevice == "GPU") {
+            deviceType = SYCLDeviceType::GPU;
+        }
+        auto syclDevice = m_context->getSyclDeviceSelector().getDevice(deviceType);
+        uint32_t width = m_createInfo.width;
+        uint32_t height = m_createInfo.height;
+        if (activeCamera) {
+            width = activeCamera->pinholeParameters.width;
+            height = activeCamera->pinholeParameters.height;
+        }
+        PathTracer::PhotonTracer::PipelineSettings pipelineSettings(syclDevice, width, height);
+
+        std::filesystem::path baseDir = "/home/magnus/datasets/PathTracingGS/active/";
+        std::filesystem::path filePath;
+        for (const auto &entry: std::filesystem::recursive_directory_iterator(baseDir)) {
+            std::string filename = entry.path().filename().string();
+            if (filename.find("render_info") != std::string::npos && filename.ends_with(".yaml")) {
+                filePath = entry.path(); // Return the first matching file
+            }
+        }
+
+        if (std::filesystem::exists(filePath)) {
+            YAML::Node config = YAML::LoadFile(filePath);
+            // Retrieve values from YAML nodes
+            auto gamma = config["Gamma"].as<double>();
+            auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
+            auto photonsEmitted = config["PhotonsEmitted"].as<uint64_t>();
+            auto frameCount = config["FrameCount"].as<uint32_t>();
+            auto photonBounceCount = config["PhotonBounceCount"].as<uint32_t>();
+
+            // Print them out (or use them in your application)
+            std::cout << "Gamma: " << gamma << std::endl;
+            std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
+            std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
+            std::cout << "FrameCount: " << frameCount << std::endl;
+            pipelineSettings.photonCount = photonsEmitted / frameCount;
+            pipelineSettings.numBounces = photonBounceCount;
+            m_renderSettings.gammaCorrection = gamma;
+            pipelineSettings.numFrames = frameCount;
+        } else {
+            Log::Logger::getInstance()->warning("Did not load params from dataset folder: {}", filePath.string());
+        }
+
+        m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_context->activeScene());
+        syclDevice->getQueue().wait();
+        auto list = syclDevice->getQueue().get_wait_list();
+        for (const auto &event: list) {
+            try {
+                auto status = event.get_info<sycl::info::event::command_execution_status>();
+                Log::Logger::getInstance()->info("Event status: {}", static_cast<int>(status));
+            } catch (const std::exception &e) {
+                Log::Logger::getInstance()->error("Error retrieving event info: {}", e.what());
+            }
+        }
+        vkDeviceWaitIdle(m_context->vkDevice().m_LogicalDevice);
+        float editorAspect = static_cast<float>(m_createInfo.width) /
+                             static_cast<float>(m_createInfo.height);
+        float sceneCameraAspect = static_cast<float>(width) /
+                                  static_cast<float>(height);
+        float scaleX = 1.0f, scaleY = 1.0f;
+        if (editorAspect > sceneCameraAspect) {
+            scaleX = sceneCameraAspect / editorAspect;
+        } else {
+            scaleY = editorAspect / sceneCameraAspect;
+        }
+        m_meshInstances.reset();
+        m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
+        m_colorTexture = EditorUtils::createEmptyTexture(
+            width,
+            height,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            m_context);
+        Log::Logger::getInstance()->info("Created New Color Texture");
+
+        m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
+            m_pathTracer.get(), m_context->activeScene());
+
+        m_optimizer = std::make_unique<torch::optim::Adam>(
+            // We pass in the parameters of our module (or custom parameter list)
+            m_photonRebuildModule->parameters(),
+            // Then define the Adam options, e.g. learning rate = 1e-3
+            torch::optim::AdamOptions(0.03f)
+        );
+        m_accumulatedTensor = torch::Tensor();
+        m_numAccumulated = 0;
+        m_optimizer->zero_grad(); // Clear old gradients
+    }
 
     void EditorDifferentiableRenderer::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
 
-        if (!m_activeScene->getActiveCamera())
-            return;
-
         // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
         if (imageUI->reloadRenderer) {
             Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
-            // Store the new resolution for next frame's comparison
-
-            SyclDeviceSelector::DeviceType deviceType = SyclDeviceSelector::DeviceType::CPU;
-            if (imageUI->kernelDevice == "GPU") {
-                deviceType = SyclDeviceSelector::DeviceType::GPU;
-            }
-            m_pathTracer.reset();
-            m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
-
-            float width = m_activeScene->getActiveCamera()->pinholeParameters.width;
-            float height = m_activeScene->getActiveCamera()->pinholeParameters.height;
-
-            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
-                                                                        width, height);
-
-
-            std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/active/render_info.yaml";
-            //std::filesystem::path filePath = "/home/magnus/datasets/PathTracingGS/04_02_active/render_info.yaml";
-            if (std::filesystem::exists(filePath)) {
-                YAML::Node config = YAML::LoadFile(filePath);
-                // Retrieve values from YAML nodes
-                auto gamma = config["Gamma"].as<double>();
-                auto photonHitCount = config["PhotonHitCount"].as<uint64_t>();
-                auto photonsEmitted = config["PhotonsEmitted"].as<uint64_t>();
-                auto frameCount = config["FrameCount"].as<uint32_t>();
-                auto photonBounceCount = config["PhotonBounceCount"].as<uint32_t>();
-
-                // Print them out (or use them in your application)
-                std::cout << "Gamma: " << gamma << std::endl;
-                std::cout << "PhotonHitCount: " << photonHitCount << std::endl;
-                std::cout << "PhotonsEmitted: " << photonsEmitted << std::endl;
-                std::cout << "FrameCount: " << frameCount << std::endl;
-                pipelineSettings.photonCount = photonsEmitted / frameCount;
-                pipelineSettings.numBounces = photonBounceCount;
-                m_renderSettings.gammaCorrection = gamma;
-                m_renderSettings.numFrames = frameCount;
-            }
-            else {
-                Log::Logger::getInstance()->warning("Did not load params from dataset folder");
-            }
-
-            // Create a new path tracer pipeline
-            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-            float editorAspect = static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height);
-            float sceneCameraAspect = width / height;
-
-            float scaleX = 1.0f, scaleY = 1.0f;
-            if (editorAspect > sceneCameraAspect) {
-                scaleX = sceneCameraAspect / editorAspect;
-            }
-            else {
-                scaleY = editorAspect / sceneCameraAspect;
-            }
-            m_meshInstances.reset();
-            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-            // Create a new color texture with the same (possibly updated) dimensions
-            m_colorTexture = EditorUtils::createEmptyTexture(
-                width,
-                height,
-                VK_FORMAT_R8G8B8A8_UNORM,
-                m_context
-            );
-
-            m_photonRebuildModule = std::make_unique<PathTracer::PhotonRebuildModule>(
-                m_pathTracer.get(), m_context->activeScene());
-
-            m_optimizer = std::make_unique<torch::optim::Adam>(
-                // We pass in the parameters of our module (or custom parameter list)
-                m_photonRebuildModule->parameters(),
-                // Then define the Adam options, e.g. learning rate = 1e-3
-                torch::optim::AdamOptions(0.05f)
-            );
-
-            m_accumulatedTensor = torch::Tensor();
-            m_numAccumulated = 0;
-            m_optimizer->zero_grad(); // Clear old gradients
+            updatePathTracerSettings();
+            imageUI->reloadRenderer = false;
         }
-
 
         // ----------------------------------------------------------
         // 1. Accumulate forward passes
@@ -143,46 +152,18 @@ namespace VkRender {
         if (m_photonRebuildModule && (imageUI->step || imageUI->toggleStep)) {
             // Store camera entities (assuming there are exactly two cameras)
 
-            CameraComponent activeCamera;
 
-            std::vector<Entity> cameraEntities;
-            size_t activeCameraIndex;
-
-            if (imageUI->automatic) {
-                auto cameraView = m_activeScene->getRegistry().view<CameraComponent>();
-                for (auto e : cameraView) {
-                    cameraEntities.emplace_back(e, m_context->activeScene().get());
-                }
-
-                // Assuming Entity class has getName() that returns std::string
-                std::sort(cameraEntities.begin(), cameraEntities.end(), [](Entity& a, Entity& b) {
-                    auto extractNumber = [](const std::string& name) -> int {
-                        size_t pos = name.find_first_of("0123456789");
-                        return (pos != std::string::npos) ? std::stoi(name.substr(pos)) : -1;
-                    };
-                    return extractNumber(a.getName()) < extractNumber(b.getName());
-                });
-                // Alternating logic based on m_stepIteration
-                // Select the active camera
-                activeCameraIndex = m_stepIteration % cameraEntities.size();
-
-                activeCamera = cameraEntities[activeCameraIndex].getComponent<CameraComponent>();
-                Log::Logger::getInstance()->info("Selecting Camera: {}", cameraEntities[activeCameraIndex].getName());
-
-            } else {
-                activeCamera = *m_activeScene->getActiveCamera();
-            }
-
+            CameraComponent *activeCamera = m_context->activeScene()->getActiveCamera();
 
 
             // Prepare path tracer forward settings
             // Use the actual scene camera (pinhole) from your scene
-            m_renderSettings.camera = *activeCamera.getPinholeCamera();
+            m_renderSettings.camera = *activeCamera->getPinholeCamera();
             m_renderSettings.cameraTransform = TransformComponent(
-                activeCamera.getPinholeCamera()->matrices.transform);
-            if (m_previousSceneCamera != &activeCamera)
+                activeCamera->getPinholeCamera()->matrices.transform);
+            if (m_previousSceneCamera != activeCamera)
                 m_pathTracer->resetImage();
-            m_previousSceneCamera = &activeCamera;
+            m_previousSceneCamera = activeCamera;
 
             if (m_numAccumulated == 0) {
                 m_photonRebuildModule->uploadPathTracerFromTensor(); // Upload path tracer with the new parameters
@@ -199,7 +180,7 @@ namespace VkRender {
             m_numAccumulated++;
 
             // Optionally retrieve the float* for real-time display
-            float* img = m_photonRebuildModule->getRenderedImage();
+            float *img = m_photonRebuildModule->getRenderedImage();
             uint32_t width = m_colorTexture->width();
             uint32_t height = m_colorTexture->height();
             if (!img) {
@@ -217,30 +198,27 @@ namespace VkRender {
                 convertedImage[i * 4 + 3] = 255;
             }
             m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
-
+            Log::Logger::getInstance()->info("Using Camera: {}", m_context->activeScene()->getActiveCameraEntity().getName());
             // Backpropagate -- OPTIMIZATION STEP --
 
-            if (m_numAccumulated >= m_renderSettings.numFrames) {
+            if (m_numAccumulated >= m_pathTracer->getPipelineSettings().numFrames) {
                 // Load the target tensor
 
 
                 //std::filesystem::path basePath = "/home/magnus-desktop/datasets/PhotonRebuild/active/";
                 std::filesystem::path basePath = "/home/magnus/datasets/PathTracingGS/active/";
-                std::filesystem::path gtFileName ;
-                if (imageUI->automatic) {
-                    gtFileName = basePath / (cameraEntities[activeCameraIndex].getName() + ".pfm");
+                std::filesystem::path gtFileName;
 
-                } else {
-                    gtFileName = basePath / (m_activeScene->getActiveCameraEntity().getName() + ".pfm");
-                }
+                gtFileName = basePath / (m_context->activeScene()->getActiveCameraEntity().getName() + ".pfm");
 
-                Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", activeCameraIndex,
+
+                Log::Logger::getInstance()->info("Rendered iteration: {}: gt file: {}", m_stepIteration,
                                                  gtFileName.string());
                 torch::Tensor targetTensor = loadPFM(gtFileName, width, height);
 
                 // Compute loss
-                auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
-                //auto loss = torch::mean(torch::pow(targetTensor - m_accumulatedTensor, 2));
+                //auto loss = torch::mean(torch::abs(targetTensor - m_accumulatedTensor));
+                auto loss = torch::mean(torch::pow(targetTensor - m_accumulatedTensor, 2));
 
                 // Backward
                 loss.backward();
@@ -269,10 +247,10 @@ namespace VkRender {
                         std::cout << "positions contain Infs!\n";
                     }
                     std::cout << "Positions: ("
-                        << positions[0][0].item<float>() << ", "
-                        << positions[0][1].item<float>() << ", "
-                        << positions[0][2].item<float>() << ")"
-                        << std::endl;
+                            << positions[0][0].item<float>() << ", "
+                            << positions[0][1].item<float>() << ", "
+                            << positions[0][2].item<float>() << ")"
+                            << std::endl;
 
                     Log::Logger::getInstance()->info("eo Gradient: ({},{},{})",
                                                      gradPositions[0][0].item<float>(),
@@ -296,14 +274,14 @@ namespace VkRender {
     }
 
 
-    void EditorDifferentiableRenderer::onRender(CommandBuffer& commandBuffer) {
-        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> renderGroups;
+    void EditorDifferentiableRenderer::onRender(CommandBuffer &commandBuffer) {
+        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand> > renderGroups;
         collectRenderCommands(renderGroups, commandBuffer.frameIndex);
 
         // Render each group
-        for (auto& [pipeline, commands] : renderGroups) {
+        for (auto &[pipeline, commands]: renderGroups) {
             pipeline->bind(commandBuffer);
-            for (auto& command : commands) {
+            for (auto &command: commands) {
                 // Bind resources and draw
                 bindResourcesAndDraw(commandBuffer, command);
             }
@@ -311,7 +289,7 @@ namespace VkRender {
     }
 
     void EditorDifferentiableRenderer::collectRenderCommands(
-        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
+        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand> > &renderGroups,
         uint32_t frameIndex) {
         if (!m_meshInstances) {
             m_meshInstances = EditorUtils::setupMesh(m_context);
@@ -370,8 +348,8 @@ namespace VkRender {
         renderGroups[pipeline].push_back(command);
     }
 
-    void EditorDifferentiableRenderer::bindResourcesAndDraw(const CommandBuffer& commandBuffer,
-                                                            RenderCommand& command) {
+    void EditorDifferentiableRenderer::bindResourcesAndDraw(const CommandBuffer &commandBuffer,
+                                                            RenderCommand &command) {
         VkCommandBuffer cmdBuffer = commandBuffer.getActiveBuffer();
         uint32_t frameIndex = commandBuffer.frameIndex;
 
@@ -390,7 +368,7 @@ namespace VkRender {
                           command.pipeline->pipeline()->getPipeline());
 
 
-        for (auto& [index, descriptorSet] : command.descriptorSets) {
+        for (auto &[index, descriptorSet]: command.descriptorSets) {
             vkCmdBindDescriptorSets(
                 cmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -409,7 +387,7 @@ namespace VkRender {
     }
 
 
-    torch::Tensor EditorDifferentiableRenderer::loadPFM(const std::string& filename, int expectedWidth,
+    torch::Tensor EditorDifferentiableRenderer::loadPFM(const std::string &filename, int expectedWidth,
                                                         int expectedHeight) {
         std::ifstream file(filename, std::ios::binary);
         if (!file.is_open()) {
@@ -444,22 +422,22 @@ namespace VkRender {
         std::vector<float> data(width * height * 3);
 
         // Read raw bytes
-        file.read(reinterpret_cast<char*>(data.data()), data.size() * sizeof(float));
+        file.read(reinterpret_cast<char *>(data.data()), data.size() * sizeof(float));
         if (!file) {
             throw std::runtime_error("Failed to read PFM pixel data.");
         }
 
         // Byte-swap if needed
         if (needByteSwap) {
-            for (auto& px : data) {
-                uint8_t* b = reinterpret_cast<uint8_t*>(&px);
+            for (auto &px: data) {
+                uint8_t *b = reinterpret_cast<uint8_t *>(&px);
                 std::swap(b[0], b[3]);
                 std::swap(b[1], b[2]);
             }
         }
 
         // Scale pixels by absScale
-        for (auto& px : data) {
+        for (auto &px: data) {
             px *= absScale;
         }
 

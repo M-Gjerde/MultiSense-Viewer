@@ -74,6 +74,7 @@ namespace VkRender {
         if (it != m_descriptorSetCache.end()) {
             return it->second;
         }
+        Log::Logger::getInstance()->trace("Allocating new descriptor sets");
 
         // Allocate a new descriptor set
         VkDescriptorSetAllocateInfo allocInfo{};

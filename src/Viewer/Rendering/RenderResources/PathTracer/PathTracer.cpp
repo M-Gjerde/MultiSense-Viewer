@@ -7,36 +7,44 @@
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer.h"
 #include "Viewer/Scenes/Entity.h"
 #include "Viewer/Rendering/Components/GaussianComponent.h"
-#include "Viewer/Tools/SyclDeviceSelector.h"
+#include "Viewer/Tools/SYCLDeviceSelector.h"
 
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracerMeshKernels.h"
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernel.h"
 #include "Viewer/Rendering/RenderResources/PathTracer/PathTracer2DGSKernelBackward.h"
 
 namespace VkRender::PathTracer {
-    PhotonTracer::PhotonTracer(Application* ctx, const PipelineSettings& pipelineSettings,
-                               std::shared_ptr<Scene>& scene) :
-        m_pipelineSettings(pipelineSettings),
-        m_context(ctx) {
+    PhotonTracer::PhotonTracer(Application *ctx, const PipelineSettings &pipelineSettings,
+                               std::shared_ptr<Scene> scene) : m_pipelineSettings(pipelineSettings),
+                                                                m_context(ctx) {
+        
         // Load the scene into gpu memory
         // Create image memory
         // Allocate host memory for RGBA image (4 floats per pixel)
         m_imageMemory = new float[pipelineSettings.width * pipelineSettings.height];
-        m_backwardInfo.gradients = new glm::vec3[pipelineSettings.photonCount];
-        m_backwardInfo.sumGradients = new glm::vec3();
         m_renderInformation = std::make_unique<RenderInformation>();
-        pipelineSettings.queue.wait();
+        pipelineSettings.device().wait();
         prepareImageAndInfoBuffers();
         //uploadVertexData(scene);
         uploadGaussianData(scene);
-        pipelineSettings.queue.wait();
+        pipelineSettings.device().wait();
 
-        Log::Logger::getInstance()->info("PathTracer created, Propterties: PhotonCount: {}, Bounces: {}, Image Size: {}x{}", m_pipelineSettings.photonCount, m_pipelineSettings.numBounces, m_pipelineSettings.width, m_pipelineSettings.height);
+        m_backwardInfo.sumGradients = new glm::vec3[m_gpu.numGaussians];
+        m_backwardInfo.gradients = new glm::vec3[pipelineSettings.photonCount];
+
+        Log::Logger::getInstance()->info(
+            "PathTracer created, Propterties: PhotonCount: {}, Bounces: {}, Image Size: {}x{}",
+            m_pipelineSettings.photonCount, m_pipelineSettings.numBounces, m_pipelineSettings.width,
+            m_pipelineSettings.height);
+        Log::Logger::getInstance()->info("PathTracer on Device: {}",
+                                         m_pipelineSettings.device().get_device().get_info<sycl::info::device::name>().
+                                         c_str());
     }
 
-    void PhotonTracer::update(RenderSettings& renderSettings) {
+    void PhotonTracer::update(RenderSettings &renderSettings) {
         try {
-            auto& queue = m_pipelineSettings.queue;
+            auto &queue = m_pipelineSettings.device();
+
             // Update shared GPU/CPU render information
             m_renderInformation->frameID++;
             m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
@@ -51,6 +59,7 @@ namespace VkRender::PathTracer {
             // Kernel Launch
             sycl::range<1> globalRange(m_pipelineSettings.photonCount);
             Log::Logger::getInstance()->trace("Path Tracer: Submitting Kernels");
+
 
             switch (renderSettings.kernelType) {
             case KERNEL_PATH_TRACER_2DGS:
@@ -72,7 +81,8 @@ namespace VkRender::PathTracer {
                     break;
             }
 
-            queue.wait_and_throw();
+
+            queue.wait();
 
             // Retrieve updated information from GPU
             queue.memcpy(m_renderInformation.get(), m_gpu.renderInformation, sizeof(RenderInformation));
@@ -82,25 +92,24 @@ namespace VkRender::PathTracer {
 
             double totalM = static_cast<double>(m_renderInformation->totalPhotons) / 1e6;
             double sensorK = static_cast<double>(m_renderInformation->photonsAccumulated) / 1000.0;
-            Log::Logger::getInstance()->info(
+            Log::Logger::getInstance()->trace(
                 "Path Tracer:  Simulated {}M photons. About {}k photons hit the sensor",
                 totalM, sensorK);
 
-        }
-        catch (const sycl::exception& e) {
+        } catch (const sycl::exception &e) {
             Log::Logger::getInstance()->warning("Caught exception: {}", e.what());
             std::cerr << "Exception: " << e.what() << std::endl;
+            throw std::runtime_error("Caught exception");
         }
     }
 
-    PhotonTracer::BackwardInfo PhotonTracer::backward(RenderSettings& renderSettings) {
-
+    PhotonTracer::BackwardInfo PhotonTracer::backward(RenderSettings &renderSettings) {
         try {
-            auto& queue = m_pipelineSettings.queue;
+            auto &queue = m_pipelineSettings.device();
             uint64_t simulatePhotonCount = m_pipelineSettings.photonCount;
             uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
 
-            queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage,  sizeof(float) * imageSize);
+            queue.memcpy(m_gpu.gradientImage, m_backwardInfo.gradientImage, sizeof(float) * imageSize);
 
             m_renderInformation->totalPhotons += m_pipelineSettings.photonCount;
             m_renderInformation->gamma = renderSettings.gammaCorrection;
@@ -110,7 +119,7 @@ namespace VkRender::PathTracer {
             queue.memcpy(m_gpu.cameraTransform, &renderSettings.cameraTransform, sizeof(TransformComponent));
 
             sycl::range<1> globalRange(simulatePhotonCount);
-            queue.submit([&](sycl::handler& cgh) {
+            queue.submit([&](sycl::handler &cgh) {
                 // Capture GPUData, etc. by value or reference as needed
                 LightTracerKernelBackward kernel(m_gpu, m_gpuDataOutput, m_pcg32);
                 cgh.parallel_for(globalRange, kernel);
@@ -118,19 +127,17 @@ namespace VkRender::PathTracer {
 
             queue.wait_and_throw();
             queue.memcpy(m_backwardInfo.gradients, m_gpu.gradients, simulatePhotonCount * sizeof(glm::vec3));
-            queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients,  sizeof(glm::vec3));
+            queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients, sizeof(glm::vec3) * m_gpu.numGaussians);
             queue.wait();
-        }
-        catch (const std::exception& e) {
+        } catch (const std::exception &e) {
             std::cerr << "Exception: " << e.what() << std::endl;
         }
         return m_backwardInfo;
-
     }
 
     void PhotonTracer::resetImage() {
         Log::Logger::getInstance()->trace("Resetting Image...");
-        auto& queue = m_pipelineSettings.queue;
+        auto &queue = m_pipelineSettings.device();
         queue.fill(m_gpu.imageMemory, static_cast<float>(0),
                    m_pipelineSettings.width * m_pipelineSettings.height).wait();
         m_renderInformation->frameID = 0;
@@ -142,7 +149,7 @@ namespace VkRender::PathTracer {
 
     void PhotonTracer::prepareImageAndInfoBuffers() {
         uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
-        auto& queue = m_pipelineSettings.queue;
+        auto &queue = m_pipelineSettings.device();
         // Allocate device memory for RGBA image (4 floats per pixel)
         m_gpu.imageMemory = sycl::malloc_device<float>(imageSize, queue);
         if (!m_gpu.imageMemory) {
@@ -186,90 +193,107 @@ namespace VkRender::PathTracer {
 
 
     void PhotonTracer::freeResources() {
-        auto& queue = m_pipelineSettings.queue;
+        auto &queue = m_pipelineSettings.device();
+        Log::Logger::getInstance()->info("Freeing Path tracer GPU/SYCL resources");
+
         queue.wait();
         if (m_gpu.imageMemory) {
             sycl::free(m_gpu.imageMemory, queue);
             m_gpu.imageMemory = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: imageMemory");
         }
         if (m_gpu.vertices) {
             sycl::free(m_gpu.vertices, queue);
             m_gpu.vertices = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: vertices");
         }
         if (m_gpu.indices) {
             sycl::free(m_gpu.indices, queue);
             m_gpu.indices = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: indices");
         }
         if (m_gpu.indexOffsets) {
             sycl::free(m_gpu.indexOffsets, queue);
             m_gpu.indexOffsets = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: indexOffsets");
         }
         if (m_gpu.vertexOffsets) {
             sycl::free(m_gpu.vertexOffsets, queue);
             m_gpu.vertexOffsets = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: vertexOffsets");
         }
         if (m_gpu.transforms) {
             sycl::free(m_gpu.transforms, queue);
             m_gpu.transforms = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: transforms");
         }
         if (m_gpu.materials) {
             sycl::free(m_gpu.materials, queue);
             m_gpu.materials = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: materials");
         }
         if (m_gpu.tagComponents) {
             sycl::free(m_gpu.tagComponents, queue);
             m_gpu.tagComponents = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: tagComponents");
         }
         if (m_gpu.gaussianInputAssembly) {
             sycl::free(m_gpu.gaussianInputAssembly, queue);
             m_gpu.gaussianInputAssembly = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: gaussianInputAssembly");
         }
         if (m_gpu.gradients) {
             sycl::free(m_gpu.gradients, queue);
             m_gpu.gradients = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: gradients");
         }
         if (m_gpu.sumGradients) {
             sycl::free(m_gpu.sumGradients, queue);
             m_gpu.sumGradients = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: sumGradients");
         }
         if (m_gpu.gradientImage) {
             sycl::free(m_gpu.gradientImage, queue);
             m_gpu.gradientImage = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: gradientImage");
         }
-
         if (m_gpu.pinholeCamera) {
             sycl::free(m_gpu.pinholeCamera, queue);
             m_gpu.pinholeCamera = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: pinholeCamera");
         }
         if (m_gpu.cameraTransform) {
             sycl::free(m_gpu.cameraTransform, queue);
             m_gpu.cameraTransform = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: cameraTransform");
         }
         if (m_gpu.renderInformation) {
             sycl::free(m_gpu.renderInformation, queue);
             m_gpu.renderInformation = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: renderInformation");
         }
-
         if (m_pcg32) {
             sycl::free(m_pcg32, queue);
             m_pcg32 = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: pcg32");
         }
         if (m_gpuDataOutput) {
             sycl::free(m_gpuDataOutput, queue);
             m_gpuDataOutput = nullptr;
+            Log::Logger::getInstance()->trace("Freed GPU Memory: gpuDataOutput");
         }
         queue.wait();
-        Log::Logger::getInstance()->info("Freeing Path tracer GPU/SYCL resources");
+
+        Log::Logger::getInstance()->info("Freed Path tracer GPU/SYCL resources");
     }
 
 
-    void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors& data) {
-
+    void PhotonTracer::uploadGaussiansFromTensors(GPUDataTensors &data) {
 #ifdef DIFF_RENDERER_ENABLED
         freeResources();
         prepareImageAndInfoBuffers();
 
-        auto& queue = m_pipelineSettings.queue;
+        auto &queue = m_pipelineSettings.device();
         // 2) Move Tensors to CPU (if they aren't already) so we can extract values
         //    (SYCL can't just copy directly from a PyTorch CUDA device pointer.)
         //    If data is already on CPU, this .cpu() will be basically a no-op.
@@ -305,14 +329,14 @@ namespace VkRender::PathTracer {
         // 6) Pointers to the underlying float data (on CPU).
         //    We'll read them row-by-row.
         //    Example: positionsCpu.data_ptr<float>() returns a pointer to the 2D array in row-major order.
-        const float* posPtr = positionsCpu.data_ptr<float>();
-        const float* scalesPtr = scalesCpu.data_ptr<float>();
-        const float* normalsPtr = normalsCpu.data_ptr<float>();
+        const float *posPtr = positionsCpu.data_ptr<float>();
+        const float *scalesPtr = scalesCpu.data_ptr<float>();
+        const float *normalsPtr = normalsCpu.data_ptr<float>();
 
-        const float* emissionsPtr = emissionsCpu.data_ptr<float>();
-        const float* colorsPtr = colorsCpu.data_ptr<float>();
-        const float* specularPtr = specularCpu.data_ptr<float>();
-        const float* diffusePtr = diffuseCpu.data_ptr<float>();
+        const float *emissionsPtr = emissionsCpu.data_ptr<float>();
+        const float *colorsPtr = colorsCpu.data_ptr<float>();
+        const float *specularPtr = specularCpu.data_ptr<float>();
+        const float *diffusePtr = diffuseCpu.data_ptr<float>();
 
         // 7) Fill the hostGaussians array
         //    (positions = 3 floats, normals = 3 floats, scale = 1 float, plus defaults)
@@ -353,8 +377,8 @@ namespace VkRender::PathTracer {
         m_gpu.gradients = sycl::malloc_device<glm::vec3>(m_pipelineSettings.photonCount, queue);
         queue.fill(m_gpu.gradients, glm::vec3(0.0f), m_pipelineSettings.photonCount);
 
-        m_gpu.sumGradients = sycl::malloc_device<glm::vec3>(1, queue);
-        queue.fill(m_gpu.sumGradients, glm::vec3(0.0f), 1);
+        m_gpu.sumGradients = sycl::malloc_device<glm::vec3>(N, queue);
+        queue.fill(m_gpu.sumGradients, glm::vec3(0.0f), N);
 
         uint32_t imageSize = m_pipelineSettings.width * m_pipelineSettings.height;
         m_gpu.gradientImage = sycl::malloc_device<float>(imageSize, queue);
@@ -367,18 +391,17 @@ namespace VkRender::PathTracer {
         // Log
         Log::Logger::getInstance()->info("uploadFromTensors: Uploaded {} Gaussians", N);
 #endif
-
     }
 
-    void PhotonTracer::uploadGaussianData(std::shared_ptr<Scene>& scene) {
-        auto& queue = m_pipelineSettings.queue;
+    void PhotonTracer::uploadGaussianData(std::shared_ptr<Scene> &scene) {
+        auto &queue = m_pipelineSettings.device();
         std::vector<GaussianInputAssembly> gaussianInputAssembly;
         std::vector<TransformComponent> transformMatrices; // Transformation matrices for entities
-        auto& registry = scene->getRegistry();
+        auto &registry = scene->getRegistry();
         // Find all entities with GaussianComponent
         auto view = scene->getRegistry().view<GaussianComponent2DGS>();
-        for (auto e : view) {
-            auto& component = Entity(e, scene.get()).getComponent<GaussianComponent2DGS>();
+        for (auto e: view) {
+            auto &component = Entity(e, scene.get()).getComponent<GaussianComponent2DGS>();
             for (size_t i = 0; i < component.size(); ++i) {
                 GaussianInputAssembly point{};
                 point.position = component.positions[i];
@@ -392,7 +415,7 @@ namespace VkRender::PathTracer {
                 point.phongExponent = component.phongExponents[i];
                 gaussianInputAssembly.push_back(point);
             }
-            auto& transform = Entity(e, scene.get()).getComponent<TransformComponent>();
+            auto &transform = Entity(e, scene.get()).getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
         }
 
@@ -405,7 +428,7 @@ namespace VkRender::PathTracer {
         queue.wait();
     }
 
-    void PhotonTracer::uploadVertexData(std::shared_ptr<Scene>& scene) {
+    void PhotonTracer::uploadVertexData(std::shared_ptr<Scene> &scene) {
         std::vector<InputAssembly> vertexData;
         std::vector<uint32_t> indices;
         std::vector<uint32_t> indexOffsets; // Offset for each entity's indices
@@ -417,7 +440,7 @@ namespace VkRender::PathTracer {
         uint32_t currentVertexOffset = 0;
         uint32_t currentIndexOffset = 0;
 
-        for (auto e : view) {
+        for (auto e: view) {
             Entity entity(e, scene.get());
             std::string tag = entity.getName();
             // Initialize a flag to determine if we should skip this entity
@@ -431,7 +454,7 @@ namespace VkRender::PathTracer {
                 // Check if the parent has both GroupComponent and VisibilityComponent
                 if (current.hasComponent<GroupComponent>() && current.hasComponent<VisibleComponent>()) {
                     // Retrieve the VisibilityComponent
-                    auto& visibility = current.getComponent<VisibleComponent>();
+                    auto &visibility = current.getComponent<VisibleComponent>();
                     // If visibility is set to false, mark to skip this entity
                     if (!visibility.visible) {
                         skipEntity = true;
@@ -442,7 +465,7 @@ namespace VkRender::PathTracer {
             if (entity.hasComponent<CameraComponent>())
                 skipEntity = true;
 
-            auto& meshComponent = entity.getComponent<MeshComponent>();
+            auto &meshComponent = entity.getComponent<MeshComponent>();
             if (meshComponent.meshDataType() != OBJ_FILE)
                 skipEntity = true;
 
@@ -452,14 +475,14 @@ namespace VkRender::PathTracer {
             }
 
 
-            auto& transform = entity.getComponent<TransformComponent>();
+            auto &transform = entity.getComponent<TransformComponent>();
             transformMatrices.emplace_back(transform);
 
             auto tagComponent = entity.getComponent<TagComponent>();
             tagComponents.emplace_back(tagComponent);
 
             if (entity.hasComponent<MaterialComponent>()) {
-                auto& material = entity.getComponent<MaterialComponent>();
+                auto &material = entity.getComponent<MaterialComponent>();
                 float diff = material.diffuse;
                 float specular = material.specular;
                 materials.emplace_back(material);
@@ -470,7 +493,7 @@ namespace VkRender::PathTracer {
             // Store vertex offset
             vertexOffsets.push_back(currentVertexOffset);
             // Add vertex data
-            for (auto& vert : meshData->vertices) {
+            for (auto &vert: meshData->vertices) {
                 InputAssembly input{};
                 input.position = vert.pos;
                 input.color = vert.color;
@@ -481,13 +504,13 @@ namespace VkRender::PathTracer {
             // Store index offset
             indexOffsets.push_back(currentIndexOffset);
             // Add index data
-            for (auto idx : meshData->indices) {
+            for (auto idx: meshData->indices) {
                 indices.push_back(idx + vertexOffsets.back()); // Adjust indices by vertex offset
             }
             currentIndexOffset += meshData->indices.size();
         }
         // Upload vertex data to GPU // Split each assignment for debug purposes
-        auto& queue = m_pipelineSettings.queue;
+        auto &queue = m_pipelineSettings.device();
         m_gpu.vertices = sycl::malloc_device<InputAssembly>(vertexData.size(), queue);
         queue.memcpy(m_gpu.vertices, vertexData.data(), vertexData.size() * sizeof(InputAssembly));
         queue.wait();
@@ -532,12 +555,18 @@ namespace VkRender::PathTracer {
     PhotonTracer::~PhotonTracer() {
         if (m_imageMemory) {
             delete[] m_imageMemory;
+            Log::Logger::getInstance()->trace("Freed CPU Memory: imageMemory");
+
         }
         if (m_backwardInfo.gradients) {
             delete[] m_backwardInfo.gradients;
+            Log::Logger::getInstance()->trace("Freed CPU Memory: gradients");
+
         }
         if (m_backwardInfo.sumGradients) {
-            delete m_backwardInfo.sumGradients;
+            delete[] m_backwardInfo.sumGradients;
+            Log::Logger::getInstance()->trace("Freed CPU Memory: sumGradients");
+
         }
         freeResources();
     }

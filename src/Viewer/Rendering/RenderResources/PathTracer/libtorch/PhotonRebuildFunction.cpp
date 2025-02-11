@@ -208,18 +208,34 @@ namespace VkRender::PathTracer {
         pathTracer->m_backwardInfo.gradientImage = dLoss_dRenderedImage.data_ptr<float>();
         auto gradients = pathTracer->backward(iterationInfo->renderSettings);
 
-        glm::vec3 grad = *gradients.sumGradients;
+        glm::vec3* grad = gradients.sumGradients;
 
-        float grad_x = grad.x;
-        float grad_y = grad.y;
-        float grad_z = grad.z;
+        float grad_x = grad[0].x;
+        float grad_y = grad[0].y;
+        float grad_z = grad[0].z;
+
+        float grad2_x = grad[1].x;
+        float grad2_y = grad[1].y;
+        float grad2_z = grad[1].z;
+
+        Log::Logger::getInstance()->info("Gradients: First: {},{},{}, Second: {},{},{}",grad_x, grad_y, grad_z, grad2_x, grad2_y, grad2_z);
+
+        auto posA = positions.accessor<float, 2>();
+
+        Log::Logger::getInstance()->info("Positions: First: {},{},{}, Second: {},{},{}",posA[0][0], posA[0][2], posA[0][3], posA[1][0], posA[1][2], posA[1][3]);
+
         auto grad_positions = torch::zeros_like(positions);
 
         auto gradPosA = grad_positions.accessor<float, 2>();
         for (int i = 0; i < grad_positions.size(0); ++i) {
-            gradPosA[i][0] = grad_x;
-            gradPosA[i][1] = grad_y;
-            gradPosA[i][2] = grad_z;
+
+
+
+
+
+            gradPosA[i][0] = grad[i].x;
+            gradPosA[i][1] = grad[i].y;
+            gradPosA[i][2] = grad[i].z;
         }
 
         // Return them in the same order as forward inputs

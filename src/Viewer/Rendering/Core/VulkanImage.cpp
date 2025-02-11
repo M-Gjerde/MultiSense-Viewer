@@ -26,7 +26,8 @@ namespace VkRender {
         createInfo.imageViewCreateInfo.image = m_image;
         result = vkCreateImageView(m_vulkanDevice.m_LogicalDevice, &createInfo.imageViewCreateInfo, nullptr,
                                    &m_view);
-        if (result != VK_SUCCESS) throw std::runtime_error("Failed to create image view");
+        if (result != VK_SUCCESS)
+            throw std::runtime_error("Failed to create image view");
         VALIDATION_DEBUG_NAME(m_vulkanDevice.m_LogicalDevice,
                               reinterpret_cast<uint64_t>(m_view), VK_OBJECT_TYPE_IMAGE_VIEW,
                               description + "View");
@@ -67,12 +68,10 @@ namespace VkRender {
 
         VulkanResourceManager::getInstance().deferDeletion(
                 [logicalDevice, allocator, allocation, view, image]() {
-                    Log::Logger::getInstance()->trace("Cleaning Up Vulkan Image Resource");
-
                     vkDestroyImageView(logicalDevice, view, nullptr);
                     vmaDestroyImage(allocator, image, allocation);
                 },
-                fence);
+                fence, "Cleaning Up Vulkan Image Resource");
 
 
     }

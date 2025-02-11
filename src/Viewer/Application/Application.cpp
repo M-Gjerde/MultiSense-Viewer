@@ -143,7 +143,7 @@ namespace VkRender {
             editor->loadScene(scene);
             m_editors.push_back(std::move(editor));
         }
-#ifdef PYTORCH_ENABLED
+#ifdef DIFF_RENDERER_ENABLED
         m_mainEditor->addUI("ToolWindow"); // TODO suspicious add here, but it is because it relies on other editors
 #endif
         m_multiSense = std::make_shared<MultiSense::MultiSenseRendererBridge>();

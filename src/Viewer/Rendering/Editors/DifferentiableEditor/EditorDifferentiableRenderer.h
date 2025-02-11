@@ -27,15 +27,6 @@ namespace VkRender
     public:
         EditorDifferentiableRenderer() = delete;
 
-        ~EditorDifferentiableRenderer()
-        {
-            // Make sure path tracer gets destroyed before the SYCL device
-            if (m_pathTracer)
-                m_pathTracer.reset();
-            if (m_syclDevice)
-                m_syclDevice.reset();
-        }
-
         explicit EditorDifferentiableRenderer(EditorCreateInfo& createInfo, UUID uuid);
 
         void onUpdate() override;
@@ -50,12 +41,17 @@ namespace VkRender
 
         void onSceneLoad(std::shared_ptr<Scene> scene) override;
 
+        void updatePathTracerSettings();
+
         void onEditorResize() override;
 
         struct DebugData
         {
             glm::vec3 positionGradient = glm::vec3(0.0f);
         } m_lastIteration;
+
+        uint32_t m_stepIteration = 0;
+        uint32_t m_numAccumulated = 0;
 
     private:
         std::vector<std::unique_ptr<Buffer>> m_shaderSelectionBuffer;
@@ -66,20 +62,16 @@ namespace VkRender
 
         std::unique_ptr<PathTracer::PhotonTracer> m_pathTracer;
 
-        std::shared_ptr<Scene> m_activeScene;
         std::shared_ptr<ArcballCamera> m_activeSceneCamera;
 
         // Diff Renderer stuff
         std::unique_ptr<PathTracer::PhotonRebuildModule> m_photonRebuildModule = nullptr;
         std::unique_ptr<torch::optim::Adam> m_optimizer; // Or any other optimizer in <torch/optim.h>
         torch::Tensor m_accumulatedTensor = torch::Tensor();
-        uint32_t m_numAccumulated = 0;
-        std::unique_ptr<SyclDeviceSelector> m_syclDevice = nullptr;
 
         PathTracer::PhotonTracer::RenderSettings m_renderSettings;
 
         CameraComponent* m_previousSceneCamera = nullptr;
-        uint32_t m_stepIteration = 0;
     };
 }
 #endif //MULTISENSE_VIEWER_EDITOR_DIFFRENTIABLE_RENDERER

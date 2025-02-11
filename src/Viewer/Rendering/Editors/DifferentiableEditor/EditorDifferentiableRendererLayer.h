@@ -48,7 +48,7 @@ namespace VkRender
 
             auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_editor->ui());
 
-            imageUI->reloadRenderer = ImGui::Button("Reload");
+            imageUI->reloadRenderer |= ImGui::Button("Reload");
             ImGui::SameLine();
 
             imageUI->step = ImGui::Button("Step");

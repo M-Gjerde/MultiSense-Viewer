@@ -5,11 +5,13 @@
 #ifndef MULTISENSE_VIEWER_RAYTRACER_H
 #define MULTISENSE_VIEWER_RAYTRACER_H
 
+#include <utility>
+
 #include "Viewer/Scenes/Scene.h"
 #include "Viewer/Rendering/MeshManager.h"
 
 #ifdef SYCL_ENABLED
-#include "Viewer/Tools/SyclDeviceSelector.h"
+#include "Viewer/Tools/SYCLDeviceSelector.h"
 #include "Viewer/Rendering/RenderResources/PathTracer/Definitions.h"
 #endif
 
@@ -30,7 +32,6 @@ namespace VkRender::PathTracer {
 
             // Render settings
             float gammaCorrection = 2.2f;
-            uint32_t numFrames = 1;
         };
 
         struct PipelineSettings {
@@ -39,10 +40,15 @@ namespace VkRender::PathTracer {
 
             uint64_t photonCount = 1e4;
             int numBounces = 1;
-            sycl::queue& queue;
+            uint32_t numFrames = 1;
 
-            PipelineSettings(sycl::queue& q, uint32_t width, uint32_t height, uint64_t photonCount = 1e4, uint64_t numBounces = 1) :
-                queue(q), width(width), height(height), photonCount(photonCount), numBounces(numBounces) {
+            std::shared_ptr<SYCLDeviceSelector> syclDevice;
+
+            sycl::queue& device() const {
+                return syclDevice->getQueue();
+            }
+            PipelineSettings(std::shared_ptr<SYCLDeviceSelector> q, uint32_t width, uint32_t height, uint64_t photonCount = 1e4, uint64_t numBounces = 1) :
+                syclDevice(std::move(q)), width(width), height(height), photonCount(photonCount), numBounces(numBounces) {
             }
         };
 
@@ -52,7 +58,7 @@ namespace VkRender::PathTracer {
             float* gradientImage = nullptr;
         };
 
-        PhotonTracer(Application* context, const PipelineSettings& pipelineSettings, std::shared_ptr<Scene>& scene);
+        PhotonTracer(Application* context, const PipelineSettings& pipelineSettings, std::shared_ptr<Scene> scene);
 
         void setExecutionDevice();
 
@@ -68,8 +74,8 @@ namespace VkRender::PathTracer {
         const PipelineSettings& getPipelineSettings() {
             return m_pipelineSettings;
         }
-        RenderInformation getRenderInfo() {
-            return *m_renderInformation;
+        RenderInformation* getRenderInfo() {
+            return m_renderInformation.get();
         }
         void uploadGaussiansFromTensors(GPUDataTensors& data);
 

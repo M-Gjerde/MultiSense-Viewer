@@ -6,6 +6,7 @@
 #define MULTISENSE_VIEWER_VULKANTEXTURE_H
 
 
+#include "UUID.h"
 #include "VulkanImage.h"
 
 namespace VkRender {
@@ -31,6 +32,7 @@ namespace VkRender {
         VkSampler m_sampler;
         std::shared_ptr<VulkanImage> m_image;
         VkDescriptorImageInfo m_imageInfo = {};
+        UUID m_uuid;
 
     };
 

@@ -14,22 +14,31 @@
 namespace VkRender {
     /** Called once upon this object creation**/
     void ToolWindow::onAttach() {
-        for (auto& editor : m_context->m_editors) {
+        for (auto &editor: m_context->m_editors) {
             if (editor->getCreateInfo().editorTypeDescription == EditorType::DifferentiableRenderer) {
-                Editor* renderer = editor.get();
-                m_diffRenderer = reinterpret_cast<EditorDifferentiableRenderer*>(renderer);
+                Editor *renderer = editor.get();
+                m_diffRenderer = reinterpret_cast<EditorDifferentiableRenderer *>(renderer);
                 break;
             }
         }
-        for (auto& editor : m_context->m_editors) {
+        for (auto &editor: m_context->m_editors) {
             if (editor->getCreateInfo().editorTypeDescription == EditorType::PathTracer) {
-                Editor* renderer = editor.get();
-                m_editorPathTracer = reinterpret_cast<EditorPathTracer*>(renderer);
+                Editor *renderer = editor.get();
+                m_editorPathTracer = reinterpret_cast<EditorPathTracer *>(renderer);
 
 
                 break;
             }
         }
+
+
+        auto pathTracerUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
+        pathTracerUI->kernelDevice = "GPU";
+        pathTracerUI->photonCount = 10000000;
+        pathTracerUI->numBounces = 0;
+        pathTracerUI->shaderSelection.gammaCorrection = 1.1f;
+        pathTracerUI->switchKernelDevice = true;
+        pathTracerUI->useSceneCamera = true;
     }
 
     /** Called after frame has finished rendered **/
@@ -53,38 +62,70 @@ namespace VkRender {
         }
 
 
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+
+
+
         // You can add more controls here as needed.
         auto pathTracerUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
         auto optimizationUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_diffRenderer->ui());
 
-        if(ImGui::Checkbox("Render Dataset", &m_checkRenderDataset)) {
+        if (ImGui::Checkbox("Render Dataset", &m_checkRenderDataset)) {
             pathTracerUI->kernelDevice = "GPU";
-            pathTracerUI->photonCount = 1000000;
-            pathTracerUI->numBounces = 0;
-            pathTracerUI->shaderSelection.gammaCorrection = 1.25f;
             pathTracerUI->switchKernelDevice = true;
             pathTracerUI->useSceneCamera = true;
         }
 
+        ImGui::Spacing();
+
+        // Group photon settings under a collapsing header for better organization.
+        if (ImGui::CollapsingHeader("Path Tracer Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+            // Slider for Photon Count.
+            // Adjust the min/max values as appropriate for your scene.
+            ImGui::SliderInt("Photon Count", &pathTracerUI->photonCount, 0, 10000000);
+
+            // Slider for Number of Bounces.
+            // Here we assume bounces range from 0 to 10.
+            ImGui::SliderInt("Bounces", &pathTracerUI->numBounces, 0, 10);
+
+            // Slider for Gamma Correction.
+            // The format "%.2f" shows the value with two decimals.
+            ImGui::SliderFloat("Gamma Correction", &pathTracerUI->shaderSelection.gammaCorrection, 0.1f, 3.0f, "%.2f");
+        }
+
         if (m_checkRenderDataset) {
-            std::string cameraName = "camera" + std::to_string(m_cameraID % numCameras);
-            auto& camera = scene->getEntityByName(cameraName).getComponent<CameraComponent>();
+            auto cameraView = scene->getRegistry().view<CameraComponent>();
+            std::vector<Entity> cameraEntities;
+            for (auto e: cameraView) {
+                auto entity = Entity(e, scene.get());
+                cameraEntities.push_back(entity);
+            }
+            auto &camera = cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>();
+
+
             camera.isActiveCamera() = true;
 
             pathTracerUI->toggleRendering = true;
-            pathTracerUI->bypassSave = false;
 
-            if (m_editorPathTracer->getRenderInformation().frameID >= 14) {
-                pathTracerUI->bypassSave = true;
-            }
+            pathTracerUI->bypassSave = true;
 
-            if (m_editorPathTracer->getRenderInformation().frameID >= 15) {
+
+            if (m_editorPathTracer->getRenderInformation()->frameID >= 1) {
                 m_cameraID++;
                 camera.isActiveCamera() = false;
                 pathTracerUI->clearImageMemory = true;
             }
 
-
+            if (m_cameraID == cameraEntities.size()) {
+                m_cameraID = 0;
+                m_checkRenderDataset = false;
+                pathTracerUI->bypassSave = false;
+                pathTracerUI->toggleRendering = false;
+                pathTracerUI->useSceneCamera = false;
+            }
         }
 
 
@@ -94,13 +135,50 @@ namespace VkRender {
             pathTracerUI->toggleRendering = false;
         }
 
+
+        ImGui::Separator();
+        ImGui::Text("Optimization");
+
+        if (ImGui::Checkbox("Iterate", &m_iterate)) {
+            optimizationUI->kernelDevice = "GPU";
+            optimizationUI->reloadRenderer = true;
+            optimizationUI->toggleStep = true;
+            optimizationUI->automatic = true;
+            m_cameraID = 0;
+        }
+
+        if (m_iterate) {
+            auto cameraView = scene->getRegistry().view<CameraComponent>();
+            std::vector<Entity> cameraEntities;
+            for (auto e: cameraView) {
+                auto entity = Entity(e, scene.get());
+                cameraEntities.push_back(entity);
+            }
+            auto &camera = cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>();
+            camera.isActiveCamera() = true;
+
+
+            if (m_diffRenderer->m_stepIteration > m_cameraID) {
+                m_cameraID++;
+                camera.isActiveCamera() = false;
+                cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>().isActiveCamera() = true;
+            }
+
+        }
+
+        // Create a button labeled "Generate Cameras".
+        if (ImGui::Button("Stop##Iterate")) {
+            // When the button is clicked, retrieve the active scene and call generateCameras.
+            optimizationUI->toggleStep = false;
+        }
+
         // End the ImGui window.
         ImGui::End();
     }
 
 
     // Function to create N cameras evenly spaced on an upper hemisphere of a given radius.
-    void ToolWindow::generateCameras(Scene* scene, int N, float radius) {
+    void ToolWindow::generateCameras(Scene *scene, int N, float radius) {
         // All cameras will look at the origin.
         glm::vec3 target(0.0f, 0.0f, 0.0f);
         // World up direction.
@@ -131,10 +209,10 @@ namespace VkRender {
 
             // Create a unique name for the camera.
             std::string cameraName = "camera" + std::to_string(i);
-            auto entity = scene->createEntity(cameraName);
+            auto entity = scene->getOrCreateEntityByName(cameraName);
             entity.addComponent<TemporaryComponent>();
             // Add the transform component and set its position.
-            auto& transform = entity.getComponent<TransformComponent>();
+            auto &transform = entity.getComponent<TransformComponent>();
             transform.setPosition(pos);
 
             // Compute the direction from the camera's position to the target.
@@ -145,7 +223,7 @@ namespace VkRender {
             transform.setRotationQuaternion(orientation);
 
             // Add and configure the camera component.
-            auto& camera = entity.addComponent<CameraComponent>();
+            auto &camera = entity.addComponent<CameraComponent>();
             camera.cameraType = CameraComponent::PINHOLE;
             camera.pinholeParameters.fx = 600;
             camera.pinholeParameters.fy = 600;
@@ -158,9 +236,9 @@ namespace VkRender {
             camera.updateParametersChanged();
 
             // Optionally add a material component.
-            auto& material = entity.addComponent<MaterialComponent>();
+            auto &material = entity.addComponent<MaterialComponent>();
 
-            auto& mesh = entity.addComponent<MeshComponent>(CAMERA_GIZMO_PINHOLE);
+            auto &mesh = entity.addComponent<MeshComponent>(CAMERA_GIZMO_PINHOLE);
             mesh.polygonMode() = VK_POLYGON_MODE_LINE;
         }
     }

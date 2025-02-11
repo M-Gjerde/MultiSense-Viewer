@@ -127,7 +127,7 @@ namespace VkRender {
             m_meshInstances = EditorUtils::setupMesh(m_context);
             m_sceneRenderer->setActiveCamera(m_editorCamera);
             auto &ci = m_sceneRenderer->getCreateInfo();
-            ci.width = m_createInfo.width;
+            ci.width =  m_createInfo.width;
             ci.height = m_createInfo.height;
             m_sceneRenderer->resize(ci);
             onRenderSettingsChanged();
@@ -154,11 +154,20 @@ namespace VkRender {
         if (!m_activeScene)
             return;
 
+
         updateActiveCamera();
 
         auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
         m_sceneRenderer->m_saveNextFrame = imageUI->saveNextFrame;
 
+        if (imageUI->reloadViewportShader) {
+            m_colorTexture = EditorUtils::createEmptyTexture(
+            m_createInfo.width,
+            m_createInfo.height,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            m_context);
+            Log::Logger::getInstance()->info("Created New Color Texture");
+        }
 
         auto frameIndex = m_context->currentFrameIndex();
         // Map and copy data to the global uniform buffer
@@ -234,7 +243,7 @@ namespace VkRender {
         key.vertexInputAttributes = vertexInputAttributes;
         auto imageUI = std::dynamic_pointer_cast<Editor3DViewportUI>(m_ui);
         if (imageUI->reloadViewportShader) {
-            m_pipelineManager.removePipeline(key);
+            //m_pipelineManager.removePipeline(key);
         }
         // Create or retrieve the pipeline
         RenderPassInfo renderPassInfo{};

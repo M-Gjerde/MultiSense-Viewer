@@ -40,7 +40,7 @@ namespace VkRender {
 
                     vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
                 },
-                fence);
+                fence, "Cleaning Up Render Pass Resource");
 
     }
 

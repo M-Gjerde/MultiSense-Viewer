@@ -32,7 +32,7 @@ namespace VkRender {
         bool switchKernelDevice = false;
 
         int photonCount = 1e4;
-        int numBounces = 1;
+        int numBounces = 0;
 
         bool resetPathTracer = false;
 

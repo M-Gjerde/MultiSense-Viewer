@@ -81,10 +81,13 @@ namespace Log {
 
     // enum for LOG_TYPE
     typedef enum LOG_TYPE {
-        NO_LOG = 1,
-        CONSOLE = 2,
-        FILE_LOG = 3,
+        NO_LOG    = 0,       // No logging
+        CONSOLE   = 1 << 0,  // 1 (0b0001)
+        FILE_LOG  = 1 << 1,  // 2 (0b0010)
+        NETWORK   = 1 << 2,  // 4 (0b0100) (Example for expansion)
+        ALL_LOGS  = CONSOLE | FILE_LOG | NETWORK // 0b0111
     } LogType;
+
 
 
     // Function to convert LogLevel enum to string

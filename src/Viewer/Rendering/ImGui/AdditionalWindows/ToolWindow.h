@@ -38,6 +38,7 @@ namespace VkRender {
         void generateCameras(Scene* scene, int N, float radius);
         uint32_t m_cameraID = 0;
         bool m_checkRenderDataset = false;
+        bool m_iterate = false;
     };
 }
 #endif //TOOLWINDOW_H

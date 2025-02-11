@@ -149,22 +149,17 @@ if (ENABLE_SYCL)
         if (CMAKE_BUILD_TYPE STREQUAL "Release")
             set(ACPP_TARGETS "generic")
         else ()
-            set(ACPP_TARGETS "omp")
+            set(ACPP_TARGETS "generic")
+            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g)
+            message(STATUS "[VkRenderINFO]: Compiling using AdaptiveCpp without optimization")
         endif ()
         target_link_options(${PROJECT_NAME} PRIVATE -L/usr/lib/llvm-14/lib)
         target_compile_options(${PROJECT_NAME} PRIVATE -I/usr/lib/llvm-14/lib/clang/14.0.0/include)
 
         find_package(AdaptiveCpp REQUIRED)
-        # Check if ACPP_TARGETS is passed via command line or environment
         # Print a message showing which targets are being used
         message(STATUS "[VkRenderINFO]: Using AdaptiveCpp with targets: ${ACPP_TARGETS} to project name ${PROJECT_NAME}")
-        # Add sycl to target using AdaptiveCpp's helper
         add_sycl_to_target(TARGET ${PROJECT_NAME} TARGETS ${ACPP_TARGETS})
-        if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-            target_compile_options(${PROJECT_NAME} PRIVATE -O0 -g)
-            #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O0")
-            message(STATUS "[VkRenderINFO]: Compiling using AdaptiveCpp without optimization")
-        endif ()
     else ()
         message(FATAL_ERROR "[VkRenderERROR]: Unknown SYCL backend. Choose either 'dpcpp' or 'adaptivecpp'.")
     endif ()
@@ -307,7 +302,7 @@ if (ENABLE_SYCL)
             src/Viewer/Rendering/RenderResources/PathTracer/PathTracer.cpp
             src/Viewer/Rendering/Editors/PathTracer/EditorPathTracer.cpp
             src/Viewer/Rendering/Editors/PathTracer/EditorPathTracerLayer.cpp
-            src/Viewer/Tools/SyclDeviceSelector.h
+            src/Viewer/Tools/SYCLDeviceSelector.h
     )
     list(APPEND SOURCE_FILES ${SYCL_SOURCES})
     message(STATUS "[VkRenderINFO]: SYCL: Adding Gaussian Renderer to source")
@@ -354,7 +349,6 @@ if (UNIX)
         message(STATUS "INFO: Default Install prefix was chosen so set install path to ${INSTALL_DIRECTORY}")
         set(CMAKE_INSTALL_PREFIX "${INSTALL_DIRECTORY}" CACHE PATH "default install path" FORCE)
     endif ()
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
     # GTK for native file dialog
     find_package(PkgConfig REQUIRED)

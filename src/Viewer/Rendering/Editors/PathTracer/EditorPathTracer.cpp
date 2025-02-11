@@ -17,7 +17,7 @@
 #endif
 
 namespace VkRender {
-    EditorPathTracer::EditorPathTracer(EditorCreateInfo& createInfo, UUID uuid) : Editor(createInfo, uuid) {
+    EditorPathTracer::EditorPathTracer(EditorCreateInfo &createInfo, UUID uuid) : Editor(createInfo, uuid) {
         addUI("EditorPathTracerLayer");
         addUI("EditorUILayer");
         addUI("DebugWindow");
@@ -26,7 +26,7 @@ namespace VkRender {
         m_descriptorRegistry.createManager(DescriptorManagerType::Viewport3DTexture, m_context->vkDevice());
 
         m_shaderSelectionBuffer.resize(m_context->swapChainBuffers().size());
-        for (auto& frameIndex : m_shaderSelectionBuffer) {
+        for (auto &frameIndex: m_shaderSelectionBuffer) {
             m_context->vkDevice().createBuffer(
                 VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -37,17 +37,14 @@ namespace VkRender {
 
         m_editorCamera = std::make_shared<ArcballCamera>();
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
-
-        m_syclDevice = std::make_unique<SyclDeviceSelector>(SyclDeviceSelector::DeviceType::CPU);
     }
 
     void EditorPathTracer::onEditorResize() {
-        m_activeScene = m_context->activeScene();
 
         float width = m_createInfo.width;
         float height = m_createInfo.height;
         float editorAspect = static_cast<float>(m_createInfo.width) /
-            static_cast<float>(m_createInfo.height);
+                             static_cast<float>(m_createInfo.height);
 
         m_editorCamera = std::make_shared<ArcballCamera>(
             static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
@@ -55,65 +52,19 @@ namespace VkRender {
 
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
 
-        auto sceneCamera = m_activeScene->getActiveCamera();
+        auto sceneCamera = m_context->activeScene()->getActiveCamera();
         // 1. Figure out what camera we are using and the correct resolution.
         bool useSceneCamera = (imageUI->useSceneCamera && sceneCamera && sceneCamera->cameraType ==
-            CameraComponent::PINHOLE);
+                               CameraComponent::PINHOLE);
         uint32_t newWidth = m_createInfo.width;
         uint32_t newHeight = m_createInfo.height;
         if (useSceneCamera) {
             newWidth = sceneCamera->pinholeParameters.width;
             newHeight = sceneCamera->pinholeParameters.height;
         }
-        // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
-        bool resolutionChanged = (newWidth != m_currentPipelineWidth || newHeight != m_currentPipelineHeight);
-        if (imageUI->resetPathTracer || resolutionChanged) {
-            Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
-            // Store the new resolution for next frame's comparison
-            m_currentPipelineWidth = newWidth;
-            m_currentPipelineHeight = newHeight;
-            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
-                                                                        m_currentPipelineWidth,
-                                                                        m_currentPipelineHeight);
-            pipelineSettings.photonCount = imageUI->photonCount;
-            pipelineSettings.numBounces = imageUI->numBounces;
-            // Create a new path tracer pipeline
-            if (m_pathTracer) {
-                m_pathTracer.reset();
-            }
-            if (m_colorTexture) {
-                m_colorTexture.reset();
-            }
-
-            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-            float editorAspect = static_cast<float>(m_createInfo.width) /
-                static_cast<float>(m_createInfo.height);
-            float sceneCameraAspect = static_cast<float>(m_currentPipelineWidth) /
-                static_cast<float>(m_currentPipelineHeight);
-
-            float scaleX = 1.0f, scaleY = 1.0f;
-            if (editorAspect > sceneCameraAspect) {
-                scaleX = sceneCameraAspect / editorAspect;
-            }
-            else {
-                scaleY = editorAspect / sceneCameraAspect;
-            }
-            m_meshInstances.reset();
-            m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-
-            // Create a new color texture with the same (possibly updated) dimensions
-            m_colorTexture = EditorUtils::createEmptyTexture(
-                m_currentPipelineWidth,
-                m_currentPipelineHeight,
-                VK_FORMAT_R8G8B8A8_UNORM,
-                m_context
-            );
-
-            return;
-        }
     }
 
-    void EditorPathTracer::onFileDrop(const std::filesystem::path& path) {
+    void EditorPathTracer::onFileDrop(const std::filesystem::path &path) {
         std::string extension = path.extension().string();
         std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
         if (extension == ".png" || extension == ".jpg") {
@@ -123,109 +74,96 @@ namespace VkRender {
 
 
     void EditorPathTracer::onSceneLoad(std::shared_ptr<Scene> scene) {
-        m_activeScene = scene;
 
         m_editorCamera = std::make_shared<ArcballCamera>(
             static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
 
-        PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(), m_createInfo.width,
-                                                                    m_createInfo.height);
-        m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        auto activeCamera = m_context->activeScene()->getActiveCamera();
+        m_lastActiveCamera = activeCamera;
     }
 
-
-    void EditorPathTracer::onUpdate() {
+    void EditorPathTracer::updatePathTracerSettings() {
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
-
-        if (imageUI->switchKernelDevice) {
-            SyclDeviceSelector::DeviceType deviceType = SyclDeviceSelector::DeviceType::CPU;
+        auto activeCamera = m_context->activeScene()->getActiveCamera();
+        if (imageUI->switchKernelDevice || imageUI->resetPathTracer) {
+            Log::Logger::getInstance()->info("Setting New Kernel Device");
+            SYCLDeviceType deviceType = SYCLDeviceType::CPU;
             if (imageUI->kernelDevice == "GPU") {
-                deviceType = SyclDeviceSelector::DeviceType::GPU;
+                deviceType = SYCLDeviceType::GPU;
             }
-
-            m_pathTracer.reset();
-            m_syclDevice = std::make_unique<SyclDeviceSelector>(deviceType);
-            imageUI->resetPathTracer = true;
-            imageUI->switchKernelDevice = false;
-        }
-
-        auto sceneCamera = m_activeScene->getActiveCamera();
-        // 1. Figure out what camera we are using and the correct resolution.
-        bool useSceneCamera = (imageUI->useSceneCamera && sceneCamera && sceneCamera->cameraType ==
-            CameraComponent::PINHOLE);
-        uint32_t newWidth = m_createInfo.width;
-        uint32_t newHeight = m_createInfo.height;
-        if (useSceneCamera) {
-            newWidth = sceneCamera->pinholeParameters.width;
-            newHeight = sceneCamera->pinholeParameters.height;
-        }
-        // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
-        bool resolutionChanged = (newWidth != m_currentPipelineWidth || newHeight != m_currentPipelineHeight);
-        if (imageUI->resetPathTracer || resolutionChanged) {
-            Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");
-            // Store the new resolution for next frame's comparison
-            m_currentPipelineWidth = newWidth;
-            m_currentPipelineHeight = newHeight;
-            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(m_syclDevice->getQueue(),
-                                                                        m_currentPipelineWidth,
-                                                                        m_currentPipelineHeight);
+            auto syclDevice = m_context->getSyclDeviceSelector().getDevice(deviceType);
+            uint32_t width = m_createInfo.width;
+            uint32_t height = m_createInfo.height;
+            if (activeCamera && imageUI->useSceneCamera) {
+                width = activeCamera->pinholeParameters.width;
+                height = activeCamera->pinholeParameters.height;
+            }
+            PathTracer::PhotonTracer::PipelineSettings pipelineSettings(syclDevice, width, height);
             pipelineSettings.photonCount = imageUI->photonCount;
             pipelineSettings.numBounces = imageUI->numBounces;
-            // Create a new path tracer pipeline
-            if (m_pathTracer) {
-                m_pathTracer.reset();
-            }
-            if (m_colorTexture) {
-                m_colorTexture.reset();
-            }
 
-            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_activeScene);
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_context->activeScene());
+            syclDevice->getQueue().wait();
+            auto list = syclDevice->getQueue().get_wait_list();
+            for (const auto &event: list) {
+                try {
+                    auto status = event.get_info<sycl::info::event::command_execution_status>();
+                    Log::Logger::getInstance()->info("Event status: {}", static_cast<int>(status));
+                } catch (const std::exception &e) {
+                    Log::Logger::getInstance()->error("Error retrieving event info: {}", e.what());
+                }
+            }
+            vkDeviceWaitIdle(m_context->vkDevice().m_LogicalDevice);
             float editorAspect = static_cast<float>(m_createInfo.width) /
-                static_cast<float>(m_createInfo.height);
-            float sceneCameraAspect = static_cast<float>(m_currentPipelineWidth) /
-                static_cast<float>(m_currentPipelineHeight);
-
+                                 static_cast<float>(m_createInfo.height);
+            float sceneCameraAspect = static_cast<float>(width) /
+                                      static_cast<float>(height);
             float scaleX = 1.0f, scaleY = 1.0f;
             if (editorAspect > sceneCameraAspect) {
                 scaleX = sceneCameraAspect / editorAspect;
-            }
-            else {
+            } else {
                 scaleY = editorAspect / sceneCameraAspect;
             }
             m_meshInstances.reset();
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-
-            // Create a new color texture with the same (possibly updated) dimensions
             m_colorTexture = EditorUtils::createEmptyTexture(
-                m_currentPipelineWidth,
-                m_currentPipelineHeight,
+                width,
+                height,
                 VK_FORMAT_R8G8B8A8_UNORM,
-                m_context
-            );
-
-            return;
+                m_context);
+            Log::Logger::getInstance()->info("Created New Color Texture");
         }
 
-        if (imageUI->clearImageMemory)
+        imageUI->switchKernelDevice = false;
+    }
+
+    void EditorPathTracer::onUpdate() {
+        auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
+
+        auto activeCamera = m_context->activeScene()->getActiveCamera();
+        bool newCamera = m_previousSceneCamera != activeCamera;
+
+        updatePathTracerSettings();
+
+        if (imageUI->clearImageMemory || newCamera) {
             m_pathTracer->resetImage();
+        }
 
         // 4. If user wants to render/preview, update the path tracer with the latest camera.
         if (imageUI->render || imageUI->toggleRendering) {
-            PathTracer::PhotonTracer::RenderSettings renderSettings;
-            renderSettings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
-            if (useSceneCamera) {
-                // Use the actual scene camera (pinhole) from your scene
-                renderSettings.camera = *sceneCamera->getPinholeCamera();
-                renderSettings.cameraTransform =
-                    TransformComponent(sceneCamera->getPinholeCamera()->matrices.transform);
-                if (m_previousSceneCamera != sceneCamera)
-                    m_pathTracer->resetImage();
 
-                m_previousSceneCamera = sceneCamera;
-            }
-            else {
+            PathTracer::PhotonTracer::RenderSettings renderSettings;
+
+            bool useSceneCamera = activeCamera;
+            if (useSceneCamera && imageUI->useSceneCamera) {
+                auto entity = m_context->activeScene()->getActiveCameraEntity();
+                auto camera = entity.getComponent<CameraComponent>();
+                auto transform = entity.getComponent<TransformComponent>();
+                renderSettings.camera = *camera.getPinholeCamera();
+                renderSettings.cameraTransform = transform;
+            } else {
                 // Otherwise, construct a default pinhole camera for your editor camera
                 PinholeParameters pinholeParameters;
                 SharedCameraSettings cameraSettings;
@@ -235,85 +173,100 @@ namespace VkRender {
                 pinholeParameters.cy = pinholeParameters.height / 2.0f;
                 pinholeParameters.fx = 600.0f;
                 pinholeParameters.fy = 600.0f;
-
                 // Construct the pinhole
                 PinholeCamera defaultCam(cameraSettings, pinholeParameters);
                 renderSettings.camera = defaultCam;
                 renderSettings.cameraTransform = TransformComponent(m_editorCamera->matrices.transform);
-
                 if (m_movedCamera) {
                     m_pathTracer->resetImage();
                 }
             }
 
-            m_pathTracer->update(renderSettings);
-        }
+            renderSettings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
 
-        float* image = m_pathTracer->getImage();
-        const uint32_t texWidth = m_colorTexture->width();
-        const uint32_t texHeight = m_colorTexture->height();
-        bool sizeMatch = m_pathTracer->getPipelineSettings().width == texWidth && texWidth == m_currentPipelineWidth && m_pathTracer->getPipelineSettings().height == texHeight && texHeight == m_currentPipelineHeight;
-        if (image && !resolutionChanged && sizeMatch) {
-            const size_t totalPixels = static_cast<size_t>(texWidth) * texHeight;
+            bool imageSizeMatch = static_cast<uint32_t>(renderSettings.camera.m_parameters.width) == m_colorTexture->
+                                     width() &&
+                                     static_cast<uint32_t>(renderSettings.camera.m_parameters.height) == m_colorTexture
+                                     ->height();
+            if (imageSizeMatch) {
 
-            // Prepare a container for the final image (after optional denoising)
-            const float* finalImage = image;
-            std::vector<float> denoisedImage; // only used if denoising is enabled
 
-            // Denoise if requested; otherwise, use the original image directly.
-            if (imageUI->denoise) {
-                denoiseImage(image, texWidth, texHeight, denoisedImage);
-                // Use the denoised data if the denoising call was successful.
-                if (!denoisedImage.empty()) {
-                    finalImage = denoisedImage.data();
+                m_pathTracer->update(renderSettings);
+
+                float *image = m_pathTracer->getImage();
+                const uint32_t texWidth = m_colorTexture->width();
+                const uint32_t texHeight = m_colorTexture->height();
+
+                if (image) {
+                    const size_t totalPixels = static_cast<size_t>(texWidth) * texHeight;
+
+                    // Prepare a container for the final image (after optional denoising)
+                    const float *finalImage = image;
+                    std::vector<float> denoisedImage; // only used if denoising is enabled
+
+                    // Denoise if requested; otherwise, use the original image directly.
+                    if (imageUI->denoise) {
+                        denoiseImage(image, texWidth, texHeight, denoisedImage);
+                        // Use the denoised data if the denoising call was successful.
+                        if (!denoisedImage.empty()) {
+                            finalImage = denoisedImage.data();
+                        }
+                    }
+                    // Allocate the converted image buffer (RGBA: 4 channels per pixel) // TODO Make the shader accepts floating point images and clamp/convert it in shader instead
+                    std::vector<uint8_t> convertedImage(totalPixels * 4);
+                    // Convert the final image from float [0, 1] to 8-bit RGBA.
+                    // We assume a grayscale image is stored in the red channel.
+                    for (size_t i = 0; i < totalPixels; ++i) {
+                        // Clamp the float value and scale to 0-255.
+                        // (Multiplication by 255.0f and conversion to uint8_t)
+                        const float clamped = std::clamp(finalImage[i], 0.0f, 1.0f);
+                        const uint8_t value = static_cast<uint8_t>(clamped * 255.0f);
+                        const size_t offset = i * 4;
+                        convertedImage[offset + 0] = value; // R
+                        convertedImage[offset + 1] = value; // G
+                        convertedImage[offset + 2] = value; // B
+                        convertedImage[offset + 3] = 255; // A (fully opaque)
+                    }
+                    // Upload the texture
+                    Log::Logger::getInstance()->trace(
+                        "Uploading Path Tracer Image to Color Texture. Size: {} bytes into {}",
+                        convertedImage.size(), m_colorTexture->getSize());
+                    m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
+                    Log::Logger::getInstance()->trace("Uploaded new Texture Data");
                 }
+            } else {
+                Log::Logger::getInstance()->warning("Image size Match! Texture: {}x{}, Camera: {}x{}",
+                                    m_colorTexture->width(), m_colorTexture->height(),
+                                    renderSettings.camera.m_parameters.width,
+                                    renderSettings.camera.m_parameters.height);
             }
-            // Allocate the converted image buffer (RGBA: 4 channels per pixel) // TODO Make the shader accepts floating point images and clamp/convert it in shader instead
-            std::vector<uint8_t> convertedImage(totalPixels * 4);
-            // Convert the final image from float [0, 1] to 8-bit RGBA.
-            // We assume a grayscale image is stored in the red channel.
-            for (size_t i = 0; i < totalPixels; ++i) {
-                // Clamp the float value and scale to 0-255.
-                // (Multiplication by 255.0f and conversion to uint8_t)
-                const float clamped = std::clamp(finalImage[i], 0.0f, 1.0f);
-                const uint8_t value = static_cast<uint8_t>(clamped * 255.0f);
-                const size_t offset = i * 4;
-                convertedImage[offset + 0] = value; // R
-                convertedImage[offset + 1] = value; // G
-                convertedImage[offset + 2] = value; // B
-                convertedImage[offset + 3] = 255; // A (fully opaque)
-            }
-            // Upload the texture
-            Log::Logger::getInstance()->trace("Uploading Path Tracer Image to Color Texture. Size: {}bytes into{}. SizeMatch: {}", convertedImage.size(), m_colorTexture->getSize(), sizeMatch);
-            m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
-            Log::Logger::getInstance()->trace("Uploaded new Texture Data");
-
         }
-
         if (imageUI->saveImage || imageUI->bypassSave) {
             saveImage();
         }
 
 
         auto frameIndex = m_context->currentFrameIndex();
-        void* data;
+        void *data;
         vkMapMemory(m_context->vkDevice().m_LogicalDevice,
-                    m_shaderSelectionBuffer[frameIndex]->m_memory, 0, sizeof(EditorPathTracerLayerUI::ShaderSelection),
+                    m_shaderSelectionBuffer[frameIndex]->m_memory, 0,
+                    sizeof(EditorPathTracerLayerUI::ShaderSelection),
                     0, &data);
         memcpy(data, &imageUI->shaderSelection, sizeof(EditorPathTracerLayerUI::ShaderSelection));
         vkUnmapMemory(m_context->vkDevice().m_LogicalDevice, m_shaderSelectionBuffer[frameIndex]->m_memory);
 
         // Reset some state variables
         m_movedCamera = false;
+        imageUI->clearImageMemory = false;
+        m_previousSceneCamera = activeCamera;
     }
 
 
-    void EditorPathTracer::onMouseMove(const MouseButtons& mouse) {
+    void EditorPathTracer::onMouseMove(const MouseButtons &mouse) {
         if (ui()->hovered && mouse.left && !ui()->resizeActive) {
             m_editorCamera->rotate(mouse.dx, mouse.dy);
             m_movedCamera = true;
-        }
-        else if (ui()->hovered && mouse.right && !ui()->resizeActive) {
+        } else if (ui()->hovered && mouse.right && !ui()->resizeActive) {
             m_editorCamera->translate(mouse.dx, mouse.dy);
             m_movedCamera = true;
         }
@@ -326,21 +279,21 @@ namespace VkRender {
         }
     }
 
-    void EditorPathTracer::onKeyCallback(const Input& input) {
+    void EditorPathTracer::onKeyCallback(const Input &input) {
         if (input.lastKeyPress == GLFW_KEY_SPACE) {
             m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
         };
     }
 
-    void EditorPathTracer::onRender(CommandBuffer& commandBuffer) {
-        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>> renderGroups;
+    void EditorPathTracer::onRender(CommandBuffer &commandBuffer) {
+        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand> > renderGroups;
         collectRenderCommands(renderGroups, commandBuffer.frameIndex);
         Log::Logger::getInstance()->trace("Collected Drawing commands");
 
         // Render each group
-        for (auto& [pipeline, commands] : renderGroups) {
+        for (auto &[pipeline, commands]: renderGroups) {
             pipeline->bind(commandBuffer);
-            for (auto& command : commands) {
+            for (auto &command: commands) {
                 // Bind resources and draw
                 bindResourcesAndDraw(commandBuffer, command);
             }
@@ -350,7 +303,7 @@ namespace VkRender {
     }
 
     void EditorPathTracer::collectRenderCommands(
-        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand>>& renderGroups,
+        std::unordered_map<std::shared_ptr<DefaultGraphicsPipeline>, std::vector<RenderCommand> > &renderGroups,
         uint32_t frameIndex) {
         if (!m_meshInstances) {
             m_meshInstances = EditorUtils::setupMesh(m_context);
@@ -361,6 +314,7 @@ namespace VkRender {
         PipelineKey key = {};
         key.setLayouts.resize(1);
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
+        Log::Logger::getInstance()->trace("Collecting Render commands for Path Tracer");
 
         // Prepare descriptor writes based on your texture or other resources
         std::array<VkWriteDescriptorSet, 2> writeDescriptors{};
@@ -404,12 +358,13 @@ namespace VkRender {
         RenderCommand command;
         command.pipeline = pipeline;
         command.meshInstance = m_meshInstances.get();
-        command.descriptorSets[DescriptorManagerType::Viewport3DTexture] = descriptorSet; // Assign the descriptor set
+        command.descriptorSets[DescriptorManagerType::Viewport3DTexture] = descriptorSet;
+        // Assign the descriptor set
         // Add to render group
         renderGroups[pipeline].push_back(command);
     }
 
-    void EditorPathTracer::bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command) {
+    void EditorPathTracer::bindResourcesAndDraw(const CommandBuffer &commandBuffer, RenderCommand &command) {
         VkCommandBuffer cmdBuffer = commandBuffer.getActiveBuffer();
         uint32_t frameIndex = commandBuffer.frameIndex;
 
@@ -428,7 +383,7 @@ namespace VkRender {
                           command.pipeline->pipeline()->getPipeline());
 
 
-        for (auto& [index, descriptorSet] : command.descriptorSets) {
+        for (auto &[index, descriptorSet]: command.descriptorSets) {
             vkCmdBindDescriptorSets(
                 cmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -451,25 +406,26 @@ namespace VkRender {
         auto imageUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui);
 
         // Save render information:
-        PathTracer::RenderInformation info = m_pathTracer->getRenderInfo();
+        PathTracer::RenderInformation *info = m_pathTracer->getRenderInfo();
         // Create a YAML emitter
         YAML::Emitter out;
         out << YAML::BeginMap;
-        out << YAML::Key << "Gamma" << YAML::Value << info.gamma;
-        out << YAML::Key << "PhotonHitCount" << YAML::Value << info.photonsAccumulated;
-        out << YAML::Key << "PhotonBounceCount" << YAML::Value << info.numBounces;
-        out << YAML::Key << "PhotonsEmitted" << YAML::Value << info.totalPhotons;
-        out << YAML::Key << "FrameCount" << YAML::Value << info.frameID; // Start from 0
+        out << YAML::Key << "Gamma" << YAML::Value << info->gamma;
+        out << YAML::Key << "PhotonHitCount" << YAML::Value << info->photonsAccumulated;
+        out << YAML::Key << "PhotonBounceCount" << YAML::Value << info->numBounces;
+        out << YAML::Key << "PhotonsEmitted" << YAML::Value << info->totalPhotons;
+        out << YAML::Key << "FrameCount" << YAML::Value << info->frameID; // Start from 0
         out << YAML::EndMap;
 
-        auto sceneCamera = m_activeScene->getActiveCamera();
-        std::string  prefix = "Viewport";
+        auto sceneCamera = m_context->activeScene()->getActiveCamera();
+        std::string prefix = "Viewport";
         if (sceneCamera) {
-            prefix = m_activeScene->getActiveCameraEntity().getName();
+            prefix = m_context->activeScene()->getActiveCameraEntity().getName();
         }
 
         // Write YAML content to a file
-        std::string infoFileName = "output/" + prefix + ":render_info.yaml"; // Change to your desired infoFileName/path
+        std::string infoFileName = "output/" + prefix + ":render_info.yaml";
+        // Change to your desired infoFileName/path
         std::ofstream fout(infoFileName);
         if (fout.is_open()) {
             fout << out.c_str();
@@ -478,7 +434,7 @@ namespace VkRender {
 
         uint32_t width = m_colorTexture->width();
         uint32_t height = m_colorTexture->height();
-        float* image = m_pathTracer->getImage();
+        float *image = m_pathTracer->getImage();
         std::vector<float> denoisedImage;
 
         if (imageUI->denoise) {
@@ -518,7 +474,7 @@ namespace VkRender {
         }
 
         // Write the RGB float data
-        file.write(reinterpret_cast<const char*>(rgbData.data()), rgbData.size() * sizeof(float));
+        file.write(reinterpret_cast<const char *>(rgbData.data()), rgbData.size() * sizeof(float));
 
         if (!file) {
             throw std::runtime_error("Failed to write PFM data to file: " + filename.string());
@@ -545,15 +501,16 @@ namespace VkRender {
 
 
         // Write the image to a PNG file
-        if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3, rgbDataPng.data(),
+        if (!stbi_write_png(filename.replace_extension(".png").string().c_str(), width, height, 3,
+                            rgbDataPng.data(),
                             width * 3)) {
             throw std::runtime_error("Failed to write PNG file: " + filename.string());
         }
     }
 
 
-    void EditorPathTracer::denoiseImage(float* singleChannelImage, uint32_t width, uint32_t height,
-                                        std::vector<float>& output) {
+    void EditorPathTracer::denoiseImage(float *singleChannelImage, uint32_t width, uint32_t height,
+                                        std::vector<float> &output) {
 #ifdef SYCL_ENABLED
         // Initialize OIDN device and commit
         oidn::DeviceRef device = oidn::newDevice();
@@ -578,7 +535,7 @@ namespace VkRender {
         filter.execute();
 
         // Check for errors from OIDN
-        const char* errorMessage;
+        const char *errorMessage;
         if (device.getError(errorMessage) != oidn::Error::None) {
             std::cerr << "OIDN Error: " << errorMessage << std::endl;
             return;

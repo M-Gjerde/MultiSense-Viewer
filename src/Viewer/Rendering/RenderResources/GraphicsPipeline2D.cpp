@@ -180,7 +180,7 @@ namespace VkRender {
                     vkFreeMemory(logicalDevice, indices.memory, nullptr);
                 }
             },
-            fence);
+            fence, "Cleaning up GraphicsPipeline2D");
     }
 
 

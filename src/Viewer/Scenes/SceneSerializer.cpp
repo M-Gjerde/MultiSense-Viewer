@@ -421,7 +421,7 @@ namespace VkRender {
         YAML::Emitter out;
         out << YAML::BeginMap;
         out << YAML::Key << "Scene";
-        out << YAML::Value << "Scene name";
+        out << YAML::Value << filePath.filename().string();
 
         out << YAML::Key << "Base Path";
         out << YAML::Value << filePath.parent_path();

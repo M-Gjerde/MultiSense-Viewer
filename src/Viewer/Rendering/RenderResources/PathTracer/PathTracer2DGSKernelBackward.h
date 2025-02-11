@@ -46,10 +46,9 @@ namespace VkRender::PathTracer {
             glm::vec3 cameraPlanePointWorld = glm::vec3(cameraTransform * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
             // A point on the plane
 
-            glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[0].position;
-            glm::vec3 gaussianNormal = m_gpuData.gaussianInputAssembly[0].normal;
-            glm::vec2 gaussianScale = m_gpuData.gaussianInputAssembly[0].scale;
-            float emissionPower = m_gpuData.gaussianInputAssembly[0].emission;
+
+
+
             //emissionOrigin = gaussianPosition;
             float apertureDiameter = (m_camera->m_parameters.focalLength / m_camera->m_parameters.fNumber) / 1000;
             float apertureRadius = apertureDiameter * 0.5f;
@@ -60,6 +59,12 @@ namespace VkRender::PathTracer {
             glm::vec3 a = m_gpuDataOutput[photonID].apertureHitPoint;
             glm::vec3 hitCam = m_gpuDataOutput[photonID].cameraHitPointLocal;
             float etmin = m_gpuDataOutput[photonID].emissionDirectionLength;
+            size_t gaussianID = m_gpuDataOutput[photonID].gaussianID;
+
+            glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[gaussianID].position;
+            float emissionPower = m_gpuData.gaussianInputAssembly[gaussianID].emission;
+            glm::vec3 gaussianNormal = m_gpuData.gaussianInputAssembly[gaussianID].normal;
+            glm::vec2 gaussianScale = m_gpuData.gaussianInputAssembly[gaussianID].scale;
 
             // Camera intrinsics
             float fx = m_camera->parameters().fx;
@@ -80,11 +85,8 @@ namespace VkRender::PathTracer {
             glm::vec3 f = cameraPlanePointWorld; // e.g., defined in your camera parameters
             glm::vec3 f_n = cameraNormal; // e.g., (0,0,1) if the focal plane faces +Z
 
-            float gtPixelU;
-            float gtPixelV;
+
             // PIXEL LOSS GROUND TRUTH
-
-
             glm::vec3 apertureHitPoint;
             glm::vec3 e_c_gt = gaussianPosition;
             glm::vec3 e_d_gt = sampleDirectionTowardAperture(
@@ -111,12 +113,12 @@ namespace VkRender::PathTracer {
             float px_gt = hitPointCam.x;
             float py_gt = hitPointCam.y;
             float pz_gt = hitPointCam.z;
-            gtPixelU = (fx * px_gt / pz_gt) + cx;
-            gtPixelV = (fy * py_gt / pz_gt) + cy;
+            float gtPixelU = (fx * px_gt / pz_gt) + cx;
+            float gtPixelV = (fy * py_gt / pz_gt) + cy;
 
             /// PART ONE ///
             // Get the Gaussian emitter parameters.
-            float sigma = m_gpuData.gaussianInputAssembly[0].scale.x; // assume uniform sigma
+            float sigma = m_gpuData.gaussianInputAssembly[gaussianID].scale.x; // assume uniform sigma
             glm::vec3 e_c = gaussianPosition; // center of the Gaussian emitter (optimized parameter)
 
             // Compute the Gaussian intensity.
@@ -187,14 +189,12 @@ namespace VkRender::PathTracer {
             // build the relevant Jacobians:
 
             // 5) chain them: J_uv_eo = J_uv_p * dp_de_o => (2×3) * (3×3) = 2×3
-            glm::mat2x3 J_uv_eo(0.0f);
-
             // Apply Rotation:
-            glm::mat3 M_world2cam = glm::inverse(glm::mat3(m_cameraTransform->getTransform()));
+            glm::mat3 M_world2cam = worldToCamera;
             glm::mat3 dp_de_o_camera = M_world2cam * dp_de_o;
 
 
-            J_uv_eo = multiply2x3_3x3(J_uv_p, dp_de_o_camera);
+            glm::mat2x3  J_uv_eo = multiply2x3_3x3(J_uv_p, dp_de_o_camera);
 
             // Now, combine the derivative contributions.
             // Previously, we computed dL/de_o = dLoss * de_i/de_o.
@@ -232,12 +232,12 @@ namespace VkRender::PathTracer {
             float d_total_z = grad_total.z;
 
             // Atomically accumulate the gradient.
-            sycl::atomic_ref<float, sycl::memory_order::relaxed,
+            sycl::atomic_ref<float, sycl::memory_order::acq_rel,
                              sycl::memory_scope::device,
                              sycl::access::address_space::global_space>
-                sum_x(m_gpuData.sumGradients->x),
-                sum_y(m_gpuData.sumGradients->y),
-                sum_z(m_gpuData.sumGradients->z);
+                sum_x(m_gpuData.sumGradients[gaussianID].x),
+                sum_y(m_gpuData.sumGradients[gaussianID].y),
+                sum_z(m_gpuData.sumGradients[gaussianID].z);
 
             sum_x.fetch_add(grad_total.x);
             sum_y.fetch_add(grad_total.y);

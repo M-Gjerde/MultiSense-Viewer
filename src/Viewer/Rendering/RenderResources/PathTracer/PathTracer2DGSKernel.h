@@ -211,6 +211,7 @@ namespace VkRender::PathTracer {
 
                     accumulateOnSensor(photonID, hitPointCam, photonFlux * scaleFactor);
 
+                    m_gpuDataOutput[photonID].gaussianID = gaussianID;
                     m_gpuDataOutput[photonID].emissionOrigin = rayOrigin;
                     m_gpuDataOutput[photonID].emissionDirection = directLightingDir;
                     m_gpuDataOutput[photonID].hitCamera = cameraHit;

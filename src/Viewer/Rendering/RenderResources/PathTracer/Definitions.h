@@ -121,6 +121,8 @@ namespace VkRender::PathTracer {
         bool hitCamera = false;
         float emissionDirectionLength = 0.0f;     // etmin
 
+        size_t gaussianID = UINT64_MAX;
+
         glm::vec3 emissionOrigin = glm::vec3(0.0f);          // eo
         glm::vec3 emissionDirection = glm::vec3(0.0f);       // ed
         glm::vec3 apertureHitPoint = glm::vec3(0.0f);        // a
