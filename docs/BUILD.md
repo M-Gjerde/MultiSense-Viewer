@@ -57,12 +57,21 @@ To be able to use the auto connect feature, launch with root/admin privileges.
 3. Install WinPcap DLLs. [link to installer](https://www.winpcap.org/install/bin/WinPcap_4_1_3.exe). You can uncheck enabling winpcap driver after installation.
 4. Install OpenSSL
 
-#### Clone this repo and submodules using git
+### Clone this repo and submodules using git
 ``` sh
 $ git clone --recurse-submodule https://github.com/carnegierobotics/multisense_viewer
 ```
-#### Tested with Visual Studio 2022.
+Then choose to compile through Visual Studio or CMAKE Command Line Interface
+
+#### Compile Visual Studio 2022.
 1. Open up a new cmake project in Visual studio. Remember to launch as admin.
 2. Configure the cmake file and set MultiSense-viewer.exe as startup item
 3. Launch using VS or run the exe located in out/ folder
 
+#### Compile Using CMAKE
+```sh
+$ cd MultiSense-Viewer
+$ mkdir build && cd build
+$ cmake -DWARNINGS_AS_ERRORS=FALSE ..
+$ cmake --build .
+```
