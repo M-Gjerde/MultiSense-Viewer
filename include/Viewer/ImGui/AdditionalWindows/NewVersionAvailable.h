@@ -101,7 +101,7 @@ public:
                                   ImVec4(0, 0, 0, 0)); // Transparent button background when active
             ImGui::SameLine();
             ImGui::SetNextItemWidth(ImGui::CalcTextSize("GitHub Releases").x);
-            if (ImGui::Selectable("GitHub Releases", false, ImGuiSelectableFlags_DontClosePopups)) {
+            if (ImGui::Selectable("GitHub Releases", false, ImGuiSelectableFlags_NoAutoClosePopups)) {
                 openURL(url);
                 uiHandle->usageMonitor->userClickAction("GitHub Releases", "Selectable", ImGui::GetCurrentWindow()->Name);
 

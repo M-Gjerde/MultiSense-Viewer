@@ -76,27 +76,41 @@ jobs:
           tag_name: ${{ github.ref_name }}
           release_name: ${{ github.ref_name }}
           body: |
-            # MultiSense Viewer
-            - Not compatible with remote head systems. Revert to 1.0.0 for that purpose.
-            
-            ## Installing:
-            
-            ### Windows users:
-
-            1.  Install WinPcap_driver.exe to let the viewer configure network settings automatically
-            2.  Download and run the Windows installer: MultiSenseSetup.exe
-
-            ### Ubuntu users:
-            Make sure you have updated graphics drivers, ffmpeg and policykit installed. Can be installed via apt pacakge manager:
-            apt install ffmpeg libvulkan1 policykit-1
-            Ubuntu 20.04 Users may also require to install: apt install libdeflate-dev
-            1. Download and install the multisense_1.1-0_amd64.deb package using your default package manager or type in terminal:
-            $ dpkg --install ~/Downloads/multisense_1.1-0_amd64.deb
-            2. Launch through start menu or run a start script at
-            $ /opt/multisense/start.sh
-            - Uninstall application:
-            1. Windows: Run 000-uninstall.exe in the installation folder
-            2. Ubuntu: Uninstall with your package manager or run dpkg ($ dpkg --remove com.carnegierobotics.multisense)
+                ***Not compatible with remote head systems. Revert to version 1.0.0 for that purpose.
+                ## Installing:
+                ### Windows Users:
+                - Download the portable version: multisense_viewer.zip and unzip it to a folder of your choice, or
+                - Download and run the Windows installer: MultiSenseSetup.exe.
+                
+                ### Ubuntu Users:
+                #### Prerequisites:
+                Ensure you have updated graphics drivers, ffmpeg, and policykit installed. These can be installed via the apt package manager:
+                  
+                  sudo apt install ffmpeg libvulkan1 policykit-1
+                
+                For Ubuntu 20.04 users: You may also need to install libdeflate-dev:
+                  
+                  sudo apt install libdeflate-dev
+                
+                #### Steps:
+                Download the appropriate .deb package for your Ubuntu version:
+                
+                Ubuntu 20.04: multisense_1.1-6_amd64_ubuntu_20_04.deb
+                Ubuntu 22.04: multisense_1.1-6_amd64_ubuntu_22_04.deb
+                Ubuntu 24.04: multisense_1.1-6_amd64_ubuntu_24_04.deb
+                Install the package using your default package manager or by running the following command in the terminal:
+                  
+                  sudo dpkg --install ~/Downloads/multisense_1.1-6_amd64_ubuntu_<version>.deb
+                  
+                  Replace <version> with 20_04, 22_04, or 24_04 as appropriate.
+                
+                Launch the application from the start menu or by running the start script:
+                  /opt/multisense/start.sh
+                
+                ## Uninstalling the Application:
+                - Windows: Run 000-uninstall.exe in the installation folder.
+                - Ubuntu: Use your package manager or run the following command:
+                  sudo dpkg --remove com.carnegierobotics.multisense
           draft: true
           prerelease: true
 

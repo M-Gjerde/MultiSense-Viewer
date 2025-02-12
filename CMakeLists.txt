@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Set application version. Remember that it should always match the pushed tag in the form of v1.*-*
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "1")
-set(VERSION_PATCH "6")
+set(VERSION_PATCH "7")
 set(ARCHITECTURE "amd64")
 
 # Set install directory. Used to generate installers for both Windows and Ubuntu using their native approaches
@@ -25,21 +25,27 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
             Release
             CACHE STRING "Choose the type of build." FORCE)
     # Set the possible values of build type for cmake-gui, ccmake
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release"  "MinSizeRel" "RelWithDebInfo")
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif ()
 
 # Find Vulkan
 find_package(Vulkan REQUIRED)
 
+if (WIN32)
+    add_executable(${PROJECT_NAME} WIN32)
+else ()
+    add_executable(${PROJECT_NAME})
+endif ()
+
 include(cmake/Common.cmake)
 include(cmake/CompilerWarnings.cmake)
 
 find_package(Doxygen)
-if(Doxygen_FOUND)
+if (Doxygen_FOUND)
     add_subdirectory(docs)
-else()
+else ()
     message(STATUS "Doxygen not found, not building docs")
-endif()
+endif ()
 
 
 include_directories(include)
@@ -102,7 +108,7 @@ set(SCRIPTS_LIB_SRC
         include/Viewer/Scripts/Renderer3D/ImageViewer.cpp
 )
 
-set(LIBRARIES "Vulkan::Vulkan;glfw;SimpleIni;imgui;tiff;MultiSense;LibAutoConnect;ktx;nlohmann_json::nlohmann_json;httplib::httplib;rosbag_cpp_writer;")
+set(LIBRARIES "Vulkan::Vulkan;glfw;SimpleIni;tiff;MultiSense;LibAutoConnect;ktx;nlohmann_json::nlohmann_json;httplib::httplib;rosbag_cpp_writer;")
 
 # Copy Assets folders to output directory
 file(GLOB ASSETS "${CMAKE_CURRENT_SOURCE_DIR}/Assets/*")
@@ -138,35 +144,46 @@ if (UNIX) ## Linux
     # Add GTK+ compiler flags
     add_definitions(${GTK3_CFLAGS_OTHER})
 
-    add_library(CustomLoggerInterface INTERFACE)
-    target_link_libraries(CustomLoggerInterface INTERFACE fmt::fmt)
+    # Link all source files directly to the main project target
+    target_sources(${PROJECT_NAME} PRIVATE
+            ${LOGGER_SRC}
+            ${ENGINE_SRC}
+            ${SCRIPTS_LIB_SRC}
+            ${IMGUI_SOURCES}
+            src/main.cpp
+    )
 
-    add_library(CustomLogger ${LOGGER_SRC})
-    target_link_libraries(CustomLogger PRIVATE CustomLoggerInterface)
+    foreach(IMGUI_FILE ${IMGUI_SOURCES})
+        set_source_files_properties(${IMGUI_FILE} PROPERTIES COMPILE_FLAGS "-w")
+    endforeach()
 
-    add_library(VulkanRenderer STATIC ${ENGINE_SRC})
-    target_link_libraries(VulkanRenderer  PRIVATE ${LIBRARIES} ${GTK3_STATIC_LIBRARIES} CustomLogger libsll libcrypto)
-    add_dependencies(VulkanRenderer rosbag_cpp_writer)
+    # Direct linking of libraries
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+            fmt::fmt
+            ${LIBRARIES}
+            ${GTK3_STATIC_LIBRARIES}
+            libsll
+            libcrypto
+            -lavutil
+            -lswscale
+            MultiSense
+            httplib::httplib
+            rosbag_cpp_writer
+    )
+    # Add dependencies directly to the project
+    add_dependencies(${PROJECT_NAME}
+            AutoConnect
+            rosbag_cpp_writer
+    )
+    set_project_warnings(${PROJECT_NAME})
 
-    add_library(ScriptLibrary STATIC ${SCRIPTS_LIB_SRC})
-    target_link_libraries(ScriptLibrary PRIVATE VulkanRenderer ${LIBRARIES} -lavutil -lswscale rosbag_cpp_writer)
-    set_target_properties(ScriptLibrary PROPERTIES UNITY_BUILD ON)
 
-    add_executable(MultiSense-Viewer src/main.cpp)
-    target_link_libraries(MultiSense-Viewer PRIVATE MultiSense httplib::httplib rosbag_cpp_writer VulkanRenderer ScriptLibrary)
-    add_dependencies(MultiSense-Viewer AutoConnect rosbag_cpp_writer)
-
-    set_project_warnings(ScriptLibrary)
-    set_project_warnings(VulkanRenderer)
-    set_project_warnings(MultiSense-Viewer)
-
-
-    install(TARGETS MultiSense-Viewer RUNTIME DESTINATION ${INSTALL_DIRECTORY})
+    install(TARGETS ${PROJECT_NAME} RUNTIME DESTINATION ${INSTALL_DIRECTORY})
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/Assets CONFIGURATIONS Release DESTINATION ${INSTALL_DIRECTORY})
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/AutoConnect CONFIGURATIONS Release DESTINATION ${INSTALL_DIRECTORY})
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/AutoConnectLauncher.sh CONFIGURATIONS Release DESTINATION ${INSTALL_DIRECTORY})
 
-    add_custom_command(TARGET MultiSense-Viewer
+    add_custom_command(TARGET ${PROJECT_NAME}
             POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/internal/AutoConnect/AutoConnect ${CMAKE_BINARY_DIR}/
             COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/Assets/Tools/Ubuntu/AutoConnectLauncher.sh ${CMAKE_BINARY_DIR}/
@@ -192,7 +209,7 @@ if (WIN32)
 
     add_library(avutil STATIC IMPORTED GLOBAL)
     set_target_properties(avutil PROPERTIES
-            IMPORTED_LINK_INTERFACE_LANGUAGES  "C"
+            IMPORTED_LINK_INTERFACE_LANGUAGES "C"
             IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/ffmpeg/lib/avutil.lib")
 
     add_library(swscale STATIC IMPORTED GLOBAL)
@@ -210,38 +227,50 @@ if (WIN32)
             IMPORTED_LINK_INTERFACE_LANGUAGES "C"
             IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/external/openssl_1.1.1/lib/libcrypto.lib")
 
-    add_library(CustomLoggerInterface INTERFACE)
-    target_link_libraries(CustomLoggerInterface INTERFACE fmt::fmt)
+    # Consolidate all source files
+    set(ALL_SOURCES
+            ${LOGGER_SRC}
+            ${ENGINE_SRC}
+            ${SCRIPTS_LIB_SRC}
+            ${IMGUI_SOURCES}
+            src/main.cpp
+    )
+    foreach(IMGUI_FILE ${IMGUI_SOURCES})
+        set_source_files_properties(${IMGUI_FILE} PROPERTIES COMPILE_FLAGS "/w")
+    endforeach()
 
-    add_library(CustomLogger ${LOGGER_SRC})
-    target_link_libraries(CustomLogger PRIVATE CustomLoggerInterface )
+    # Create a single executable target
+    target_sources(${PROJECT_NAME} PRIVATE ${ALL_SOURCES})
 
-    add_library(VulkanRenderer STATIC ${ENGINE_SRC})
-    target_link_libraries(VulkanRenderer ${LIBRARIES} CustomLogger libsll libcrypto)
+    # Link all necessary libraries directly to the main target
+    target_link_libraries(${PROJECT_NAME}
+            PRIVATE
+            fmt::fmt
+            ${LIBRARIES}
+            libsll
+            libcrypto
+            avutil
+            swscale
+            rosbag_cpp_writer
+    )
 
-    add_library(ScriptLibrary STATIC ${SCRIPTS_LIB_SRC})
-    target_link_libraries(ScriptLibrary VulkanRenderer avutil swscale libsll libcrypto rosbag_cpp_writer)
+    # Add dependencies and set project warnings
+    add_dependencies(${PROJECT_NAME} AutoConnect)
 
-    add_executable(MultiSense-Viewer WIN32 src/main.cpp)
-    target_link_libraries(MultiSense-Viewer VulkanRenderer ScriptLibrary CustomLoggerInterface)
-    add_dependencies(MultiSense-Viewer AutoConnect)
-
-    set_project_warnings(ScriptLibrary)
-    set_project_warnings(VulkanRenderer)
-    set_project_warnings(MultiSense-Viewer)
+    set_project_warnings(${PROJECT_NAME})
 
     #AutoConnect
-    set_target_properties(MultiSense-Viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    set_target_properties(MultiSense-Viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+    set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
     set_target_properties(AutoConnect PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    set_target_properties(AutoConnect PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_BINARY_DIR})
-    set_target_properties(AutoConnect PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_BINARY_DIR})
+    set_target_properties(AutoConnect PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+    set_target_properties(AutoConnect PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
     set_target_properties(AutoConnect PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-    set_target_properties(AutoConnect PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_BINARY_DIR})
-    set_target_properties(AutoConnect PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_BINARY_DIR})
-    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY  ${CMAKE_BINARY_DIR})
-    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE  ${CMAKE_BINARY_DIR})
-    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG  ${CMAKE_BINARY_DIR})
+    set_target_properties(AutoConnect PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+    set_target_properties(AutoConnect PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
+    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR})
+    set_target_properties(MultiSense PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR})
 
     # create a list of third part DLLs to copy
     set(THIRD_PARTY_DLLS
@@ -258,7 +287,7 @@ if (WIN32)
     # do the copying
     foreach (file_i ${THIRD_PARTY_DLLS})
         add_custom_command(
-                TARGET VulkanRenderer
+                TARGET ${PROJECT_NAME}
                 POST_BUILD
                 COMMAND ${CMAKE_COMMAND}
                 ARGS -E copy ${file_i} ${CMAKE_BINARY_DIR}/)
@@ -266,9 +295,9 @@ if (WIN32)
 
     ### INSTALL TARGETS ###
     # VkRender Viewer DLL and libraries
-    install(TARGETS MultiSense-Viewer CONFIGURATIONS Release RUNTIME DESTINATION ${INSTALL_DIRECTORY})
-    install(TARGETS MultiSense-Viewer CONFIGURATIONS Release ARCHIVE DESTINATION ${INSTALL_DIRECTORY})
-    install(TARGETS MultiSense-Viewer CONFIGURATIONS Release LIBRARY DESTINATION ${INSTALL_DIRECTORY})
+    install(TARGETS ${PROJECT_NAME} CONFIGURATIONS Release RUNTIME DESTINATION ${INSTALL_DIRECTORY})
+    install(TARGETS ${PROJECT_NAME} CONFIGURATIONS Release ARCHIVE DESTINATION ${INSTALL_DIRECTORY})
+    install(TARGETS ${PROJECT_NAME} CONFIGURATIONS Release LIBRARY DESTINATION ${INSTALL_DIRECTORY})
     # LibMultiSense and WinPCap dll
     install(FILES
             ${CMAKE_BINARY_DIR}/MultiSense.dll
@@ -289,19 +318,15 @@ if (WIN32)
         if (${CMAKE_VERSION} VERSION_LESS "3.6.0")
             message("\n\t[ WARNING ]\n\n\tCMake version lower than 3.6.\n\n\t - Please update CMake and rerun; OR\n\t - Manually set 'GLFW-CMake-starter' as StartUp Project in Visual Studio.\n")
         else ()
-            set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT MultiSense-Viewer)
-            set_property(TARGET MultiSense-Viewer PROPERTY CXX_STANDARD 20)
+            set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${PROJECT_NAME})
+            set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
         endif ()
     endif ()
 endif ()
 
 # Compile definitions
 if (CMAKE_BUILD_TYPE MATCHES "Release")
-    target_compile_definitions(VulkanRenderer PRIVATE MULTISENSE_VIEWER_PRODUCTION)
-    target_compile_definitions(ScriptLibrary PRIVATE MULTISENSE_VIEWER_PRODUCTION)
-    target_compile_definitions(MultiSense-Viewer PRIVATE MULTISENSE_VIEWER_PRODUCTION)
-else()
-    target_compile_definitions(VulkanRenderer PRIVATE MULTISENSE_VIEWER_DEBUG)
-    target_compile_definitions(ScriptLibrary PRIVATE MULTISENSE_VIEWER_DEBUG)
-    target_compile_definitions(MultiSense-Viewer PRIVATE MULTISENSE_VIEWER_DEBUG)
-endif()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MULTISENSE_VIEWER_PRODUCTION)
+else ()
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MULTISENSE_VIEWER_DEBUG)
+endif ()

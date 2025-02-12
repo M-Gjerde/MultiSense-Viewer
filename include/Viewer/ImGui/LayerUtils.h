@@ -22,7 +22,10 @@ DISABLE_WARNING_ALL
 #include <gtk/gtk.h>
 #endif
 
+DISABLE_WARNING_PUSH
+DISABLE_WARNING_ALL
 #include <imgui.h>
+DISABLE_WARNING_POP
 
 #include "Viewer/ImGui/Widgets.h"
 

@@ -41,8 +41,12 @@
 #include <queue>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-
+DISABLE_WARNING_PUSH
+DISABLE_WARNING_ALL
+#include <imgui.h>
 #include <imgui_internal.h>
+DISABLE_WARNING_POP
+
 #include <sys/types.h>
 
 #include "Viewer/Tools/Utils.h"
@@ -218,7 +222,7 @@ public:
                                   ImVec4(0, 0, 0, 0)); // Transparent button background when active
             ImGui::SameLine();
             ImGui::SetNextItemWidth(ImGui::CalcTextSize("Privacy policy").x);
-            if (ImGui::Selectable("Privacy policy", false, ImGuiSelectableFlags_DontClosePopups))
+            if (ImGui::Selectable("Privacy policy", false, ImGuiSelectableFlags_NoAutoClosePopups))
             {
                 openURL(url);
                 handle->usageMonitor->userClickAction("Privacy policy", "Selectable",
@@ -484,7 +488,7 @@ private:
             case VkRender::CRL_STATE_CONNECTED:
                 break;
             case VkRender::CRL_STATE_CONNECTING:
-                buttonIdentifier = "Connecting";
+                buttonIdentifier = "Connecting...";
                 ImGui::PushStyleColor(ImGuiCol_ChildBg, VkRender::Colors::CRLGray424);
                 ImGui::PushStyleColor(ImGuiCol_Button, VkRender::Colors::CRLBlueIsh);
                 btnColor = VkRender::Colors::CRLBlueIsh;
@@ -640,13 +644,17 @@ private:
             }
 
             // Connect button
-            if (buttonIdentifier == "Connecting")
+            if (buttonIdentifier == "Connecting...") // Supposed to be a gif here
             {
+                /*
                 e.clicked = ImGui::ButtonWithGif(buttonIdentifier.c_str(), ImVec2(ImGui::GetFontSize() * 10, 35.0f),
                                                  handles->info->gif.image[gifFrameIndex2], ImVec2(35.0f, 35.0f),
                                                  uv0,
                                                  uv1,
                                                  tint_col, btnColor) && !busy;
+                */
+                e.clicked = ImGui::Button(buttonIdentifier.c_str(),
+                          ImVec2(ImGui::GetFontSize() * 10, ImGui::GetFontSize() * 2)) && !busy;
             }
             else
             {
@@ -988,7 +996,7 @@ private:
                     if (entryConnectDeviceList[n].cameraName.empty()) continue;
                     if (ImGui::Selectable((entryConnectDeviceList[n].cameraName + "##" + std::to_string(n)).c_str(),
                                           resultsComboIndex == static_cast<int>(n),
-                                          ImGuiSelectableFlags_DontClosePopups,
+                                          ImGuiSelectableFlags_NoAutoClosePopups,
                                           ImVec2(handles->info->popupWidth - (20.0f * 2), 15.0f)))
                     {
                         handles->usageMonitor->userClickAction(entryConnectDeviceList[n].cameraName, "Selectable",
@@ -1171,7 +1179,7 @@ private:
                                                     1.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, blueLinkColor);
                 std::string selectableTxt = "Network Configuration Guide";
-                if (ImGui::Selectable(selectableTxt.c_str(), false, ImGuiSelectableFlags_DontClosePopups,
+                if (ImGui::Selectable(selectableTxt.c_str(), false, ImGuiSelectableFlags_NoAutoClosePopups,
                                       ImGui::CalcTextSize(selectableTxt.c_str())))
                 {
                     openURL(url);

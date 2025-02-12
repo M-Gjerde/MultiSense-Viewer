@@ -842,7 +842,6 @@ namespace VkRender::MultiSense {
             const auto &info = app->camPtr.getCameraInfo(dev->channelConnections.front()).devInfo;
             dev->cameraName = info.name;
             dev->serialName = info.serialNumber;
-
             dev->hasColorCamera =
                     info.hardwareRevision ==
                     crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_C6S2_S27 ||

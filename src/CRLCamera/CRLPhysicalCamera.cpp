@@ -244,7 +244,7 @@ namespace VkRender::MultiSense {
                     std::memset(tex->data + header->data().imageLength, 0x00, diff * tex->m_Width);
 
                     if (tex->data3 != nullptr) {
-                        size_t diff2 = static_cast<size_t>((tex->m_Height) / 2) - headerTwo->data().height;
+                        //size_t diff2 = static_cast<size_t>((tex->m_Height) / 2) - headerTwo->data().height;
                         //std::memset(tex->data2 + (headerTwo->data().imageLength / 2), 0x00, diff2 * tex->m_Width);
                         //std::memset(tex->data3 + (headerTwo->data().imageLength / 2), 0x00, diff2 * tex->m_Width);
 
@@ -827,7 +827,9 @@ namespace VkRender::MultiSense {
                             infoMap[channelID].devInfo.hardwareRevision ==
                             crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_S30 ||
                             infoMap[channelID].devInfo.hardwareRevision ==
-                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_MONOCAM;
+                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_MONOCAM||
+                            infoMap[channelID].devInfo.hardwareRevision ==
+                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_KS21i;
         std::ifstream inFile, exFile;
         std::map<std::string, std::vector<float> > data;
         inFile.open(intrinsicsFile.c_str());
@@ -960,7 +962,9 @@ namespace VkRender::MultiSense {
                             infoMap[channelID].devInfo.hardwareRevision ==
                             crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_S30 ||
                             infoMap[channelID].devInfo.hardwareRevision ==
-                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_MONOCAM;
+                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_MONOCAM ||
+                            infoMap[channelID].devInfo.hardwareRevision ==
+                            crl::multisense::system::DeviceInfo::HARDWARE_REV_MULTISENSE_KS21i;
         std::ofstream inFile, exFile;
         std::string intrinsicsFile = savePath + "/" + infoMap[channelID].devInfo.serialNumber + "_intrinsics.yml";
         std::string extrinsicsFile = savePath + "/" + infoMap[channelID].devInfo.serialNumber + "_extrinsics.yml";

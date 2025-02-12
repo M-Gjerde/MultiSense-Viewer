@@ -38,7 +38,6 @@
 
 #include <vulkan/vulkan_core.h>
 #include <string>
-#include "Viewer/Tools/Logger.h"
 
 #if defined(_MSC_VER)
 #define DISABLE_WARNING_PUSH           __pragma(warning( push ))
@@ -57,6 +56,12 @@
 #define DISABLE_WARNING_MISSING_INITIALIZERS
 #define DISABLE_WARNING_DEPRECATION                      DISABLE_WARNING(4996)
 // other warnings you want to deactivate...
+
+#define DISABLE_WARNING_ALL DISABLE_WARNING_UNREFERENCED_FORMAL_PARAMETER \
+DISABLE_WARNING_UNREFERENCED_FUNCTION \
+DISABLE_WARNING_UNREFERENCED_VARIABLE \
+DISABLE_WARNING_DEPRECATION
+
 
 #elif defined(__GNUC__) || defined(__clang__)
 #define DO_PRAGMA(X) _Pragma(#X)
@@ -119,8 +124,6 @@ DISABLE_WARNING_USELESS_CAST
 }
 
 namespace Macros {
-
-
     inline std::string errorString(VkResult errorCode) {
         switch (errorCode) {
 #define STR(r) case VK_ ##r: return #r

@@ -2,7 +2,7 @@ name: MultiSense Viewer Pull request workflow
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [ opened, synchronize, reopened ]
   push:
     tags:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
@@ -57,120 +57,144 @@ jobs:
         id: install_path_id_ubuntu
         run: echo "install_path_ubuntu=multisense_${{ env.MAJOR }}.${{ env.MINOR }}-${{ env.PATCH }}_amd64/opt/multisense" >> $GITHUB_OUTPUT
 
-
-
-
   BuildWindows:
     name: Compile Check for Windows
-    needs: [VersionJob]
+    needs: [ VersionJob ]
     runs-on: windows-2022
     steps:
+      - name: Print install location
+        run: echo "My output is ${{ needs.VersionJob.outputs.install_path }}"
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: 'true'
 
+      - name: Disable certificate revocation check for curl
+        shell: pwsh
+        run: |
+          [Environment]::SetEnvironmentVariable("CURL_SSL_NO_REVOKE", "1", "User")
+
       - name: Prepare Vulkan SDK
         uses: humbletim/setup-vulkan-sdk@v1.2.0
         with:
-          vulkan-query-version: 1.3.204.0
+          vulkan-query-version: latest
           vulkan-components: Vulkan-Headers, Vulkan-Loader
           vulkan-use-cache: true
 
       - name: Configure CMake
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE
+        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE
 
       - name: Build project
-        run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target install -- /m:10
+        run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }} --target install -- /m:10
 
-#      - name: Prepare Installer Files
-#        shell: powershell
-#        run: |
-#          # Move Inno Setup script and necessary tools into the build directory
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\Windows\inno_setup_script.iss" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\Windows\build_installer.ps1" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\compile.sh" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\install_spirv_compiler.sh" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\monitor_memory_usage.py" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#          Move-Item -Path "$($env.GITHUB_WORKSPACE)\Assets\Tools\how_to_release" -Destination "$($env.GITHUB_WORKSPACE)\build"
-#
-#          # Clean up unnecessary directories
-#          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\Assets\Tools\Ubuntu"
-#          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\bin"
-#          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\include"
-#          Remove-Item -Recurse -Force "$($env.GITHUB_WORKSPACE)\build\lib"
-#
-#      - name: Building the installer
-#        run: |
-#          "%programfiles(x86)%\Inno Setup 6\iscc.exe" "$env.GITHUB_WORKSPACE\build\inno_setup_script.iss"
-#        shell: cmd
+      # Remove the unwanted directories from the install folder
+      - name: Remove bin, include, and lib folders
+        shell: pwsh
+        run: |
+          Write-Host "Removing 'bin', 'include', and 'lib' from the install folder..."
+          $installPath = "${{ needs.VersionJob.outputs.install_path }}"
+          foreach ($folder in @('bin', 'include', 'lib')) {
+              $fullPath = Join-Path $installPath $folder
+              if (Test-Path $fullPath) {
+                  Remove-Item -Path $fullPath -Recurse -Force
+                  Write-Host "Removed $fullPath"
+              }
+              else {
+                  Write-Host "Folder $fullPath does not exist, skipping..."
+              }
+          }
+
+      - name: Create ZIP Archive
+        shell: pwsh
+        run: |
+          # Construct the full install path using the workspace and the output from VersionJob
+          $installPath = Join-Path $env:GITHUB_WORKSPACE "build/${{ needs.VersionJob.outputs.install_path }}"
+          
+          # Define where to put the ZIP archive; adjust the path as needed
+          $zipPath = Join-Path $env:GITHUB_WORKSPACE "build/install_artifact.zip"
+          
+          Write-Host "Zipping the install folder from $installPath to $zipPath"
+          
+          # If a previous ZIP exists, remove it
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          
+          # Compress all files from the install directory into the ZIP archive
+          Compress-Archive -Path (Join-Path $installPath "*") -DestinationPath $zipPath
+          
+          Write-Host "Created ZIP archive at $zipPath"
+
+
+      # Upload the ZIP archive as an artifact
+      - name: Upload install artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: install-artifact
+          path: ${{ github.workspace }}\build\install_artifact.zip
 
   BuildUbuntu20:
     name: Build and package for Ubuntu 20_04
-    needs: [VersionJob]
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    needs: [ VersionJob ]
     runs-on: ubuntu-20.04
-
     steps:
-    - name: print install location
-      run: echo "My output is ${{ needs.VersionJob.outputs.install_path  }}"
-    - uses: actions/checkout@v4
-      with:
-        submodules: 'true'
+      - name: Print install location
+        run: echo "My output is ${{ needs.VersionJob.outputs.install_path }}"
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'true'
 
-    - name: Prepare Vulkan SDK
-      uses: humbletim/setup-vulkan-sdk@v1.2.0
-      with:
-        vulkan-query-version: 1.2.198.1
-        vulkan-components: Vulkan-Headers, Vulkan-Loader
-        vulkan-use-cache: true
+      - name: Prepare Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.0
+        with:
+          vulkan-query-version: 1.2.198.1
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
 
-    - name: Install dependencies
-      run: sudo apt-get install -y cmake libx11-dev build-essential xorg-dev libtbb-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libssl-dev libgtk-3-dev libsystemd-dev
+      - name: Install dependencies
+        run: sudo apt-get install -y cmake libx11-dev build-essential xorg-dev libtbb-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libssl-dev libgtk-3-dev libsystemd-dev
 
-    #- name: update gcc11
-    #  run: sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt update && sudo apt install -y gcc-11 g++-11
+      - name: Configure CMake
+        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE
 
-    - name: Configure CMake
-      # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-      # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE #-D CMAKE_C_COMPILER=gcc-11 -D CMAKE_CXX_COMPILER=g++-11
+      - name: Build
+        run: cmake --build ${{ github.workspace }}/build -- -j3
 
-    - name: Build
-      # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build -- -j3
+      - name: Install
+        working-directory: ${{ github.workspace }}/build
+        run: cmake --install . --config ${{ env.BUILD_TYPE }}
 
-    - name: Install
-      working-directory: ${{github.workspace}}/build
-      run: cmake --install . --config ${{env.BUILD_TYPE}}
+      - name: Prepare package step
+        working-directory: ${{ github.workspace }}/build
+        run: |
+          mkdir ${{ needs.VersionJob.outputs.install_path }}/DEBIAN && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path }}/DEBIAN/
+          mkdir -p ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications/
+          cp ${{ github.workspace }}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/include
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/lib
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/share
 
-    - name: Prepare package step
-      working-directory: ${{github.workspace}}/build
-      run: |
-        mkdir ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN && cp ${{github.workspace}}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN/
-        mkdir -p ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications && cp ${{github.workspace}}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications/
-        cp ${{github.workspace}}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/
-        rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/include
-        rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/lib
-        rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/share
+      - name: Package
+        working-directory: ${{ github.workspace }}/build
+        run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path }}
 
-    - name: Package
-      working-directory: ${{github.workspace}}/build
-      run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path  }}
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package-ubuntu-20
+          path: ${{ github.workspace }}/build/${{ needs.VersionJob.outputs.install_path }}.deb
 
   BuildUbuntu22:
     name: Build and package for Ubuntu 22_04
-    needs: [VersionJob]
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    needs: [ VersionJob ]
     runs-on: ubuntu-22.04
-
     steps:
-      - name: print install location
-        run: echo "My output is ${{ needs.VersionJob.outputs.install_path  }}"
+      - name: Print install location
+        run: echo "My output is ${{ needs.VersionJob.outputs.install_path }}"
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
@@ -185,47 +209,43 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y cmake libx11-dev build-essential xorg-dev libtbb-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libssl-dev libgtk-3-dev libsystemd-dev libwebp-dev
 
-        #- name: update gcc11
-        #run: sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt update && sudo apt install -y gcc-11 g++-11
-
       - name: Configure CMake
-        # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-        # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE #-D CMAKE_C_COMPILER=gcc-11 -D CMAKE_CXX_COMPILER=g++-11
+        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE
 
       - name: Build
-        # Build your program with the given configuration
-        run: cmake --build ${{github.workspace}}/build -- -j3
+        run: cmake --build ${{ github.workspace }}/build -- -j3
 
       - name: Install
-        working-directory: ${{github.workspace}}/build
-        run: cmake --install . --config ${{env.BUILD_TYPE}}
+        working-directory: ${{ github.workspace }}/build
+        run: cmake --install . --config ${{ env.BUILD_TYPE }}
 
       - name: Prepare package step
-        working-directory: ${{github.workspace}}/build
+        working-directory: ${{ github.workspace }}/build
         run: |
-          mkdir ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN && cp ${{github.workspace}}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN/
-          mkdir -p ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications && cp ${{github.workspace}}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications/
-          cp ${{github.workspace}}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/include
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/lib
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/share
+          mkdir ${{ needs.VersionJob.outputs.install_path }}/DEBIAN && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path }}/DEBIAN/
+          mkdir -p ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications/
+          cp ${{ github.workspace }}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/include
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/lib
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/share
 
       - name: Package
-        working-directory: ${{github.workspace}}/build
-        run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path  }}
+        working-directory: ${{ github.workspace }}/build
+        run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path }}
+
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package-ubuntu-22
+          path: ${{ github.workspace }}/build/${{ needs.VersionJob.outputs.install_path }}.deb
 
   BuildUbuntu24:
     name: Build and package for Ubuntu 24_04
-    needs: [VersionJob]
-    # The CMake configure and build commands are platform agnostic and should work equally well on Windows or Mac.
-    # You can convert this to a matrix build if you need cross-platform coverage.
-    # See: https://docs.github.com/en/free-pro-team@latest/actions/learn-github-actions/managing-complex-workflows#using-a-build-matrix
+    needs: [ VersionJob ]
     runs-on: ubuntu-24.04
-
     steps:
-      - name: print install location
-        run: echo "My output is ${{ needs.VersionJob.outputs.install_path  }}"
+      - name: Print install location
+        run: echo "My output is ${{ needs.VersionJob.outputs.install_path }}"
       - uses: actions/checkout@v4
         with:
           submodules: 'true'
@@ -240,32 +260,32 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get install -y cmake libx11-dev build-essential xorg-dev libtbb-dev libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libssl-dev libgtk-3-dev libsystemd-dev libwebp-dev
 
-        #- name: update gcc11
-        #run: sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt update && sudo apt install -y gcc-11 g++-11
-
       - name: Configure CMake
-        # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
-        # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
-        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE #-D CMAKE_C_COMPILER=gcc-11 -D CMAKE_CXX_COMPILER=g++-11
+        run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} -DGIT_SUBMODULE=OFF -DWARNINGS_AS_ERRORS=FALSE
 
       - name: Build
-        # Build your program with the given configuration
-        run: cmake --build ${{github.workspace}}/build -- -j3
+        run: cmake --build ${{ github.workspace }}/build -- -j3
 
       - name: Install
-        working-directory: ${{github.workspace}}/build
-        run: cmake --install . --config ${{env.BUILD_TYPE}}
+        working-directory: ${{ github.workspace }}/build
+        run: cmake --install . --config ${{ env.BUILD_TYPE }}
 
       - name: Prepare package step
-        working-directory: ${{github.workspace}}/build
+        working-directory: ${{ github.workspace }}/build
         run: |
-          mkdir ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN && cp ${{github.workspace}}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path  }}/DEBIAN/
-          mkdir -p ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications && cp ${{github.workspace}}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path  }}/usr/share/applications/
-          cp ${{github.workspace}}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/include
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/lib
-          rm -rf ${{ needs.VersionJob.outputs.install_path  }}/opt/multisense/share
+          mkdir ${{ needs.VersionJob.outputs.install_path }}/DEBIAN && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/control ${{ needs.VersionJob.outputs.install_path }}/DEBIAN/
+          mkdir -p ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications && cp ${{ github.workspace }}/Assets/Tools/Ubuntu/multisense.desktop ${{ needs.VersionJob.outputs.install_path }}/usr/share/applications/
+          cp ${{ github.workspace }}/Assets/Tools/Ubuntu/start.sh ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/include
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/lib
+          rm -rf ${{ needs.VersionJob.outputs.install_path }}/opt/multisense/share
 
       - name: Package
-        working-directory: ${{github.workspace}}/build
-        run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path  }}
+        working-directory: ${{ github.workspace }}/build
+        run: dpkg-deb --build --root-owner-group ${{ needs.VersionJob.outputs.install_path }}
+
+      - name: Upload DEB package
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-package-ubuntu-24
+          path: ${{ github.workspace }}/build/${{ needs.VersionJob.outputs.install_path }}.deb

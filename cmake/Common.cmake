@@ -121,13 +121,25 @@ else ()
     message("[INFO] Adding IMGUI from directory: ${IMGUI_DIR}")
 
     set(IMGUI_DIR external/imgui)
-    include_directories(SYSTEM ${IMGUI_DIR} ${IMGUI_DIR}/backends ..)
-    include_directories(${PROJECT_SOURCE_DIR}/include/Viewer/ImGui/Custom) # Custom IMGUI application
-    set(IMGUI_SRC
-            ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp ${IMGUI_DIR}/imgui.cpp
-            ${IMGUI_DIR}/imgui_draw.cpp ${IMGUI_DIR}/imgui_demo.cpp ${IMGUI_DIR}/imgui_tables.cpp ${IMGUI_DIR}/imgui_widgets.cpp
-            include/Viewer/ImGui/Custom/imgui_user.h)
-    add_library(imgui STATIC ${IMGUI_SRC})
+    set(IMGUI_SOURCES
+            ${IMGUI_DIR}/imgui.h
+            ${IMGUI_DIR}/imgui_internal.h
+            ${IMGUI_DIR}/imgui.cpp
+            ${IMGUI_DIR}/imgui_demo.cpp
+            ${IMGUI_DIR}/imgui_draw.cpp
+            ${IMGUI_DIR}/imgui_tables.cpp
+            ${IMGUI_DIR}/imgui_widgets.cpp
+    )
+    set(IMGUI_INCLUDE ${IMGUI_DIR}/
+            ${IMGUI_DIR}/backends
+            ${PROJECT_SOURCE_DIR}/include/Viewer/ImGui/Custom
+    )
+    target_sources(${PROJECT_NAME} PRIVATE
+            ${IMGUI_SOURCES}
+    )
+    target_include_directories(${PROJECT_NAME} PRIVATE
+            ${IMGUI_INCLUDE})
+
 endif ()
 
 if (NOT EXISTS "${PROJECT_SOURCE_DIR}/${AUTOCONNECT_DIR}/CMakeLists.txt")

@@ -38,13 +38,9 @@
 // https://github.com/TheCherno/Walnut
 // LICENSE: See MIT LICENSE in root folder of this repo
 
+#define ImTextureID VkDescriptorSet
 
 #include <stb_image.h>
-
-#define IMGUI_DEFINE_MATH_OPERATORS
-
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_vulkan.h>
 
 #include "Viewer/ImGui/GuiManager.h"
 
@@ -122,7 +118,7 @@ namespace VkRender {
         handles.info->font15 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 15);
         handles.info->font18 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 18);
         handles.info->font24 = loadFontFromFileName("Assets/Fonts/Roboto-Black.ttf", 24);
-        io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(fontDescriptors[fontCount - 1]));
+        io.Fonts->SetTexID((fontDescriptors[fontCount - 1]));
 
         imageIconDescriptors.resize(10);
         handles.info->imageButtonTextureDescriptor.resize(10);
@@ -448,7 +444,7 @@ namespace VkRender {
                 for (int32_t j = 0; j < cmd_list->CmdBuffer.Size; j++) {
                     const ImDrawCmd *pcmd = &cmd_list->CmdBuffer[j];
 
-                    auto texture = static_cast<VkDescriptorSet>(pcmd->GetTexID());
+                    auto texture = (pcmd->GetTexID());
                     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                             &texture, 0, nullptr);
 
@@ -492,12 +488,11 @@ namespace VkRender {
         handles.info->gif.totalFrames = depth;
         handles.info->gif.imageSize = imageSize;
         handles.info->gif.delay = reinterpret_cast<uint32_t *>( delays);
-        gifImageDescriptors.reserve(static_cast<size_t>(depth) + 1);
+        gifImageDescriptors.resize(static_cast<size_t>(depth) + 1);
 
         auto *pixelPointer = pixels; // Store original position in pixels
 
         for (int i = 0; i < depth; ++i) {
-            VkDescriptorSet dSet{};
             gifTexture[i] = std::make_unique<Texture2D>(device);
 
             gifTexture[i]->fromBuffer(pixelPointer, handles.info->gif.imageSize, VK_FORMAT_R8G8B8A8_SRGB,
@@ -513,22 +508,20 @@ namespace VkRender {
             alloc_info.descriptorPool = descriptorPool;
             alloc_info.descriptorSetCount = 1;
             alloc_info.pSetLayouts = &descriptorSetLayout;
-            CHECK_RESULT(vkAllocateDescriptorSets(device->m_LogicalDevice, &alloc_info, &dSet));
+            CHECK_RESULT(vkAllocateDescriptorSets(device->m_LogicalDevice, &alloc_info, &gifImageDescriptors[i]));
 
 
             // Update the Descriptor Set:
             VkWriteDescriptorSet write_desc[1] = {};
             write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write_desc[0].dstSet = dSet;
+            write_desc[0].dstSet = gifImageDescriptors[i];
             write_desc[0].descriptorCount = 1;
             write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             write_desc[0].pImageInfo = &gifTexture[i]->m_Descriptor;
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
 
-            handles.info->gif.image[i] = reinterpret_cast<void *>(dSet);
+            handles.info->gif.image[i] = (gifImageDescriptors[i]);
             pixelPointer += handles.info->gif.imageSize;
-
-            gifImageDescriptors.emplace_back(dSet);
         }
         stbi_image_free(pixels);
     }
@@ -566,7 +559,7 @@ namespace VkRender {
             vkUpdateDescriptorSets(device->m_LogicalDevice, 1, write_desc, 0, NULL);
         }
 
-        handles.info->imageButtonTextureDescriptor[i] = reinterpret_cast<void *>(imageIconDescriptors[i]);
+        handles.info->imageButtonTextureDescriptor[i] = (imageIconDescriptors[i]);
     }
 
 
@@ -574,7 +567,7 @@ namespace VkRender {
         ImFontConfig config;
         config.OversampleH = 2;
         config.OversampleV = 1;
-        config.GlyphExtraSpacing.x = 1.0f;
+        //config.GlyphExtraSpacing.x = 1.0f;
         ImGuiIO *io = &ImGui::GetIO();
         ImFont *font = io->Fonts->AddFontFromFileTTF(file.c_str(), fontSize, &config);
 
