@@ -228,14 +228,14 @@ namespace VkRender::PathTracer {
 
         auto gradPosA = grad_positions.accessor<float, 2>();
         for (int i = 0; i < grad_positions.size(0); ++i) {
+            float gx = grad[i].x;
+            float gy = grad[i].y;
+            float gz = grad[i].z;
 
-
-
-
-
-            gradPosA[i][0] = grad[i].x;
-            gradPosA[i][1] = grad[i].y;
-            gradPosA[i][2] = grad[i].z;
+            // Replace NaNs with zero (or another fallback value)
+            gradPosA[i][0] = std::isnan(gx) ? 0.0f : gx;
+            gradPosA[i][1] = std::isnan(gy) ? 0.0f : gy;
+            gradPosA[i][2] = std::isnan(gz) ? 0.0f : gz;
         }
 
         // Return them in the same order as forward inputs

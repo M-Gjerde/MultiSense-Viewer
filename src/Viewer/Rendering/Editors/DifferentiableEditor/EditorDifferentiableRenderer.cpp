@@ -139,6 +139,18 @@ namespace VkRender {
     void EditorDifferentiableRenderer::onUpdate() {
         auto imageUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_ui);
 
+        // Enable some camera if we dont have one enabled:
+        if (!m_context->activeScene()->getActiveCamera()) {
+            auto cameraView = m_context->activeScene()->getRegistry().view<CameraComponent>();
+            std::vector<Entity> cameraEntities;
+            for (auto e: cameraView) {
+                auto entity = Entity(e, m_context->activeScene().get());
+                if (entity.getComponent<CameraComponent>().cameraType == CameraComponent::PINHOLE) {
+                    entity.getComponent<CameraComponent>().isActiveCamera() = true;
+                    break;
+                }
+            }
+        }
         // 2. Check if we need to re-create the pipeline (resolution changed or user forced reset).
         if (imageUI->reloadRenderer) {
             Log::Logger::getInstance()->info("Resetting Path Tracer.. Change in settings");

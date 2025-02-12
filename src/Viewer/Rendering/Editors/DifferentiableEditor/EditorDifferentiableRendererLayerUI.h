@@ -18,8 +18,6 @@ namespace VkRender {
         int selectedDeviceIndex = 1;
 
         bool denoise = false;
-
-        bool automatic = true;
         // Constructor that copies everything from base EditorUI
         EditorDifferentiableRendererLayerUI(const EditorUI &baseUI) : EditorUI(baseUI) {}
     };

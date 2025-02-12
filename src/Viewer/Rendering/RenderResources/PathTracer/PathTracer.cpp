@@ -125,7 +125,7 @@ namespace VkRender::PathTracer {
                 cgh.parallel_for(globalRange, kernel);
             });
 
-            queue.wait_and_throw();
+            queue.wait();
             queue.memcpy(m_backwardInfo.gradients, m_gpu.gradients, simulatePhotonCount * sizeof(glm::vec3));
             queue.memcpy(m_backwardInfo.sumGradients, m_gpu.sumGradients, sizeof(glm::vec3) * m_gpu.numGaussians);
             queue.wait();

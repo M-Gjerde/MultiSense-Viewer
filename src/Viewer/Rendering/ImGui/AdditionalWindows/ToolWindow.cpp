@@ -67,14 +67,22 @@ namespace VkRender {
         ImGui::Spacing();
 
 
-
+        ImGui::Text("Dataset Generation");
+        ImGui::Spacing();
 
         // You can add more controls here as needed.
         auto pathTracerUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
         auto optimizationUI = std::dynamic_pointer_cast<EditorDifferentiableRendererLayerUI>(m_diffRenderer->ui());
 
+        const char *selections[] = {"CPU", "GPU"}; // TODO This should come from selectSyclDevices
+        ImGui::SetNextItemWidth(100.0f);
+        if (ImGui::Combo("##Select Device Type", &pathTracerUI->selectedDeviceIndex, selections,
+                         IM_ARRAYSIZE(selections))) {
+            pathTracerUI->kernelDevice = selections[pathTracerUI->selectedDeviceIndex];
+            pathTracerUI->switchKernelDevice = true;
+        }
+
         if (ImGui::Checkbox("Render Dataset", &m_checkRenderDataset)) {
-            pathTracerUI->kernelDevice = "GPU";
             pathTracerUI->switchKernelDevice = true;
             pathTracerUI->useSceneCamera = true;
         }
@@ -115,6 +123,8 @@ namespace VkRender {
 
             if (m_editorPathTracer->getRenderInformation()->frameID >= 1) {
                 m_cameraID++;
+                auto &nextCamera = cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>();
+                nextCamera.isActiveCamera() = true;
                 camera.isActiveCamera() = false;
                 pathTracerUI->clearImageMemory = true;
             }
@@ -133,17 +143,18 @@ namespace VkRender {
         if (ImGui::Button("Stop")) {
             // When the button is clicked, retrieve the active scene and call generateCameras.
             pathTracerUI->toggleRendering = false;
+            m_cameraID = 0;
+            pathTracerUI->bypassSave = false;
         }
 
+        ImGui::Spacing();
 
         ImGui::Separator();
         ImGui::Text("Optimization");
-
+        ImGui::Spacing();
         if (ImGui::Checkbox("Iterate", &m_iterate)) {
-            optimizationUI->kernelDevice = "GPU";
             optimizationUI->reloadRenderer = true;
             optimizationUI->toggleStep = true;
-            optimizationUI->automatic = true;
             m_cameraID = 0;
         }
 
@@ -161,9 +172,9 @@ namespace VkRender {
             if (m_diffRenderer->m_stepIteration > m_cameraID) {
                 m_cameraID++;
                 camera.isActiveCamera() = false;
-                cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>().isActiveCamera() = true;
+                cameraEntities[m_cameraID % cameraEntities.size()].getComponent<CameraComponent>().isActiveCamera() =
+                        true;
             }
-
         }
 
         // Create a button labeled "Generate Cameras".

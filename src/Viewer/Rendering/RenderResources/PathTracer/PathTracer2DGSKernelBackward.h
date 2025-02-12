@@ -39,19 +39,13 @@ namespace VkRender::PathTracer {
         // Single Photon Trace (Multi-Bounce)
         // ---------------------------------------------------------
         void traceOnePhoton(size_t photonID) const {
-            auto cameraTransform = m_cameraTransform->getTransform();
-            glm::mat4 worldToCamera = glm::inverse(cameraTransform);
-            glm::vec3 cameraNormal = glm::normalize(glm::mat3(cameraTransform) * glm::vec3(0.0f, 0.0f, -1.0f));
+            auto camera2World = m_cameraTransform->getTransform();
+            glm::mat4 world2Camera = glm::inverse(camera2World);
+
+            glm::vec3 cameraNormal = glm::normalize(glm::mat3(camera2World) * glm::vec3(0.0f, 0.0f, -1.0f));
             glm::vec3 pinholePosition = m_cameraTransform->getPosition();
-            glm::vec3 cameraPlanePointWorld = glm::vec3(cameraTransform * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+            glm::vec3 cameraPlanePointWorld = glm::vec3(camera2World * glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
             // A point on the plane
-
-
-
-
-            //emissionOrigin = gaussianPosition;
-            float apertureDiameter = (m_camera->m_parameters.focalLength / m_camera->m_parameters.fNumber) / 1000;
-            float apertureRadius = apertureDiameter * 0.5f;
 
             // For clarity, rename e_o = emissionOrigin, e_d = apertureSampleDir
             glm::vec3 e_o = m_gpuDataOutput[photonID].emissionOrigin;
@@ -63,8 +57,6 @@ namespace VkRender::PathTracer {
 
             glm::vec3 gaussianPosition = m_gpuData.gaussianInputAssembly[gaussianID].position;
             float emissionPower = m_gpuData.gaussianInputAssembly[gaussianID].emission;
-            glm::vec3 gaussianNormal = m_gpuData.gaussianInputAssembly[gaussianID].normal;
-            glm::vec2 gaussianScale = m_gpuData.gaussianInputAssembly[gaussianID].scale;
 
             // Camera intrinsics
             float fx = m_camera->parameters().fx;
@@ -84,7 +76,6 @@ namespace VkRender::PathTracer {
 
             glm::vec3 f = cameraPlanePointWorld; // e.g., defined in your camera parameters
             glm::vec3 f_n = cameraNormal; // e.g., (0,0,1) if the focal plane faces +Z
-
 
             // PIXEL LOSS GROUND TRUTH
             glm::vec3 apertureHitPoint;
@@ -108,8 +99,8 @@ namespace VkRender::PathTracer {
             glm::vec3 cameraHitPointWorld = e_c_gt + e_d_gt * tCam;
 
             // 1. Transform the hit point from world space to camera space
-            glm::vec4 hitPointCam4 = worldToCamera * glm::vec4(cameraHitPointWorld, 1.0f);
-            glm::vec3 hitPointCam = hitPointCam4 / hitPointCam4.w;
+            glm::vec4 hitPointCam = world2Camera * glm::vec4(cameraHitPointWorld, 1.0f);
+            hitPointCam = hitPointCam / hitPointCam.w;
             float px_gt = hitPointCam.x;
             float py_gt = hitPointCam.y;
             float pz_gt = hitPointCam.z;
@@ -153,9 +144,7 @@ namespace VkRender::PathTracer {
             float denom_squared = denom * denom; // Avoid recomputing later
             glm::vec3 term1 = -f_n * denom; // Scalar * Vector = Vector
             glm::vec3 term2 = (glm::dot(f, f_n) - glm::dot(e_o, f_n)) * (Jed_eo * f_n);
-            // Scalar * (Matrix * Vector) = Vector
             glm::vec3 etmin_de_o = (term1 - term2) / denom_squared; // Element-wise division
-
             // 2.3) Derivatives for intersections with the focal plane
             // (c) p = e_o + tMin * e_d
             //     dp/de_o = ...
@@ -177,7 +166,7 @@ namespace VkRender::PathTracer {
             float inv_pz = 1.0f / pz_camera;
             float inv_pz2 = inv_pz * inv_pz; // 1/pz^2
             // Construct Jacobian matrix J_(u,v),p (2x3)
-            glm::mat2x3 J_uv_p;
+            glm::mat3x3 J_uv_p(0.0f); // J_uv_p is in fact a 2x3 matrix but use a 3x3 for simple integration with glm
             J_uv_p[0][0] = fx * inv_pz; // ∂u/∂px
             J_uv_p[0][1] = 0.0f; // ∂u/∂py
             J_uv_p[0][2] = -fx * px_camera * inv_pz2; // ∂u/∂pz
@@ -187,15 +176,11 @@ namespace VkRender::PathTracer {
             J_uv_p[1][2] = -fy * py_camera * inv_pz2; // ∂v/∂pz
 
             // build the relevant Jacobians:
-
             // 5) chain them: J_uv_eo = J_uv_p * dp_de_o => (2×3) * (3×3) = 2×3
             // Apply Rotation:
-            glm::mat3 M_world2cam = worldToCamera;
-            glm::mat3 dp_de_o_camera = M_world2cam * dp_de_o;
-
-
-            glm::mat2x3  J_uv_eo = multiply2x3_3x3(J_uv_p, dp_de_o_camera);
-
+            glm::mat3 dp_de_o_world = glm::mat3(world2Camera) * dp_de_o;
+            //glm::mat2x3  J_uv_eo = multiply2x3_3x3(J_uv_p, dp_de_o_camera);
+            glm::mat3  J_uv_eo =  glm::transpose(J_uv_p) * dp_de_o_world;
             // Now, combine the derivative contributions.
             // Previously, we computed dL/de_o = dLoss * de_i/de_o.
             // We add the extra term from the path-length differentiation:
@@ -211,11 +196,13 @@ namespace VkRender::PathTracer {
 
             // For the geometry part, you need to pull back the loss derivative in image space through the Jacobian:
             glm::vec3 grad_geometry;
-            grad_geometry.x = (dLdu * J_uv_eo[0][0] + dLdv * J_uv_eo[1][0]) * dLoss;
-            grad_geometry.y = (dLdu * J_uv_eo[0][1] + dLdv * J_uv_eo[1][1]) * dLoss;
-            grad_geometry.z = (dLdu * J_uv_eo[0][2] + dLdv * J_uv_eo[1][2]) * dLoss;
+            grad_geometry.x = (dLdu * J_uv_eo[0][0] + dLdv * J_uv_eo[0][1]);
+            grad_geometry.y = (dLdu * J_uv_eo[1][0] + dLdv * J_uv_eo[1][1]);
+            grad_geometry.z = (dLdu * J_uv_eo[2][0] + dLdv * J_uv_eo[2][1]);
 
-            glm::vec3 grad_geometry_scaled = grad_geometry;
+            //grad_geometry = grad_geometry * M_cam2world;
+            float scaleFactor =  20000.0f;
+            glm::vec3 grad_geometry_scaled = (grad_geometry * dLoss);
             // The total gradient is the sum:
             glm::vec3 grad_total = grad_intensity + grad_geometry_scaled;
 
@@ -342,13 +329,13 @@ namespace VkRender::PathTracer {
         glm::mat2x3 multiply2x3_3x3(const glm::mat2x3& A, const glm::mat3& B) const {
             glm::mat2x3 result;
             // Manual matrix multiplication
-            result[0][0] = A[0][0] * B[0][0] + A[0][1] * B[1][0] + A[0][2] * B[2][0];
-            result[0][1] = A[0][0] * B[0][1] + A[0][1] * B[1][1] + A[0][2] * B[2][1];
-            result[0][2] = A[0][0] * B[0][2] + A[0][1] * B[1][2] + A[0][2] * B[2][2];
+            result[0][0] = A[0][0] * B[0][0] + A[1][0] * B[0][1] + A[2][0] * B[0][2];
+            result[1][0] = A[0][0] * B[1][0] + A[1][0] * B[1][1] + A[2][0] * B[1][2];
+            result[2][0] = A[0][0] * B[2][0] + A[1][0] * B[2][1] + A[2][0] * B[2][2];
 
-            result[1][0] = A[1][0] * B[0][0] + A[1][1] * B[0][1] + A[1][2] * B[0][2];
+            result[1][1] = A[1][0] * B[0][0] + A[1][1] * B[0][1] + A[1][2] * B[0][2];
             result[1][1] = A[1][0] * B[1][0] + A[1][1] * B[1][1] + A[1][2] * B[1][2];
-            result[1][2] = A[1][0] * B[2][0] + A[1][1] * B[2][1] + A[1][2] * B[2][2];
+            result[1][1] = A[1][0] * B[2][0] + A[1][1] * B[2][1] + A[1][2] * B[2][2];
 
             return result;
         }
