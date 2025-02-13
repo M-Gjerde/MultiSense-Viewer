@@ -82,6 +82,10 @@ namespace VkRender {
         m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
         auto activeCamera = m_context->activeScene()->getActiveCamera();
         m_lastActiveCamera = activeCamera;
+
+        std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui)->resetPathTracer = true;
+        updatePathTracerSettings();
+
     }
 
     void EditorPathTracer::updatePathTracerSettings() {
@@ -163,6 +167,8 @@ namespace VkRender {
                 auto transform = entity.getComponent<TransformComponent>();
                 renderSettings.camera = *camera.getPinholeCamera();
                 renderSettings.cameraTransform = transform;
+                if (entity.getComponent<TransformComponent>().moved())
+                    m_pathTracer->resetImage();
             } else {
                 // Otherwise, construct a default pinhole camera for your editor camera
                 PinholeParameters pinholeParameters;
@@ -201,16 +207,14 @@ namespace VkRender {
                     const size_t totalPixels = static_cast<size_t>(texWidth) * texHeight;
 
                     // Prepare a container for the final image (after optional denoising)
-                    const float *finalImage = image;
+                    float *finalImage = image;
                     std::vector<float> denoisedImage; // only used if denoising is enabled
 
                     // Denoise if requested; otherwise, use the original image directly.
                     if (imageUI->denoise) {
                         denoiseImage(image, texWidth, texHeight, denoisedImage);
                         // Use the denoised data if the denoising call was successful.
-                        if (!denoisedImage.empty()) {
-                            finalImage = denoisedImage.data();
-                        }
+                        finalImage = denoisedImage.data();
                     }
                     // Allocate the converted image buffer (RGBA: 4 channels per pixel) // TODO Make the shader accepts floating point images and clamp/convert it in shader instead
                     std::vector<uint8_t> convertedImage(totalPixels * 4);
@@ -219,9 +223,9 @@ namespace VkRender {
                     for (size_t i = 0; i < totalPixels; ++i) {
                         // Clamp the float value and scale to 0-255.
                         // (Multiplication by 255.0f and conversion to uint8_t)
-                        const float clamped = std::clamp(finalImage[i], 0.0f, 1.0f);
-                        const uint8_t value = static_cast<uint8_t>(clamped * 255.0f);
-                        const size_t offset = i * 4;
+                        float clamped = std::clamp(finalImage[i], 0.0f, 1.0f);
+                        auto value = static_cast<uint8_t>(clamped * 255.0f);
+                        size_t offset = i * 4;
                         convertedImage[offset + 0] = value; // R
                         convertedImage[offset + 1] = value; // G
                         convertedImage[offset + 2] = value; // B
@@ -235,7 +239,7 @@ namespace VkRender {
                     Log::Logger::getInstance()->trace("Uploaded new Texture Data");
                 }
             } else {
-                Log::Logger::getInstance()->warning("Image size Match! Texture: {}x{}, Camera: {}x{}",
+                Log::Logger::getInstance()->warning("Image size Mismatch! Texture: {}x{}, Camera: {}x{}",
                                     m_colorTexture->width(), m_colorTexture->height(),
                                     renderSettings.camera.m_parameters.width,
                                     renderSettings.camera.m_parameters.height);
@@ -511,7 +515,6 @@ namespace VkRender {
 
     void EditorPathTracer::denoiseImage(float *singleChannelImage, uint32_t width, uint32_t height,
                                         std::vector<float> &output) {
-#ifdef SYCL_ENABLED
         // Initialize OIDN device and commit
         oidn::DeviceRef device = oidn::newDevice();
         device.commit();
@@ -526,7 +529,7 @@ namespace VkRender {
 
         // Create and configure the denoising filter
         oidn::FilterRef filter = device.newFilter("RT");
-        filter.set("hdr", true);
+        filter.set("hdr", false);
         filter.setImage("color", inputBuffer, oidn::Format::Float, width, height);
         filter.setImage("output", outputBuffer, oidn::Format::Float, width, height);
         filter.commit();
@@ -544,6 +547,5 @@ namespace VkRender {
         // Retrieve the denoised image data
         output.resize(imageSize);
         std::memcpy(output.data(), outputBuffer.getData(), imageSize * sizeof(float));
-#endif
     }
 }

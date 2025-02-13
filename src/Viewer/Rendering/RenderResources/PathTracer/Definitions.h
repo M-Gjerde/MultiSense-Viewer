@@ -128,6 +128,17 @@ namespace VkRender::PathTracer {
         glm::vec3 apertureHitPoint = glm::vec3(0.0f);        // a
         glm::vec3 cameraHitPointLocal = glm::vec3(0.0f);     // p
 
+        struct Bounce {
+            //Properties:
+            glm::vec3 hitPointWorld = glm::vec3(0.0f);
+            glm::vec3 hitNormalWorld = glm::vec3(0.0f);
+            float hitPointIntersectionParameter = 0.0f;
+            size_t gaussianID = 0;
+            glm::vec3 halfVector = glm::vec3(0.0f);
+        };
+
+        // 1 bounce
+        Bounce bounce[1];
     };
 
 

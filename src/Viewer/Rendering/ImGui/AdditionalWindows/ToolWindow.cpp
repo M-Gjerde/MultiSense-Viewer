@@ -33,12 +33,12 @@ namespace VkRender {
 
 
         auto pathTracerUI = std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_editorPathTracer->ui());
-        pathTracerUI->kernelDevice = "GPU";
-        pathTracerUI->photonCount = 10000000;
-        pathTracerUI->numBounces = 0;
-        pathTracerUI->shaderSelection.gammaCorrection = 1.1f;
-        pathTracerUI->switchKernelDevice = true;
-        pathTracerUI->useSceneCamera = true;
+        //pathTracerUI->kernelDevice = "GPU";
+        //pathTracerUI->photonCount = 10000000;
+        //pathTracerUI->numBounces = 0;
+        //pathTracerUI->shaderSelection.gammaCorrection = 1.1f;
+        //pathTracerUI->switchKernelDevice = true;
+        //pathTracerUI->useSceneCamera = true;
     }
 
     /** Called after frame has finished rendered **/

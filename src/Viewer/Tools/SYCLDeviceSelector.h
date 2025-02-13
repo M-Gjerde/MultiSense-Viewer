@@ -27,7 +27,7 @@ namespace VkRender {
         ~SYCLDeviceSelector() {
             Log::Logger::getInstance()->info("Destroying Sycl Queue for device: {}",
                                              m_queue.get_device().get_info<sycl::info::device::name>());
-            m_queue.wait();
+            m_queue.wait_and_throw();
         }
 
     private:

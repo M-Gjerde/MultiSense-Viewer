@@ -176,6 +176,11 @@ namespace VkRender::PathTracer {
                 apertureRadius,
                 photonID
             );
+            // Early exist if we are hitting the camera plane from behind, this happens if the aperture direction and camera plane normal are parallell or within that quadrant
+            float direction = glm::dot(directLightingDir, cameraPlaneNormalWorld);
+            if (direction >= 0.0f) {
+                return;
+            }
             // Check if contribution ray intersects geometry
             glm::vec3 directLightingOrigin = rayOrigin;
 
