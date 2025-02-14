@@ -81,9 +81,9 @@ namespace VkRender::PathTracer {
                     float albedo = mat.color.x;
                     float specular = mat.specular; // Specular coefficient
                     float shininess = mat.phongExponent;
-                    float diffusion = mat.diffuse; // Diffuse coefficient
+                    float diffuse = mat.diffuse; // Diffuse coefficient
                     // We'll accumulate our contribution here
-                    float totalContribution = 0.0f;
+                    float totalContribution = 1.0f;
                     float contributionRayContribution = 0.0f;
 
                     // ----------------------------------
@@ -91,38 +91,47 @@ namespace VkRender::PathTracer {
                     // ----------------------------------
                     // 1) Diffuse contribution
                     // Compute cosTheta for the diffuse term
-                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
-                    cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
-                    float diffuseContribution = diffusion * albedo * cosTheta / M_PIf;
+
                     // 2) Specular contribution
                     // TODO also calculate the contribution if I am sampling directly towards the camera instead of just reflecting along the surface normal
-
                     // Contribution Dir
-                    {
-                        glm::vec3 apertureHitPoint;
-                        glm::vec3 contributionRayDir = sampleDirectionTowardAperture(
-                            hitPointWorld,
-                            m_cameraTransform->getPosition(), // center of aperture
-                            cameraPlaneNormalWorld, // might be -X if your camera faces X, or -Z, etc.
-                            apertureHitPoint,
-                            apertureRadius,
-                            photonID
-                        );
 
-                        float cosAlpha = glm::dot(contributionRayDir, glm::normalize(-rayDir));
-                        cosAlpha = glm::max(0.0f, cosAlpha);
-                        float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
-                        float sumForWeights = albedo + specular;
-                        if (sumForWeights > 0.0f) {
-                            float diffuseWeight = albedo / sumForWeights;
-                            float specularWeight = specular / sumForWeights;
-                            // Weighted sum
-                            contributionRayContribution = diffuseWeight * diffuseContribution
-                                                          + specularWeight * specularContribution;
-                        }
+                    glm::vec3 apertureHitPoint;
+                    glm::vec3 contributionRayDir = sampleDirectionTowardAperture(
+                        hitPointWorld,
+                        m_cameraTransform->getPosition(), // center of aperture
+                        cameraPlaneNormalWorld, // might be -X if your camera faces X, or -Z, etc.
+                        apertureHitPoint,
+                        apertureRadius,
+                        photonID
+                    );
+
+                    float cosTheta = glm::dot(hitNormalWorld, -rayDir);
+                    cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
+                    float diffuseContribution = cosTheta * diffuse * albedo / M_PIf;
+
+
+                    glm::vec3 delta = rayDir + contributionRayDir;
+                    glm::vec3 halfVector = delta / glm::length(delta);
+                    float cosAlpha = std::max(glm::dot(hitNormalWorld, halfVector), 0.0f);
+                    float specularContribution = specular * std::pow(cosAlpha, shininess) / M_PIf;
+
+                    float sumForWeights = albedo + specular;
+                    if (sumForWeights > 0.0f) {
+                        float diffuseWeight = albedo / sumForWeights;
+                        float specularWeight = specular / sumForWeights;
+                        // Weighted sum
+                        contributionRayContribution = diffuseWeight * diffuseContribution
+                                                      + specularWeight * specularContribution;
                     }
+
+                    /*
                     // Path contribution
                     {
+                        float cosTheta = glm::dot(hitNormalWorld, -rayDir);
+                        cosTheta = glm::max(0.0f, cosTheta); // Clamp to 0 to prevent negative contributions
+                        float diffuseContribution = diffuse * albedo * cosTheta / M_PIf;
+
                         glm::vec3 reflectedDir = glm::reflect(rayDir, hitNormalWorld);
                         float cosAlpha = glm::dot(glm::normalize(reflectedDir), glm::normalize(-rayDir));
                         cosAlpha = glm::max(0.0f, cosAlpha);
@@ -130,9 +139,9 @@ namespace VkRender::PathTracer {
                         //3 ) Energy conservation / normalization:
                         //    We want to ensure that the total reflection doesn't exceed 1,
                         //    weight diffuse vs. specular so that sum of their "weights" is 1.
-                        float sumForWeights = albedo + specular;
+                        float sumForWeights = diffuse + specular;
                         if (sumForWeights > 0.0f) {
-                            float diffuseWeight = albedo / sumForWeights;
+                            float diffuseWeight = diffuse / sumForWeights;
                             float specularWeight = specular / sumForWeights;
                             // Weighted sum
                             totalContribution = diffuseWeight * diffuseContribution
@@ -142,6 +151,7 @@ namespace VkRender::PathTracer {
                             totalContribution = 0.0f;
                         }
                     }
+                    */
 
                     float contributionFlux = photonFlux * contributionRayContribution;
                     // Finally, scale the photonFlux (or outgoing radiance) by total contribution

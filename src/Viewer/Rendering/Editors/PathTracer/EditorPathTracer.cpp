@@ -40,7 +40,6 @@ namespace VkRender {
     }
 
     void EditorPathTracer::onEditorResize() {
-
         float width = m_createInfo.width;
         float height = m_createInfo.height;
         float editorAspect = static_cast<float>(m_createInfo.width) /
@@ -74,18 +73,17 @@ namespace VkRender {
 
 
     void EditorPathTracer::onSceneLoad(std::shared_ptr<Scene> scene) {
-
         m_editorCamera = std::make_shared<ArcballCamera>(
             static_cast<float>(m_createInfo.width) / static_cast<float>(m_createInfo.height));
         m_editorCamera->setDefaultPosition({-90.0f, -60.0f}, 1.5f);
 
-        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height, VK_FORMAT_R8G8B8A8_UNORM, m_context);
+        m_colorTexture = EditorUtils::createEmptyTexture(m_createInfo.width, m_createInfo.height,
+                                                         VK_FORMAT_R8G8B8A8_UNORM, m_context);
         auto activeCamera = m_context->activeScene()->getActiveCamera();
         m_lastActiveCamera = activeCamera;
 
         std::dynamic_pointer_cast<EditorPathTracerLayerUI>(m_ui)->resetPathTracer = true;
         updatePathTracerSettings();
-
     }
 
     void EditorPathTracer::updatePathTracerSettings() {
@@ -107,8 +105,11 @@ namespace VkRender {
             PathTracer::PhotonTracer::PipelineSettings pipelineSettings(syclDevice, width, height);
             pipelineSettings.photonCount = imageUI->photonCount;
             pipelineSettings.numBounces = imageUI->numBounces;
-
-            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings, m_context->activeScene());
+            m_pathTracer.reset();
+            vkDeviceWaitIdle(m_context->vkDevice().m_LogicalDevice);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            m_pathTracer = std::make_unique<PathTracer::PhotonTracer>(m_context, pipelineSettings,
+                                                                      m_context->activeScene());
             syclDevice->getQueue().wait();
             auto list = syclDevice->getQueue().get_wait_list();
             for (const auto &event: list) {
@@ -132,11 +133,7 @@ namespace VkRender {
             }
             m_meshInstances.reset();
             m_meshInstances = EditorUtils::setupMesh(m_context, scaleX, scaleY);
-            m_colorTexture = EditorUtils::createEmptyTexture(
-                width,
-                height,
-                VK_FORMAT_R8G8B8A8_UNORM,
-                m_context);
+
             Log::Logger::getInstance()->info("Created New Color Texture");
         }
 
@@ -157,7 +154,6 @@ namespace VkRender {
 
         // 4. If user wants to render/preview, update the path tracer with the latest camera.
         if (imageUI->render || imageUI->toggleRendering) {
-
             PathTracer::PhotonTracer::RenderSettings renderSettings;
 
             bool useSceneCamera = activeCamera;
@@ -190,13 +186,25 @@ namespace VkRender {
 
             renderSettings.gammaCorrection = imageUI->shaderSelection.gammaCorrection;
 
+            if (imageUI->clearImageMemory) {
+                uint32_t width = m_createInfo.width;
+                uint32_t height = m_createInfo.height;
+                if (activeCamera && imageUI->useSceneCamera) {
+                    width = activeCamera->pinholeParameters.width;
+                    height = activeCamera->pinholeParameters.height;
+                }
+                m_colorTexture = EditorUtils::createEmptyTexture(
+                    width,
+                    height,
+                    VK_FORMAT_R8G8B8A8_UNORM,
+                    m_context);
+            }
+
             bool imageSizeMatch = static_cast<uint32_t>(renderSettings.camera.m_parameters.width) == m_colorTexture->
-                                     width() &&
-                                     static_cast<uint32_t>(renderSettings.camera.m_parameters.height) == m_colorTexture
-                                     ->height();
+                                  width() &&
+                                  static_cast<uint32_t>(renderSettings.camera.m_parameters.height) == m_colorTexture
+                                  ->height();
             if (imageSizeMatch) {
-
-
                 m_pathTracer->update(renderSettings);
 
                 float *image = m_pathTracer->getImage();
@@ -235,14 +243,16 @@ namespace VkRender {
                     Log::Logger::getInstance()->trace(
                         "Uploading Path Tracer Image to Color Texture. Size: {} bytes into {}",
                         convertedImage.size(), m_colorTexture->getSize());
+
+
                     m_colorTexture->loadImage(convertedImage.data(), convertedImage.size());
                     Log::Logger::getInstance()->trace("Uploaded new Texture Data");
                 }
             } else {
                 Log::Logger::getInstance()->warning("Image size Mismatch! Texture: {}x{}, Camera: {}x{}",
-                                    m_colorTexture->width(), m_colorTexture->height(),
-                                    renderSettings.camera.m_parameters.width,
-                                    renderSettings.camera.m_parameters.height);
+                                                    m_colorTexture->width(), m_colorTexture->height(),
+                                                    renderSettings.camera.m_parameters.width,
+                                                    renderSettings.camera.m_parameters.height);
             }
         }
         if (imageUI->saveImage || imageUI->bypassSave) {
