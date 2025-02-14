@@ -17,7 +17,7 @@
 
 
 namespace VkRender {
-    SceneRenderer::SceneRenderer(EditorCreateInfo& createInfo, UUID uuid) : Editor(createInfo, uuid) {
+    SceneRenderer::SceneRenderer(EditorCreateInfo &createInfo, UUID uuid) : Editor(createInfo, uuid) {
         m_renderToOffscreen = true;
         m_activeCamera = std::make_shared<BaseCamera>(m_createInfo.width / m_createInfo.height);
         descriptorRegistry.createManager(DescriptorManagerType::MVP, m_context->vkDevice());
@@ -42,7 +42,7 @@ namespace VkRender {
         m_activeScene = m_context->activeScene();
         // TODO not clear what this does but it creates render reosurces of the editor was copied as part of a split operation
         auto view = m_activeScene->getRegistry().view<IDComponent>();
-        for (auto e : view) {
+        for (auto e: view) {
             auto entity = Entity(e, m_activeScene.get());
             auto name = entity.getName();
             if (entity.hasComponent<MaterialComponent>()) {
@@ -62,27 +62,93 @@ namespace VkRender {
         if (!m_activeScene)
             return;
         auto view = m_activeScene->getRegistry().view<IDComponent>();
-        for (auto entity : view) {
-            updateGlobalUniformBuffer(m_context->currentFrameIndex(), Entity(entity, m_activeScene.get()));
+
+        std::vector<LightSourceComponent> lightSources;
+        for (auto e: view) {
+            auto entity = Entity(e, m_activeScene.get());
+            if (entity.hasComponent<LightSourceComponent>()) {
+                lightSources.push_back(entity.getComponent<LightSourceComponent>());
+            }
         }
 
+        uint32_t frameIndex = m_context->currentFrameIndex();
+        for (auto e: view) {
+            auto entity = Entity(e, m_activeScene.get());
+
+            if (entity.hasComponent<MeshComponent>()) {
+                GlobalUniformBufferObject globalUBO = {};
+                auto activeCameraPtr = m_activeCamera.lock(); // Lock to get shared_ptr
+                if (activeCameraPtr) {
+                    globalUBO.view = activeCameraPtr->matrices.view;
+                    globalUBO.projection = activeCameraPtr->matrices.projection;
+                    globalUBO.cameraPosition = activeCameraPtr->matrices.position;
+                }
+
+                // Map and copy data to the global uniform buffer
+                void *data;
+                vkMapMemory(m_context->vkDevice().m_LogicalDevice,
+                            m_entityRenderData[entity.getUUID()].cameraBuffer[frameIndex]->m_memory, 0,
+                            sizeof(globalUBO),
+                            0,
+                            &data);
+                memcpy(data, &globalUBO, sizeof(globalUBO));
+                vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
+                              m_entityRenderData[entity.getUUID()].cameraBuffer[frameIndex]->m_memory);
+            }
+            if (entity.hasComponent<TransformComponent>() && entity.hasComponent<MeshComponent>()) {
+                void *data;
+                auto &transformComponent = m_activeScene->getRegistry().get<TransformComponent>(entity);
+                vkMapMemory(m_context->vkDevice().m_LogicalDevice,
+                            m_entityRenderData[entity.getUUID()].modelBuffer[frameIndex]->m_memory, 0, VK_WHOLE_SIZE, 0,
+                            &data);
+                auto *modelMatrices = reinterpret_cast<glm::mat4 *>(data);
+                *modelMatrices = transformComponent.getTransform();
+                vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
+                              m_entityRenderData[entity.getUUID()].modelBuffer[frameIndex]->m_memory);
+            }
+            if (entity.hasComponent<MaterialComponent>() && !m_entityRenderData[entity.getUUID()].materialBuffer.
+                empty()) {
+                auto &material = entity.getComponent<MaterialComponent>();
+                MaterialBufferObject matUBO = {};
+                matUBO.baseColor = material.albedo;
+                matUBO.specular = material.specular;
+                matUBO.diffuse = material.diffuse;
+                matUBO.emissiveFactor = glm::vec4(material.emission);
+
+                for (int i = 0; i < lightSources.size(); ++i) {
+                    matUBO.lightPosition[i] = glm::vec4(lightSources[i].position, 1.0f);
+                    matUBO.lightNormal[i] =   glm::vec4(lightSources[i].normal, 1.0f);
+                }
+                matUBO.numLightSources = static_cast<float>(lightSources.size());
+                assert(matUBO.numLightSources < 32);
+
+                void *data;
+                vkMapMemory(m_context->vkDevice().m_LogicalDevice,
+                            m_entityRenderData[entity.getUUID()].materialBuffer[frameIndex]->m_memory, 0,
+                            sizeof(MaterialBufferObject), 0,
+                            &data);
+                memcpy(data, &matUBO, sizeof(MaterialBufferObject));
+                vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
+                              m_entityRenderData[entity.getUUID()].materialBuffer[frameIndex]->m_memory);
+            }
+        }
     }
 
 
-    void SceneRenderer::onRender(CommandBuffer& commandBuffer) {
+    void SceneRenderer::onRender(CommandBuffer &commandBuffer) {
         collectRenderCommands(m_renderGroups, commandBuffer.getActiveFrameIndex());
 
         // Render each group
-        for (auto& command : m_renderGroups) {
+        for (auto &command: m_renderGroups) {
             bindResourcesAndDraw(commandBuffer, command);
         }
     }
 
-    void SceneRenderer::bindResourcesAndDraw(const CommandBuffer& commandBuffer, RenderCommand& command) {
+    void SceneRenderer::bindResourcesAndDraw(const CommandBuffer &commandBuffer, RenderCommand &command) {
         // Bind vertex buffers
         VkCommandBuffer cmdBuffer = commandBuffer.getActiveBuffer();
         vkCmdBindPipeline(cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, command.pipeline->pipeline()->getPipeline());
-        for (auto& [index, descriptorSet] : command.descriptorSets) {
+        for (auto &[index, descriptorSet]: command.descriptorSets) {
             vkCmdBindDescriptorSets(
                 cmdBuffer,
                 VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -98,8 +164,8 @@ namespace VkRender {
         // Bind vertex buffer
         bool usesVertexBuffers = command.meshInstance->vertexBuffer && command.meshInstance->usesVertexBuffers;
         if (usesVertexBuffers) {
-            VkBuffer vertexBuffers[] = { command.meshInstance->vertexBuffer->m_buffer };
-            VkDeviceSize offsets[] = { 0 };
+            VkBuffer vertexBuffers[] = {command.meshInstance->vertexBuffer->m_buffer};
+            VkDeviceSize offsets[] = {0};
             vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers, offsets);
 
             // Bind index buffer if present
@@ -119,12 +185,12 @@ namespace VkRender {
     }
 
     void SceneRenderer::collectRenderCommands(
-        std::vector<RenderCommand>& renderGroups, uint32_t frameIndex) {
+        std::vector<RenderCommand> &renderGroups, uint32_t frameIndex) {
         auto view = m_activeScene->getRegistry().view<MeshComponent, TransformComponent>();
 
         m_renderGroups.clear();
         m_renderGroups.reserve(view.size_hint());
-        for (auto e : view) {
+        for (auto e: view) {
             Entity entity(e, m_activeScene.get());
 
             // Initialize a flag to determine if we should skip this entity
@@ -139,7 +205,7 @@ namespace VkRender {
                 // Check if the parent has both GroupComponent and VisibilityComponent
                 if (current.hasComponent<GroupComponent>() && current.hasComponent<VisibleComponent>()) {
                     // Retrieve the VisibilityComponent
-                    auto& visibility = current.getComponent<VisibleComponent>();
+                    auto &visibility = current.getComponent<VisibleComponent>();
                     // If visibility is set to false, mark to skip this entity
                     if (!visibility.visible) {
                         skipEntity = true;
@@ -154,16 +220,15 @@ namespace VkRender {
 
             std::string tag = entity.getName();
             UUID uuid = entity.getUUID();
-            auto& meshComponent = entity.getComponent<MeshComponent>();
+            auto &meshComponent = entity.getComponent<MeshComponent>();
             std::unordered_map<DescriptorManagerType, VkDescriptorSet> descriptorSets; // Add the descriptor set here
-            std::unordered_map<DescriptorManagerType, std::vector<VkWriteDescriptorSet>> descriptorWritesTracker; // TODO remove
+            std::unordered_map<DescriptorManagerType, std::vector<VkWriteDescriptorSet> > descriptorWritesTracker;
+            // TODO remove
             PipelineKey key = {};
             key.setLayouts.resize(3);
 
-            auto& renderData = m_entityRenderData[entity.getUUID()];
-
-            {
-                auto& writes = descriptorWritesTracker[DescriptorManagerType::MVP];
+            auto &renderData = m_entityRenderData[entity.getUUID()]; {
+                auto &writes = descriptorWritesTracker[DescriptorManagerType::MVP];
                 writes.resize(2);
                 writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[0].dstBinding = 0;
@@ -178,7 +243,7 @@ namespace VkRender {
                 writes[1].descriptorCount = 1;
                 writes[1].pBufferInfo = &renderData.modelBuffer[frameIndex]->m_descriptorBufferInfo;
                 VkDescriptorSet mvpDescriptorSet = descriptorRegistry.getManager(DescriptorManagerType::MVP).
-                                                                      getOrCreateDescriptorSet(writes);
+                        getOrCreateDescriptorSet(writes);
                 descriptorSets[DescriptorManagerType::MVP] = mvpDescriptorSet;
 
                 key.setLayouts[0] = descriptorRegistry.getManager(DescriptorManagerType::MVP).getDescriptorSetLayout();
@@ -189,7 +254,8 @@ namespace VkRender {
             if (!meshData)
                 continue;
             // Update meshData
-            std::shared_ptr<MeshInstance> meshInstance = m_meshResourceManager->getMeshInstance(meshComponent.getCacheIdentifier(), meshData, meshComponent.meshDataType());
+            std::shared_ptr<MeshInstance> meshInstance = m_meshResourceManager->getMeshInstance(
+                meshComponent.getCacheIdentifier(), meshData, meshComponent.meshDataType());
             if (!meshInstance) {
                 continue;
             }
@@ -198,21 +264,20 @@ namespace VkRender {
             // Check if the entity has a MaterialComponent
             std::shared_ptr<MaterialInstance> materialInstance = nullptr;
             if (entity.hasComponent<MaterialComponent>()) {
-                auto& materialComponent = entity.getComponent<MaterialComponent>();
+                auto &materialComponent = entity.getComponent<MaterialComponent>();
                 auto materialIt = m_materialInstances.find(uuid);
                 if (materialIt == m_materialInstances.end()) {
                     materialInstance = initializeMaterial(entity, materialComponent);
                     m_materialInstances[uuid] = materialInstance;
-                }
-                else {
+                } else {
                     materialInstance = materialIt->second;
                 }
                 key.vertexShaderName = materialComponent.vertexShaderName;
                 key.fragmentShaderName = materialComponent.fragmentShaderName;
                 key.renderMode = materialInstance->renderMode;
-                key.materialPtr = reinterpret_cast<uint64_t*>(materialInstance.get());
+                key.materialPtr = reinterpret_cast<uint64_t *>(materialInstance.get());
 
-                auto& writes = descriptorWritesTracker[DescriptorManagerType::Material];
+                auto &writes = descriptorWritesTracker[DescriptorManagerType::Material];
                 writes.resize(2);
                 writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[0].dstBinding = 0;
@@ -226,7 +291,8 @@ namespace VkRender {
                 writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                 writes[1].descriptorCount = 1;
                 writes[1].pImageInfo = &materialInstance->baseColorTexture->getDescriptorInfo();
-                VkDescriptorSet materialDescriptorSet = descriptorRegistry.getManager(DescriptorManagerType::Material).getOrCreateDescriptorSet(writes);
+                VkDescriptorSet materialDescriptorSet = descriptorRegistry.getManager(DescriptorManagerType::Material).
+                        getOrCreateDescriptorSet(writes);
                 descriptorSets[DescriptorManagerType::Material] = materialDescriptorSet;
             }
             key.setLayouts[1] = descriptorRegistry.getManager(DescriptorManagerType::Material).getDescriptorSetLayout();
@@ -255,7 +321,7 @@ namespace VkRender {
                 key.vertexInputAttributes.clear();
                 key.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 
-                auto& writes = descriptorWritesTracker[DescriptorManagerType::DynamicCameraGizmo];
+                auto &writes = descriptorWritesTracker[DescriptorManagerType::DynamicCameraGizmo];
                 writes.resize(2);
                 writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
                 writes[0].dstBinding = 0;
@@ -272,10 +338,9 @@ namespace VkRender {
                 VkDescriptorSet dynamicCameraDescriptorSet = descriptorRegistry.getManager(
                     DescriptorManagerType::DynamicCameraGizmo).getOrCreateDescriptorSet(writes);
                 descriptorSets[DescriptorManagerType::DynamicCameraGizmo] = dynamicCameraDescriptorSet;
-
-
             }
-            key.setLayouts[2] = descriptorRegistry.getManager(DescriptorManagerType::DynamicCameraGizmo).getDescriptorSetLayout();
+            key.setLayouts[2] = descriptorRegistry.getManager(DescriptorManagerType::DynamicCameraGizmo).
+                    getDescriptorSetLayout();
             // Create or retrieve the pipeline
             RenderPassInfo renderPassInfo{};
             renderPassInfo.sampleCount = m_createInfo.pPassCreateInfo.msaaSamples;
@@ -296,7 +361,7 @@ namespace VkRender {
         }
     }
 
-    void SceneRenderer::onComponentAdded(Entity entity, MeshComponent& meshComponent) {
+    void SceneRenderer::onComponentAdded(Entity entity, MeshComponent &meshComponent) {
         // Check if I readd a meshcomponent then we should destroy the renderresources attached to it:
         m_entityRenderData[entity.getUUID()].cameraBuffer.resize(m_context->swapChainBuffers().size());
         m_entityRenderData[entity.getUUID()].modelBuffer.resize(m_context->swapChainBuffers().size());
@@ -317,18 +382,17 @@ namespace VkRender {
         }
     }
 
-    void SceneRenderer::onComponentRemoved(Entity entity, MeshComponent& meshComponent) {
+    void SceneRenderer::onComponentRemoved(Entity entity, MeshComponent &meshComponent) {
         if (m_entityRenderData.contains(entity.getUUID())) {
             m_entityRenderData[entity.getUUID()].cameraBuffer.clear();
             m_entityRenderData[entity.getUUID()].modelBuffer.clear();
         }
     }
 
-    void SceneRenderer::onComponentUpdated(Entity entity, MeshComponent& meshComponent) {
-
+    void SceneRenderer::onComponentUpdated(Entity entity, MeshComponent &meshComponent) {
     }
 
-    void SceneRenderer::onComponentAdded(Entity entity, MaterialComponent& materialComponent) {
+    void SceneRenderer::onComponentAdded(Entity entity, MaterialComponent &materialComponent) {
         // Check if I readd a meshcomponent then we should destroy the renderresources attached to it:
         if (m_materialInstances.contains(entity.getUUID())) {
             m_materialInstances.erase(entity.getUUID());
@@ -345,13 +409,13 @@ namespace VkRender {
         }
     }
 
-    void SceneRenderer::onComponentRemoved(Entity entity, MaterialComponent& materialComponent) {
+    void SceneRenderer::onComponentRemoved(Entity entity, MaterialComponent &materialComponent) {
         if (m_materialInstances.contains(entity.getUUID())) {
             m_materialInstances.erase(entity.getUUID());
         }
     }
 
-    void SceneRenderer::onComponentUpdated(Entity entity, MaterialComponent& materialComponent) {
+    void SceneRenderer::onComponentUpdated(Entity entity, MaterialComponent &materialComponent) {
         // add a video source if selected
         if (m_materialInstances.contains(
             entity.getUUID())) {
@@ -360,7 +424,7 @@ namespace VkRender {
         }
     }
 
-    void SceneRenderer::onComponentAdded(Entity entity, PointCloudComponent& pointCloudComponent) {
+    void SceneRenderer::onComponentAdded(Entity entity, PointCloudComponent &pointCloudComponent) {
         // Check if I readd a meshcomponent then we should destroy the renderresources attached to it:
         m_entityRenderData[entity.getUUID()].cameraBuffer.resize(m_context->swapChainBuffers().size());
         m_entityRenderData[entity.getUUID()].modelBuffer.resize(m_context->swapChainBuffers().size());
@@ -388,78 +452,29 @@ namespace VkRender {
         }
     }
 
-    void SceneRenderer::onComponentRemoved(Entity entity, PointCloudComponent& pointCloudComponent) {
+    void SceneRenderer::onComponentRemoved(Entity entity, PointCloudComponent &pointCloudComponent) {
     }
 
-    void SceneRenderer::onComponentUpdated(Entity entity, PointCloudComponent& pointCloudComponent) {
+    void SceneRenderer::onComponentUpdated(Entity entity, PointCloudComponent &pointCloudComponent) {
     }
 
     void SceneRenderer::updateGlobalUniformBuffer(uint32_t frameIndex, Entity entity) {
         // Get the active camera entity
         // Compute view and projection matrices
-        if (entity.hasComponent<MeshComponent>()) {
-            GlobalUniformBufferObject globalUBO = {};
-            auto activeCameraPtr = m_activeCamera.lock(); // Lock to get shared_ptr
-            if (activeCameraPtr) {
-                globalUBO.view = activeCameraPtr->matrices.view;
-                globalUBO.projection = activeCameraPtr->matrices.projection;
-                globalUBO.cameraPosition = activeCameraPtr->matrices.position;
-            }
-
-            // Map and copy data to the global uniform buffer
-            void* data;
-            vkMapMemory(m_context->vkDevice().m_LogicalDevice,
-                        m_entityRenderData[entity.getUUID()].cameraBuffer[frameIndex]->m_memory, 0, sizeof(globalUBO),
-                        0,
-                        &data);
-            memcpy(data, &globalUBO, sizeof(globalUBO));
-            vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
-                          m_entityRenderData[entity.getUUID()].cameraBuffer[frameIndex]->m_memory);
-
-        }
-        if (entity.hasComponent<TransformComponent>() && entity.hasComponent<MeshComponent>()) {
-            void* data;
-            auto& transformComponent = m_activeScene->getRegistry().get<TransformComponent>(entity);
-            vkMapMemory(m_context->vkDevice().m_LogicalDevice,
-                        m_entityRenderData[entity.getUUID()].modelBuffer[frameIndex]->m_memory, 0, VK_WHOLE_SIZE, 0,
-                        &data);
-            auto* modelMatrices = reinterpret_cast<glm::mat4*>(data);
-            *modelMatrices = transformComponent.getTransform();
-            vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
-                          m_entityRenderData[entity.getUUID()].modelBuffer[frameIndex]->m_memory);
-        }
-        if (entity.hasComponent<MaterialComponent>() && !m_entityRenderData[entity.getUUID()].materialBuffer.empty()) {
-            auto& material = entity.getComponent<MaterialComponent>();
-            MaterialBufferObject matUBO = {};
-            matUBO.baseColor = material.albedo;
-            matUBO.metallic = material.specular;
-            matUBO.roughness = material.diffuse;
-            matUBO.emissiveFactor = glm::vec4(material.emission);
-            void* data;
-            vkMapMemory(m_context->vkDevice().m_LogicalDevice,
-                        m_entityRenderData[entity.getUUID()].materialBuffer[frameIndex]->m_memory, 0,
-                        sizeof(MaterialBufferObject), 0,
-                        &data);
-            memcpy(data, &matUBO, sizeof(MaterialBufferObject));
-            vkUnmapMemory(m_context->vkDevice().m_LogicalDevice,
-                          m_entityRenderData[entity.getUUID()].materialBuffer[frameIndex]->m_memory);
-        }
     }
 
 
     std::shared_ptr<MaterialInstance> SceneRenderer::initializeMaterial(
-        Entity entity, const MaterialComponent& materialComponent) {
+        Entity entity, const MaterialComponent &materialComponent) {
         auto materialInstance = std::make_shared<MaterialInstance>();
         if (std::filesystem::exists(materialComponent.albedoTexturePath)) {
             materialInstance->baseColorTexture = EditorUtils::createTextureFromFile(materialComponent.albedoTexturePath,
                 m_context);
-        }
-        else {
+        } else {
             materialInstance->baseColorTexture = EditorUtils::createEmptyTexture(1280, 720, VK_FORMAT_R8G8B8A8_UNORM,
                 m_context, VMA_MEMORY_USAGE_GPU_ONLY, true);
         }
         Log::Logger::getInstance()->info("Created Material for Entity: {}", entity.getName());
         return materialInstance;
     }
-
 }

@@ -37,6 +37,14 @@ namespace VkRender {
             return component;
         }
 
+        template<typename T, typename... Args>
+        T& getOrAddComponent(Args&&... args)
+        {
+            if (hasComponent<T>())
+                return getComponent<T>();
+
+            return addComponent<T>(std::forward<Args>(args)...);
+        }
         template<typename T>
         T& getComponent()
         {

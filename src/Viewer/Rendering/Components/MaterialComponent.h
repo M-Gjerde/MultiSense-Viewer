@@ -33,6 +33,11 @@ namespace VkRender {
         std::filesystem::path albedoTexturePath = "default.png";
     };
 
+    struct LightSourceComponent {
+        glm::vec3 normal = glm::vec3(0.0f, 0.0f, -1.0f);
+        glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f);
+    };
+
     struct MaterialInstance {
         RenderMode renderMode = RenderMode::Opaque;
         std::shared_ptr<VulkanTexture2D> baseColorTexture;

@@ -668,12 +668,14 @@ namespace VkRender {
                         ImGui::Text("Appearance Properties");
                         update |= drawFloatControl("Opacity", component.opacities[i], 0.0f, 0.1f);
                         update |= drawFloatControl("Emission", component.emissions[i], 0.0f, 0.1f);
-                        update |= drawFloatControl("Colors", component.colors[i], 1.0f, 0.1f);
                         update |= drawFloatControl("Diffuse", component.diffuse[i], 0.5f, 0.1f);
                         update |= drawFloatControl("Specular", component.specular[i], 0.5f, 0.1f);
                         update |= drawFloatControl("PhongExponents", component.phongExponents[i], 32.0f, 1.0f);
 
-
+                        ImGui::Spacing();
+                        ImGui::PushItemWidth(200); // Set a wider width for the next widget
+                        update |= ImGui::ColorEdit4("Color", glm::value_ptr(component.colors[i]));
+                        ImGui::PopItemWidth(); // Revert to the previous width
                         // Button to remove this Gaussian
                         ImGui::Spacing();
                         if (ImGui::Button("Remove Gaussian")) {
@@ -747,10 +749,11 @@ namespace VkRender {
                 ImGui::Text("Appearance Properties");
                 update |= drawFloatControl("Opacity", component.opacities[i], 0.0f, 0.1f);
                 update |= drawFloatControl("Emission", component.emissions[i], 0.0f, 0.1f);
-                update |= drawFloatControl("Colors", component.colors[i], 1.0f, 0.1f);
                 update |= drawFloatControl("Diffuse", component.diffuse[i], 0.5f, 0.1f);
                 update |= drawFloatControl("Specular", component.specular[i], 0.5f, 0.1f);
                 update |= drawFloatControl("PhongExp", component.phongExponents[i], 32.0f, 1.0f);
+
+                update |= ImGui::ColorEdit4("Color", glm::value_ptr(component.colors[i]));
 
                 ImGui::Spacing();
 

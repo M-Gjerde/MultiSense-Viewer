@@ -12,7 +12,6 @@ layout (set = 1, binding = 0) uniform Info {
     vec4 baseColor;
     float metallic;
     float roughness;
-    float isDisparity;
     vec4 emissiveFactor;
 } info;
 

@@ -360,9 +360,16 @@ namespace VkRender::PathTracer {
             point.normal.y = normalsPtr[i * 3 + 1];
             point.normal.z = normalsPtr[i * 3 + 2];
 
+            // Update colors (each is 4 floats)
+            point.color = glm::vec4(
+                colorsPtr[i * 4 + 0],
+                colorsPtr[i * 4 + 1],
+                colorsPtr[i * 4 + 2],
+                colorsPtr[i * 4 + 3]
+            );
+
             // Fill default appearance properties
             point.emission = emissionsPtr[i]; // emission = 0
-            point.color = colorsPtr[i]; // color = 1
             point.diffuse = specularPtr[i]; // diffuse = 0.5
             point.specular = diffusePtr[i]; // specular = 0.5
             point.phongExponent = 32; // phongExponent = 32

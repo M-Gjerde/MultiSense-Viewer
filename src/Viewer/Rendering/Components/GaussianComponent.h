@@ -23,7 +23,7 @@ namespace VkRender {
 
         std::vector<float> opacities;        // Contiguous array for amplitudes
         std::vector<float> emissions;        // Contiguous array for amplitudes
-        std::vector<float> colors;        // Contiguous array for amplitudes
+        std::vector<glm::vec4> colors;        // Contiguous array for amplitudes
         std::vector<float> diffuse;        // Contiguous array for amplitudes
         std::vector<float> specular;        // Contiguous array for amplitudes
         std::vector<float> phongExponents;        // Contiguous array for amplitudes
@@ -69,7 +69,7 @@ namespace VkRender {
                          const glm::vec3 &normal,
                          const glm::vec2 &scale,
                          float opacity = 1.0f,
-                         float color = 1.0f,
+                         glm::vec4 color = glm::vec4(glm::vec3(0.0f), 1.0f),
                          float diffuseValue = 0.5f,
                          float specularValue = 0.5f,
                          float phongExponent = 32.0f) {

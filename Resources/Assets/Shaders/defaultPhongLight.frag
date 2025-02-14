@@ -3,86 +3,74 @@
 layout (location = 0) in vec2 inUV;
 layout (location = 1) in vec4 fragPos;
 layout (location = 2) in vec3 inNormal;
-layout (location = 3) in vec4 vertexColor; // World space position
 
-layout (binding = 0) uniform CameraUBO
-{
+layout (binding = 0) uniform CameraUBO {
     mat4 projection;
     mat4 view;
-    vec3 position;
+    vec3 position; // renamed to match fragment shader
 } camera;
 
 layout (set = 1, binding = 0) uniform Info {
-    vec4 baseColor;      // Base color of the material
-    float metallic;      // Metallic factor (0.0 to 1.0)
-    float roughness;     // Roughness factor (0.0 to 1.0)
-    float isDisparity;   // Unused in Phong, potentially for stereo
-    vec4 emissiveFactor; // Emissive color
+    vec4 baseColor;
+    float specular;
+    float diffuse;
+    vec2 _pad0;        // Ensure 16-byte alignment
+    vec4 emissiveFactor;
+    float numLightSources;
+    vec4 lightPosition[32]; // Expanded vec3 -> vec4 for alignment
+    vec4 lightNormal[32];   // Expanded vec3 -> vec4 for alignment
 } info;
 
 layout (set = 1, binding = 1) uniform sampler2D samplerColorMap;
 
 layout (location = 0) out vec4 outColor;
 
-// Phong lighting calculation function
-vec3 calculatePhongLighting(vec3 normal, vec3 fragPos, vec3 viewDir, vec3 lightDir, vec3 specularColor, float shininess) {
-    // Phong lighting components
-    vec3 ambientColor = vec3(0.2, 0.2, 0.2); // Ambient color
-    vec3 diffuseColor = vec3(1.0, 1.0, 1.0); // Diffuse color
+// Calculates diffuse and specular contributions for one light (ambient is added separately)
+vec3 calculatePhongLighting(vec3 normal, vec3 viewDir, vec3 lightDir, vec3 specularColor, float shininess) {
+    // Diffuse term
+    float diff = max(dot(-normal, lightDir), 0.0);
+    vec3 diffuseComponent = diff * vec3(1.0); // white light assumed
 
-    // Ambient
-    vec3 ambient = ambientColor;
-
-    // Diffuse
-    float diff = max(dot(normal, lightDir), 0.0);
-    vec3 diffuse = diff * diffuseColor;
-
-    // Specular
+    // Specular term
     vec3 reflectDir = reflect(-lightDir, normal);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), shininess);
-    vec3 specular = spec * specularColor;
+    vec3 specularComponent = spec * specularColor;
 
-    // Combine results
-    return (ambient + diffuse + specular);
+    return diffuseComponent + specularComponent;
 }
 
 void main()
 {
-    // Define light direction (assuming light.direction points towards the scene)
-    vec3 lightDir = normalize(vec3(0, 0, 1)); // Adjust based on your scene setup
-
-    // Normalize normal vector
+    // Normalize the input normal
     vec3 norm = normalize(inNormal);
 
-    // World space fragment position
+    // World-space fragment position
     vec3 fragPosWorld = fragPos.xyz;
 
-    // Compute view direction
+    // Compute view direction from fragment to camera
     vec3 viewDir = normalize(camera.position - fragPosWorld);
 
-    // Determine specular color based on metallic factor
-    vec3 specularColor = mix(vec3(1.0), info.baseColor.rgb, info.metallic);
+    // Determine specular color by mixing white and the base color
+    vec3 specularColor = mix(vec3(1.0), info.baseColor.rgb, info.specular);
 
-    // Adjust shininess based on roughness
-    float shininess = mix(256.0, 32.0, info.roughness); // Higher roughness -> lower shininess
+    // Compute shininess: higher diffuse weight gives lower shininess
+    float shininess = mix(256.0, 32.0, info.diffuse);
 
-    // Calculate Phong lighting
-    vec3 phongLighting = calculatePhongLighting(norm, fragPosWorld, viewDir, lightDir, specularColor, shininess);
+    // Define ambient lighting (applied once)
+    vec3 ambient = vec3(0.0);
+
+    vec3 lighting = ambient;
+    vec3 lightDir = normalize(info.lightPosition[0].rgb - fragPosWorld);
+    lighting += calculatePhongLighting(norm, viewDir, lightDir, specularColor, shininess);
 
     // Sample texture color
     vec3 texColor = texture(samplerColorMap, inUV).rgb;
 
-    // Combine lighting with texture and base color
-    vec3 finalColor = mix(texColor * info.baseColor.rgb, phongLighting * texColor, info.metallic);
+    // Combine the material color and lighting. The mix here is based on the specular factor.
+    vec3 finalColor = mix(texColor * info.baseColor.rgb, lighting * texColor, info.specular);
 
-    // Apply emissive factor
+    // Add emissive component
     finalColor += info.emissiveFactor.rgb;
 
-    // Assign to output color
     outColor = vec4(finalColor, 1.0);
-    //vec3 normalColor = normalize(inNormal) * 0.5 + 0.5; // Map from [-1,1] to [0,1]
-    //outColor = vec4(normalColor, 1.0); // Output as color
-    // Uncomment the following lines for depth debugging (ensure it's commented out in the final shader)
-    // float depth = (camera.projection * camera.view * fragPos).z / (camera.projection * camera.view * fragPos).w;
-    // outColor = vec4(vec3(depth), 1.0);
 }

@@ -105,7 +105,7 @@ namespace VkRender::PathTracer {
 
             float diffuse = m_gpuData.gaussianInputAssembly[gaussianID].diffuse;
             float specular = m_gpuData.gaussianInputAssembly[gaussianID].specular;
-            float color = m_gpuData.gaussianInputAssembly[gaussianID].color;
+            glm::vec4 color = m_gpuData.gaussianInputAssembly[gaussianID].color;
             float phongExponent = m_gpuData.gaussianInputAssembly[gaussianID].phongExponent;
 
 

@@ -71,7 +71,7 @@ namespace VkRender::PathTracer {
         glm::vec2 scale;
 
         float emission; // Emissive power
-        float color; // Albedo
+        glm::vec4 color; // Albedo
         float diffuse; // Diffuse coefficient
         float specular; // Specular coefficient
         float phongExponent; // Shininess exponent

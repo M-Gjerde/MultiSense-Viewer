@@ -171,11 +171,15 @@ namespace VkRender {
 
 
     struct MaterialBufferObject {
-        glm::vec4 baseColor;
-        float metallic;
-        float roughness;
-        float isDisparity;
-        glm::vec4 emissiveFactor;
+        glm::vec4 baseColor;       // 16 bytes (aligned to 16)
+        float specular;            // 4 bytes
+        float diffuse;             // 4 bytes
+        glm::vec2 _pad0;           // 8 bytes of padding to align to 16 bytes
+        glm::vec4 emissiveFactor;  // 16 bytes (aligned to 16)
+        float numLightSources;       // 4 bytes
+        glm::vec3 _pad1;           // 12 bytes of padding for alignment
+        glm::vec4 lightPosition[32]; // 32 * 16 bytes (vec3 expanded to vec4 for alignment)
+        glm::vec4 lightNormal[32];   // 32 * 16 bytes (vec3 expanded to vec4 for alignment)
     };
 
     struct RenderPassInfo { // TODO move somewhere else

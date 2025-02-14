@@ -125,9 +125,16 @@ void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
                 normPtr[i * 3 + 1],
                 normPtr[i * 3 + 2]
             );
+            // Update colors (each is 4 floats)
+            comp.colors[i] = glm::vec4(
+                colorPtr[i * 4 + 0],
+                colorPtr[i * 4 + 1],
+                colorPtr[i * 4 + 2],
+                colorPtr[i * 4 + 3]
+            );
+
             // Update the other properties (each assumed to be a single float per gaussian)
             comp.emissions[i] = emissPtr[i];
-            comp.colors[i]    = colorPtr[i];
             comp.specular[i]  = specPtr[i];
             comp.diffuse[i]   = diffPtr[i];
         }
@@ -224,7 +231,7 @@ void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
         /**  Appearance properties //// **/
         // Example for normals:
         std::vector<float> emissions;
-        std::vector<float> colors;
+        std::vector<glm::vec4> colors;
         std::vector<float> specular;
         std::vector<float> diffuse;
         emissions.reserve(gaussianInputAssembly.size());
@@ -243,7 +250,7 @@ void PhotonRebuildModule::uploadSceneFromTensor(std::shared_ptr<Scene> scene) {
 
         m_tensorData.colors = torch::from_blob(
             colors.data(),
-            {static_cast<long>(gaussianInputAssembly.size()), 1},
+            {static_cast<long>(gaussianInputAssembly.size()), 4},
             torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)
         ).clone().to(device).set_requires_grad(false);
 
